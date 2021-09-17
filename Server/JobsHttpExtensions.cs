@@ -57,21 +57,13 @@ namespace JobBank.Server
                               CancellationToken cancellationToken) =>
                        {
                            var promise = jobsController.GetPromiseById(id);
-                           if (promise == null)
+                           if (promise == null || (timeout == null && !promise.IsCompleted))
                                return Results.NotFound();
-                           var resultPayloadP = promise.ResultPayload;
-                           if (resultPayloadP is Payload resultPayload)
-                               return Results.Stream(new ReadOnlySequence<byte>(resultPayload.Body).AsStream(),
-                                                     resultPayload.ContentType);
-                           else if (timeout != null)
-                           {
-                               using var subscription = promise.AddSubscriber(null!, 0);
-                               var resultPayload2 = await promise.GetResultAsync(subscription, timeout.GetValueOrDefault().Value, cancellationToken);
-                               return Results.Stream(new ReadOnlySequence<byte>(resultPayload2.Body).AsStream(),
-                                                     resultPayload2.ContentType);
-                           }
-                           else
-                               return Results.NoContent();
+
+                           var subscriber = new Subscriber(null!, 0);
+                           using var result = await promise.GetResultAsync(subscriber, timeout?.Value, cancellationToken);
+                           return Results.Stream(new ReadOnlySequence<byte>(result.Payload.Body).AsStream(),
+                                                 result.Payload.ContentType);
                        });
         }
 

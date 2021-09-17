@@ -30,6 +30,8 @@
     <Compile Include="Promise.cs" />
     <Compile Include="Promise.Subscription.cs" />
     <Compile Include="PromiseException.cs" />
+    <Compile Include="PromiseResult.cs" />
+    <Compile Include="Subscriber.cs" />
   </ItemGroup>
 
 </Project>

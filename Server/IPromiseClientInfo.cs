@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace JobBank.Server
 {
-    internal interface IPromiseClientInfo
+    public interface IPromiseClientInfo
     {
     }
 }

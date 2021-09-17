@@ -111,45 +111,6 @@ namespace JobBank.Server
             }
         }
 
-        /// <summary>
-        /// Subscribe a client to receive notification when this promise completes.
-        /// </summary>
-        /// <param name="client">
-        /// Identifies the client of the promise.
-        /// </param>
-        /// <param name="handle">
-        /// An arbitrary integer that the client can associate to this promise, 
-        /// to allow the client to distinguish other promises that it is subscribed to.
-        /// </param>
-        public SubscriptionRegistration AddSubscriber(IPromiseClientInfo client, int handle)
-        {
-            return new SubscriptionRegistration(new Subscription(this, client, handle));
-        }
-
-        public struct SubscriptionRegistration : IDisposable
-        {
-            private Subscription? _node;
-
-            public bool IsActive => _node != null;
-
-            internal Subscription Subscription => _node ?? throw new ObjectDisposedException(nameof(SubscriptionRegistration));
-
-            internal SubscriptionRegistration(Subscription? node)
-            {
-                _node = node;
-            }
-
-            public void Dispose()
-            {
-                var node = _node;
-                if (node == null)
-                    return;
-
-                _node = null;
-                node.DetachSelf();
-            }
-        }
-
         private volatile int _isFulfilled;
 
         // Expiry
