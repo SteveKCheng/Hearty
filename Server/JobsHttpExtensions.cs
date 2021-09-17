@@ -66,7 +66,7 @@ namespace JobBank.Server
                            else if (timeout != null)
                            {
                                using var subscription = promise.AddSubscriber(null!, 0);
-                               var resultPayload2 = await promise.GetResultAsync(subscription, cancellationToken);
+                               var resultPayload2 = await promise.GetResultAsync(subscription, timeout.GetValueOrDefault().Value, cancellationToken);
                                return Results.Stream(new ReadOnlySequence<byte>(resultPayload2.Body).AsStream(),
                                                      resultPayload2.ContentType);
                            }

@@ -64,18 +64,12 @@ namespace JobBank.Server
             /// Function registered by <see cref="RegisterCallback"/>, if any,
             /// that has yet to be invoked.
             /// </summary>
-            /// <remarks>
-            /// This object must be locked before accessing this field.
-            /// </remarks>
-            private Action<object?>? _callback;
+            private Action<object?>? _callbackFunc;
 
             /// <summary>
-            /// User-specified state object to pass into <see cref="_callback"/>.
+            /// User-specified state object to pass into <see cref="_callbackFunc"/>.
             /// </summary>
-            /// <remarks>
-            /// This object must be locked before accessing this field.
-            /// </remarks>
-            private object? _callbackState;
+            private object? _callbackArg;
  
             public Subscription(Promise promise, IPromiseClientInfo client, int handle)
             {
@@ -122,40 +116,59 @@ namespace JobBank.Server
             /// </remarks>
             public void RegisterCallback(Action<object?> callback, object? state)
             {
+                if (Interlocked.CompareExchange(ref _callbackStage, (int)CallbackStage.Preparing, (int)CallbackStage.Unset)
+                    != (int)CallbackStage.Unset)
+                {
+                    throw new InvalidOperationException("Callback has already been registered. ");
+                }
+
                 lock (Promise.SyncObject)
                 {
-                    Debug.Assert(_callback == null);
+                    Debug.Assert(_callbackFunc == null);
 
                     if (!Promise.IsCompleted)
                     {
-                        _callback = callback;
-                        _callbackState = state;
+                        _callbackFunc = callback;
+                        _callbackArg = state;
+                        _callbackStage = (int)CallbackStage.Set;
                         return;
                     }
                 }
 
+                _callbackStage = (int)CallbackStage.Completed;
                 callback.Invoke(state);
+                _timeoutTrigger.Dispose();
             }
 
-            internal void InvokeRegisteredCallback()
+
+
+            internal void InvokeRegisteredCallback(CallbackStage stage)
             {
-                Debug.Assert(Promise.IsCompleted);
+                var oldStage = (CallbackStage)Interlocked.CompareExchange(ref _callbackStage, (int)stage, (int)CallbackStage.Set);
+                if (oldStage != CallbackStage.Set)
+                    return;
 
-                Action<object?>? callback;
-                object? state;
+                Action<object?>? callbackFunc;
+                object? callbackArg;
                 
-                callback = _callback;
-                state = _callbackState;
+                callbackFunc = _callbackFunc;
+                callbackArg = _callbackArg;
 
-                _callback = null;
-                _callbackState = null;
+                _callbackFunc = null;
+                _callbackArg = null;
  
-                if (callback != null)
-                    callback.Invoke(state);
+                callbackFunc!.Invoke(callbackArg);
+                _timeoutTrigger.Dispose();
             }
 
             Payload IValueTaskSource<Payload>.GetResult(short token)
             {
+                var stage = (CallbackStage)_callbackStage;
+                if (stage == CallbackStage.Cancelled)
+                    _cancellationToken.ThrowIfCancellationRequested();
+                if (stage == CallbackStage.TimedOut)
+                    throw new TimeoutException("Data for the promise was not available before timing out. ");
+
                 var payload = Promise.ResultPayload;
                 if (payload == null)
                     throw new InvalidOperationException("Cannot call IValueTaskSource.GetResult on an uncompleted promise. ");
@@ -170,7 +183,45 @@ namespace JobBank.Server
             void IValueTaskSource<Payload>.OnCompleted(Action<object?> continuation, object? state, short token, ValueTaskSourceOnCompletedFlags flags)
             {
                 RegisterCallback(continuation, state);
+
+                _cancellationToken.Register(s => ((Subscription)s!).InvokeRegisteredCallback(CallbackStage.Cancelled),
+                                            this, false);   // FIXME respect flags
+                _timeoutTrigger.Token.Register(s => ((Subscription)s!).InvokeRegisteredCallback(CallbackStage.TimedOut),
+                                               this, false);
             }
+
+            internal void PrepareForCancellation(TimeSpan? timeout, CancellationToken cancellationToken)
+            {
+                // FIXME locking?
+
+                _cancellationToken = cancellationToken;
+                
+                if (timeout != null)
+                    _timeoutTrigger = CancellationPool.CancelAfter(timeout.GetValueOrDefault());
+            }
+
+            /// <summary>
+            /// The canellation token passed in by the client as part of an asynchronously
+            /// retrieving from the promise.
+            /// </summary>
+            private CancellationToken _cancellationToken;
+
+            /// <summary>
+            /// Triggers timeout if desired by the client.
+            /// </summary>
+            private CancellationPool.Use _timeoutTrigger;
+
+            internal enum CallbackStage : int
+            {
+                Unset = 0,
+                Preparing = 1,
+                Set = 2,
+                Completed = 2,
+                TimedOut = 3,
+                Cancelled = 4
+            }
+
+            private int _callbackStage;
         }
 
         /// <summary>
@@ -178,12 +229,13 @@ namespace JobBank.Server
         /// </summary>
         private Subscription? _lastSubscription;
 
-        public ValueTask<Payload> GetResultAsync(SubscriptionRegistration subscription, CancellationToken cancellationToken)
+        public ValueTask<Payload> GetResultAsync(SubscriptionRegistration subscription, TimeSpan timeout, CancellationToken cancellationToken)
         {
-            if (subscription.Subscription.Promise != this)
+            var s = subscription.Subscription;
+            if (s.Promise != this)
                 throw new ArgumentException("Given subscription is not for this promise object. ", nameof(subscription));
-
-            return new ValueTask<Payload>(subscription.Subscription, token: 0);
+            s.PrepareForCancellation(timeout, cancellationToken);
+            return new ValueTask<Payload>(s, token: 0);
         }
 
     }
