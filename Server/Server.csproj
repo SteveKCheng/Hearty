@@ -19,6 +19,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <None Include="Properties\launchSettings.json" />
+    <Compile Include="BasicPromiseClientInfo.cs" />
     <Compile Include="CancellationPool.cs" />
     <Compile Include="ExpiryTimeSpan.cs" />
     <Compile Include="IPromiseClientInfo.cs" />
@@ -31,7 +32,7 @@
     <Compile Include="Promise.Subscription.cs" />
     <Compile Include="PromiseException.cs" />
     <Compile Include="PromiseResult.cs" />
-    <Compile Include="Subscriber.cs" />
+    <Compile Include="Subscription.cs" />
   </ItemGroup>
 
 </Project>

@@ -16,10 +16,10 @@ namespace JobBank.Server
     /// within a .NET program.  So, this class tracks much more bookkeeping
     /// information.
     /// </remarks>
-    internal partial class Promise
+    public partial class Promise
     {
-        private static readonly ArrayPool<Subscription> SubscriptionArrayPool
-            = ArrayPool<Subscription>.Create();
+        private static readonly ArrayPool<SubscriptionNode> SubscriptionArrayPool
+            = ArrayPool<SubscriptionNode>.Create();
 
         public Payload? ResultPayload
         {
@@ -82,7 +82,7 @@ namespace JobBank.Server
                     {
                         if (count == subscriptions.Length)
                         {
-                            var newSubscriptions = new Subscription[subscriptions.Length * 2];
+                            var newSubscriptions = new SubscriptionNode[subscriptions.Length * 2];
                             subscriptions.CopyTo(newSubscriptions.AsSpan());
                             subscriptions = newSubscriptions;
                         }
@@ -95,7 +95,7 @@ namespace JobBank.Server
                 {
                     try
                     {
-                        subscriptions[i].InvokeRegisteredCallback(Subscription.CallbackStage.Completed);
+                        subscriptions[i].InvokeRegisteredCallback(SubscriptionNode.CallbackStage.Completed);
                     }
                     catch
                     {

@@ -11,11 +11,11 @@ namespace JobBank.Server
     /// </summary>
     public struct PromiseResult : IDisposable
     {
-        private Promise.Subscription? _subscription;
+        private Promise.SubscriptionNode? _subscription;
 
         public Payload Payload { get; }
 
-        internal PromiseResult(Promise.Subscription? subscription, in Payload payload)
+        internal PromiseResult(Promise.SubscriptionNode? subscription, in Payload payload)
         {
             _subscription = subscription;
             Payload = payload;

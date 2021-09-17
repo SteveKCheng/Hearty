@@ -19,6 +19,9 @@ namespace JobBank.Server
         {
             routeKey = routeKey.Trim('/');
 
+            // FIXME This should be managed by a cache
+            IPromiseClientInfo clientInfo = new BasicPromiseClientInfo();
+
             endpoints.MapPost("/jobs/v1/queue/" + routeKey, 
                        async (HttpRequest httpRequest, HttpResponse httpResponse, CancellationToken cancellationToken) =>
                        {
@@ -60,8 +63,7 @@ namespace JobBank.Server
                            if (promise == null || (timeout == null && !promise.IsCompleted))
                                return Results.NotFound();
 
-                           var subscriber = new Subscriber(null!, 0);
-                           using var result = await promise.GetResultAsync(subscriber, timeout?.Value, cancellationToken);
+                           using var result = await promise.GetResultAsync(clientInfo, timeout?.Value, cancellationToken);
                            return Results.Stream(new ReadOnlySequence<byte>(result.Payload.Body).AsStream(),
                                                  result.Payload.ContentType);
                        });

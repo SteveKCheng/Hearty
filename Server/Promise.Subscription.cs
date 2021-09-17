@@ -1,12 +1,11 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Sources;
 
 namespace JobBank.Server
 {
-    internal partial class Promise
+    public partial class Promise
     {
         /// <summary>
         /// Bookkeeping information for one subscription from a client to a <see cref="Promise"/>.
@@ -26,29 +25,29 @@ namespace JobBank.Server
         /// (custom) task source provided to each client.
         /// </para>
         /// </remarks>
-        internal class Subscription : IValueTaskSource<PromiseResult>
+        internal class SubscriptionNode : IValueTaskSource<PromiseResult>
         {
             /// <summary>
             /// Backing field for <see cref="Previous" />.
             /// </summary>
-            private Subscription? _previous;
+            private SubscriptionNode? _previous;
 
             /// <summary>
             /// Backing field for <see cref="Next" />.
             /// </summary>
-            private Subscription? _next;
+            private SubscriptionNode? _next;
 
             /// <summary>
             /// The subscription for a preceding client, within the doubly-linked 
             /// list stored in the same parent promise. 
             /// </summary>
-            internal Subscription? Previous => _previous;
+            internal SubscriptionNode? Previous => _previous;
 
             /// <summary>
             /// The subscription for a following client, within the doubly-linked 
             /// list stored in the same parent promise. 
             /// </summary>
-            internal Subscription? Next => _next;
+            internal SubscriptionNode? Next => _next;
 
             /// <summary>
             /// The (parent) promise object that is being subscribed to.
@@ -56,9 +55,27 @@ namespace JobBank.Server
             public readonly Promise Promise;
 
             /// <summary>
-            /// The subscriber that created this instance.
+            /// The client that is subscribing to the promise.
             /// </summary>
-            public readonly Subscriber Subscriber;
+            public IPromiseClientInfo Client { get; }
+
+            /// <summary>
+            /// Backing field for <see cref="Index" />.
+            /// </summary>
+            private readonly uint _index;
+
+            /// <summary>
+            /// An arbitrary integer that the client can associate to the subscribed promise, 
+            /// so that it can distinguish its other subscriptions.
+            /// </summary>
+            /// <remarks>
+            /// One client may subscribe to many promises.  We do not identify each
+            /// individual subscriptions as abstract "clients" because 
+            /// real clients need to be associated with users or
+            /// connections (for authentication and monitoring), which tend
+            /// to be heavier objects.
+            /// </remarks>
+            public uint Index => _index;
 
             /// <summary>
             /// Function registered by <see cref="RegisterCallback"/>, if any,
@@ -75,10 +92,11 @@ namespace JobBank.Server
             /// Initializes the object to store subscription data, but
             /// does not link it into the parent promise yet.
             /// </summary>
-            public Subscription(Promise promise, in Subscriber subscriber)
+            public SubscriptionNode(Promise promise, IPromiseClientInfo client)
             {
                 Promise = promise;
-                Subscriber = subscriber;
+                Client = client;
+                client.OnSubscribe(new Subscription(this), out _index);
             }
 
             /// <summary>
@@ -98,6 +116,8 @@ namespace JobBank.Server
                     _previous = null;
                     _next = null;
                 }
+
+                Client.OnUnsubscribe(new Subscription(this));
             }
 
             /// <summary>
@@ -190,9 +210,9 @@ namespace JobBank.Server
             {
                 RegisterCallback(continuation, state);
 
-                _cancellationToken.Register(s => ((Subscription)s!).InvokeRegisteredCallback(CallbackStage.Cancelled),
+                _cancellationToken.Register(s => ((SubscriptionNode)s!).InvokeRegisteredCallback(CallbackStage.Cancelled),
                                             this, false);   // FIXME respect flags
-                _timeoutTrigger.Token.Register(s => ((Subscription)s!).InvokeRegisteredCallback(CallbackStage.TimedOut),
+                _timeoutTrigger.Token.Register(s => ((SubscriptionNode)s!).InvokeRegisteredCallback(CallbackStage.TimedOut),
                                                this, false);
             }
 
@@ -234,18 +254,18 @@ namespace JobBank.Server
         /// <summary>
         /// Points to the last subscription entry attached to this promise.
         /// </summary>
-        private Subscription? _lastSubscription;
+        private SubscriptionNode? _lastSubscription;
 
         /// <summary>
         /// Subscribes to this promise and asynchronously retrieve results from it.
         /// </summary>
-        public ValueTask<PromiseResult> GetResultAsync(in Subscriber subscriber, in TimeSpan? timeout, CancellationToken cancellationToken)
+        public ValueTask<PromiseResult> GetResultAsync(IPromiseClientInfo client, in TimeSpan? timeout, CancellationToken cancellationToken)
         {
             var payload = ResultPayload;
             if (payload != null)
                 return new ValueTask<PromiseResult>(new PromiseResult(null, payload.GetValueOrDefault()));
 
-            var subscription = new Subscription(this, subscriber);
+            var subscription = new SubscriptionNode(this, client);
             subscription.PrepareForCancellation(timeout, cancellationToken);
             return new ValueTask<PromiseResult>(subscription, token: 0);
         }
