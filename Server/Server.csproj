@@ -21,6 +21,7 @@
     <None Include="Properties\launchSettings.json" />
     <Compile Include="BasicPromiseClientInfo.cs" />
     <Compile Include="CancellationPool.cs" />
+    <Compile Include="CircularListNode.cs" />
     <Compile Include="ExpiryTimeSpan.cs" />
     <Compile Include="IPromiseClientInfo.cs" />
     <Compile Include="JobsController.cs" />
