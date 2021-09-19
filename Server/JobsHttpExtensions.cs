@@ -57,9 +57,13 @@ namespace JobBank.Server
                            }
                            else
                            {
-                               backgroundTask.ConfigureAwait(false)
-                                             .GetAwaiter()
-                                             .UnsafeOnCompleted(() => promise.PostResult(backgroundTask.Result.Payload));
+                               static async void AwaitAndPostResultAsync(ValueTask<PromiseResult> backgroundTask, Promise promise)
+                               {
+                                   var result = await backgroundTask.ConfigureAwait(false);
+                                   promise.PostResult(result.Payload);
+                               }
+
+                               AwaitAndPostResultAsync(backgroundTask, promise);
                            }
 
                            // URL encoding??
