@@ -42,7 +42,6 @@ namespace JobBank.Server
                            
                            try
                            {
-                               job = await executor.Invoke(new JobInput(payload.ContentType, payload.Body.Length, null!), promise);
                                // FIXME CancellationToken should be separately created for the promise.
                                job = await executor.Invoke(new JobInput(payload.ContentType, payload.Body.Length, null!, cancellationToken), promise);
                            }
@@ -51,7 +50,7 @@ namespace JobBank.Server
                                return Results.Problem(e.ToString(), statusCode: 400);
                            }
 
-                           var backgroundTask = job.Result;
+                           var backgroundTask = job.Task;
                            if (backgroundTask.IsCompleted)
                            {
                                promise.PostResult(backgroundTask.Result.Payload);

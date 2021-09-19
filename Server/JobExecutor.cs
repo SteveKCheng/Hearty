@@ -21,7 +21,7 @@ namespace JobBank.Server
     /// determine the job to execute.  Reading and parsing inputs
     /// may be part of the asynchronous work of this function, but the
     /// actual work that the job entails should be set as an asynchronous task
-    /// in <see cref="Job.Result"/>.
+    /// in <see cref="Job.Task"/>.
     /// </returns>
     public delegate ValueTask<Job> JobExecutor(JobInput input, Promise promise);
 
@@ -99,13 +99,13 @@ namespace JobBank.Server
         /// the asynchronous task that <see cref="JobExecutor"/> returns.
         /// </para>
         /// </remarks>
-        public ValueTask<PromiseResult> Result { get; }
+        public ValueTask<PromiseResult> Task { get; }
 
-        public Job(ValueTask<PromiseResult> result)
+        public Job(ValueTask<PromiseResult> task)
         {
             PromiseId = null;
             Progress = null;
-            Result = result;
+            Task = task;
         }
 
         public Job(PromiseResult result)
