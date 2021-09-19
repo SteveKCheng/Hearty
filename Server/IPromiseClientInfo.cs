@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace JobBank.Server
@@ -43,5 +44,13 @@ namespace JobBank.Server
         /// Name of the user that this client is associated to.
         /// </summary>
         string UserName { get; }
+
+        /// <summary>
+        /// Represents the user for authorizing operations on promises. 
+        /// </summary>
+        /// <remarks>
+        /// Null means that the requesting user is unknown or anonymous.
+        /// </remarks>
+        ClaimsPrincipal? User { get; }
     }
 }

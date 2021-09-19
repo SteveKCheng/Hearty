@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -14,6 +15,8 @@ namespace JobBank.Server
         private uint _subscriptionCount;
 
         public string UserName => "current-user";
+
+        public ClaimsPrincipal? User => null;
 
         public uint OnSubscribe(Subscription subscription)
         {
