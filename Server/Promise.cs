@@ -78,7 +78,7 @@ namespace JobBank.Server
                     _resultPayload = resultPayload;
                     _isFulfilled = 1;
 
-                    for (var s = _lastSubscription; s != null; s = s.Previous)
+                    foreach (var s in new CircularListView<SubscriptionNode>(_firstSubscription))
                     {
                         if (count == subscriptions.Length)
                         {

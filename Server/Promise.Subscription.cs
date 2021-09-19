@@ -25,30 +25,8 @@ namespace JobBank.Server
         /// (custom) task source provided to each client.
         /// </para>
         /// </remarks>
-        internal class SubscriptionNode : IValueTaskSource<PromiseResult>
+        internal class SubscriptionNode : CircularListNode<SubscriptionNode>, IValueTaskSource<PromiseResult>
         {
-            /// <summary>
-            /// Backing field for <see cref="Previous" />.
-            /// </summary>
-            private SubscriptionNode? _previous;
-
-            /// <summary>
-            /// Backing field for <see cref="Next" />.
-            /// </summary>
-            private SubscriptionNode? _next;
-
-            /// <summary>
-            /// The subscription for a preceding client, within the doubly-linked 
-            /// list stored in the same parent promise. 
-            /// </summary>
-            internal SubscriptionNode? Previous => _previous;
-
-            /// <summary>
-            /// The subscription for a following client, within the doubly-linked 
-            /// list stored in the same parent promise. 
-            /// </summary>
-            internal SubscriptionNode? Next => _next;
-
             /// <summary>
             /// The (parent) promise object that is being subscribed to.
             /// </summary>
@@ -106,15 +84,7 @@ namespace JobBank.Server
             {
                 lock (Promise.SyncObject)
                 {
-                    if (_previous != null) 
-                        _previous._next = _next;
-                    if (_next != null) 
-                        _next._previous = _previous;
-                    if (Promise._lastSubscription == this)
-                        Promise._lastSubscription = _previous;
-
-                    _previous = null;
-                    _next = null;
+                    base.RemoveSelf(ref Promise._firstSubscription);
                 }
 
                 Client.OnUnsubscribe(new Subscription(this));
@@ -140,11 +110,7 @@ namespace JobBank.Server
                         _callbackArg = state;
 
                         // Add self to parent's list
-                        var previous = Promise._lastSubscription;
-                        _previous = previous;
-                        if (previous != null)
-                            previous._next = this;
-                        Promise._lastSubscription = this;
+                        base.AppendSelf(ref Promise._firstSubscription);
 
                         return;
                     }
@@ -252,9 +218,9 @@ namespace JobBank.Server
         }
 
         /// <summary>
-        /// Points to the last subscription entry attached to this promise.
+        /// Points to the first subscription entry attached to this promise.
         /// </summary>
-        private SubscriptionNode? _lastSubscription;
+        private SubscriptionNode? _firstSubscription;
 
         /// <summary>
         /// Subscribes to this promise and asynchronously retrieve results from it.
