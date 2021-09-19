@@ -24,9 +24,18 @@ namespace JobBank.Server
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapGet("/", () => "Hello World!");
-                jobsController.MapHttpRoutes(endpoints, "pricing", async () => {
-                    await Task.Delay(TimeSpan.FromSeconds(30));
-                    return new Payload("application/json", Encoding.ASCII.GetBytes(@"{ ""status"": ""completed"" }"));
+                jobsController.MapHttpRoutes(endpoints, "pricing", (JobInput input, Promise promise) => {
+                    
+                    static async ValueTask<PromiseResult> MockWork()
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(30));
+                        return PromiseResult.CreatePayload("application/json", Encoding.ASCII.GetBytes(@"{ ""status"": ""completed"" }"));
+                    }
+
+                    return ValueTask.FromResult(new Job(MockWork())
+                    {
+                        PromiseId = "x",
+                    });
                 });
             });
 

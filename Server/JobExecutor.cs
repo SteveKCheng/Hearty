@@ -98,7 +98,19 @@ namespace JobBank.Server
         /// the asynchronous task that <see cref="JobExecutor"/> returns.
         /// </para>
         /// </remarks>
-        public ValueTask<PromiseResult> Result { get; set; }
+        public ValueTask<PromiseResult> Result { get; }
+
+        public Job(ValueTask<PromiseResult> result)
+        {
+            PromiseId = null;
+            Progress = null;
+            Result = result;
+        }
+
+        public Job(PromiseResult result)
+            : this(ValueTask.FromResult(result))
+        {
+        }
     }
 
     /// <summary>
@@ -141,5 +153,12 @@ namespace JobBank.Server
         /// input is only partially determined.
         /// </remarks>
         public PipeReader PipeReader { get; }
+
+        internal JobInput(string contentType, long? contentLength, PipeReader pipeReader)
+        {
+            ContentType = contentType;
+            ContentLength = contentLength;
+            PipeReader = pipeReader;
+        }
     }
 }

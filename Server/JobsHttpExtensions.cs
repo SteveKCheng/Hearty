@@ -15,7 +15,7 @@ namespace JobBank.Server
         public static void MapHttpRoutes(this JobsController jobsController, 
                                          IEndpointRouteBuilder endpoints, 
                                          string routeKey,
-                                         Func<ValueTask<Payload>> jobAction)
+                                         JobExecutor executor)
         {
             routeKey = routeKey.Trim('/');
 
@@ -38,17 +38,28 @@ namespace JobBank.Server
                            var promise = jobsController.CreatePromise(routeKey, payload, out var id);
                            httpResponse.Headers.Add("x-job-id", id);
 
-                           ValueTask<Payload> jobTask;
+                           Job job;
+                           
                            try
                            {
-                               jobTask = jobAction();
+                               job = await executor.Invoke(new JobInput(payload.ContentType, payload.Body.Length, null!), promise);
                            }
                            catch (Exception e)
                            {
                                return Results.Problem(e.ToString(), statusCode: 400);
                            }
 
-                           jobTask.ConfigureAwait(false).GetAwaiter().OnCompleted(() => promise.PostResult(jobTask.Result));
+                           var backgroundTask = job.Result;
+                           if (backgroundTask.IsCompleted)
+                           {
+                               promise.PostResult(backgroundTask.Result.Payload);
+                           }
+                           else
+                           {
+                               backgroundTask.ConfigureAwait(false)
+                                             .GetAwaiter()
+                                             .UnsafeOnCompleted(() => promise.PostResult(backgroundTask.Result.Payload));
+                           }
 
                            // URL encoding??
                            return Results.Redirect($"/jobs/v1/current/{id}", permanent: true, preserveMethod: false);
