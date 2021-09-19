@@ -97,7 +97,7 @@ namespace JobBank.Server
             /// <remarks>
             /// If the promise has already completed, the callback is invoked synchronously.
             /// </remarks>
-            public void RegisterCallback(Action<object?> callback, object? state)
+            private bool RegisterCallback(Action<object?> callback, object? state)
             {
                 lock (Promise.SyncObject)
                 {
@@ -112,7 +112,7 @@ namespace JobBank.Server
                         // Add self to parent's list
                         base.AppendSelf(ref Promise._firstSubscription);
 
-                        return;
+                        return true;
                     }
                 }
 
@@ -120,6 +120,7 @@ namespace JobBank.Server
                 _callbackStage = (int)CallbackStage.Completed;
                 callback.Invoke(state);
                 _timeoutTrigger.Dispose();
+                return false;
             }
 
             internal void InvokeRegisteredCallback(CallbackStage stage)
@@ -128,6 +129,9 @@ namespace JobBank.Server
                                                                (int)stage, 
                                                                (int)CallbackStage.Start) != CallbackStage.Start)
                     return;
+
+                _cancelTokenRegistration.Dispose();
+                _timeoutTokenRegistration.Dispose();
 
                 Action<object?>? callbackFunc;
                 object? callbackArg;
@@ -174,13 +178,20 @@ namespace JobBank.Server
 
             void IValueTaskSource<PromiseResult>.OnCompleted(Action<object?> continuation, object? state, short token, ValueTaskSourceOnCompletedFlags flags)
             {
-                RegisterCallback(continuation, state);
+                if (RegisterCallback(continuation, state))
+                    return;
 
-                _cancellationToken.Register(s => ((SubscriptionNode)s!).InvokeRegisteredCallback(CallbackStage.Cancelled),
-                                            this, false);   // FIXME respect flags
-                _timeoutTrigger.Token.Register(s => ((SubscriptionNode)s!).InvokeRegisteredCallback(CallbackStage.TimedOut),
-                                               this, false);
+                _cancelTokenRegistration = _cancellationToken.UnsafeRegister(
+                                                s => ((SubscriptionNode)s!).InvokeRegisteredCallback(CallbackStage.Cancelled),
+                                                this);
+                _timeoutTokenRegistration = _timeoutTrigger.Token.UnsafeRegister(
+                                                s => ((SubscriptionNode)s!).InvokeRegisteredCallback(CallbackStage.TimedOut),
+                                                this);
             }
+
+            private CancellationTokenRegistration _cancelTokenRegistration;
+
+            private CancellationTokenRegistration _timeoutTokenRegistration;
 
             #endregion
 
