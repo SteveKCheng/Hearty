@@ -74,7 +74,7 @@ namespace JobBank.Server
             {
                 Promise = promise;
                 Client = client;
-                client.OnSubscribe(new Subscription(this), out _index);
+                _index = client.OnSubscribe(new Subscription(this));
             }
 
             /// <summary>
@@ -87,7 +87,7 @@ namespace JobBank.Server
                     base.RemoveSelf(ref Promise._firstSubscription);
                 }
 
-                Client.OnUnsubscribe(new Subscription(this));
+                Client.OnUnsubscribe(new Subscription(this), Index);
             }
 
             /// <summary>

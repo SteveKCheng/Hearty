@@ -14,24 +14,30 @@ namespace JobBank.Server
         /// This method is called before the subscription node object
         /// gets attached to the promise. 
         /// </remarks>
-        /// <param name="index">The value set here is assigned to
-        /// <see cref="Subscription.Index"/>.  Usually it is a sequence
-        /// number maintained by a client, so that its subscriptions
-        /// can be individually distinguished.  If there can be no
-        /// concurrent look-ups of subscriptions by index, then values
-        /// can even be re-used.
-        /// </param>
-        void OnSubscribe(Subscription subscription, out uint index);
+        /// <returns>A sequence number or index maintained by a client, 
+        /// that can distinguish subscriptions by the same client.  If 
+        /// there can be no concurrent look-ups of subscriptions by index, 
+        /// then the index values can be re-used.
+        /// </returns>
+        uint OnSubscribe(Subscription subscription);
 
         /// <summary>
         /// Called to notify this client when a subscription to a promise
         /// is taken off. 
         /// </summary>
+        /// <param name="subscription">The same subscription that was
+        /// passed to <see cref="OnSubscribe"/> 
+        /// when it had returned <paramref name="index"/>.
+        /// </param>
+        /// <param name="index">The previously returned value
+        /// from <see cref="OnSubscribe"/> that indicates which
+        /// subscription is to be removed.
+        /// </param>
         /// <remarks>
         /// This method is called after the subscription node object
         /// gets detached from the promise. 
         /// </remarks>
-        void OnUnsubscribe(Subscription subscription);
+        void OnUnsubscribe(Subscription subscription, uint index);
 
         /// <summary>
         /// Name of the user that this client is associated to.

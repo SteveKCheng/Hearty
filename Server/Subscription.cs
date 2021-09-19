@@ -16,8 +16,9 @@ namespace JobBank.Server
     /// (consumer) to facilitate monitoring and administration.
     /// </para>
     /// <para>
-    /// This structure wraps <see cref="Promise.SubscriptionNode" /> so that the interfaces
-    /// it implements for internal use do not leak out to the public API.
+    /// Internally, each subscription is represented by a node
+    /// in a linked list.  This structure deliberately hides
+    /// this implementation detail, which may change. 
     /// </para>
     /// <para>
     /// This structure should be not be default-initialized.
@@ -46,18 +47,5 @@ namespace JobBank.Server
         /// The client that is subscribing to the promise.
         /// </summary>
         public IPromiseClientInfo Client => _node.Client;
-
-        /// <summary>
-        /// An arbitrary integer that the client can associate to the subscribed promise, 
-        /// so that it can distinguish its other subscriptions.
-        /// </summary>
-        /// <remarks>
-        /// One client may subscribe to many promises.  We do not identify each
-        /// individual subscriptions as abstract "clients" because 
-        /// real clients need to be associated with users or
-        /// connections (for authentication and monitoring), which tend
-        /// to be heavier objects.
-        /// </remarks>
-        public uint Index => _node.Index;
     }
 }

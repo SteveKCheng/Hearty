@@ -15,12 +15,12 @@ namespace JobBank.Server
 
         public string UserName => "current-user";
 
-        public void OnSubscribe(Subscription subscription, out uint index)
+        public uint OnSubscribe(Subscription subscription)
         {
-            index = Interlocked.Increment(ref _subscriptionCount);
+            return Interlocked.Increment(ref _subscriptionCount);
         }
 
-        public void OnUnsubscribe(Subscription subscription)
+        public void OnUnsubscribe(Subscription subscription, uint index)
         {
         }
     }
