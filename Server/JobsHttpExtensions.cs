@@ -43,6 +43,8 @@ namespace JobBank.Server
                            try
                            {
                                job = await executor.Invoke(new JobInput(payload.ContentType, payload.Body.Length, null!), promise);
+                               // FIXME CancellationToken should be separately created for the promise.
+                               job = await executor.Invoke(new JobInput(payload.ContentType, payload.Body.Length, null!, cancellationToken), promise);
                            }
                            catch (Exception e)
                            {

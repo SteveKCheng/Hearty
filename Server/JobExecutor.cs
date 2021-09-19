@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO.Pipelines;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace JobBank.Server
@@ -154,11 +155,21 @@ namespace JobBank.Server
         /// </remarks>
         public PipeReader PipeReader { get; }
 
-        internal JobInput(string contentType, long? contentLength, PipeReader pipeReader)
+        /// <summary>
+        /// For cancelling the job when requested by users, or on some
+        /// otherwise non-recoverable error.
+        /// </summary>
+        public CancellationToken CancellationToken { get; }
+
+        internal JobInput(string contentType, 
+                          long? contentLength, 
+                          PipeReader pipeReader, 
+                          CancellationToken cancellationToken)
         {
             ContentType = contentType;
             ContentLength = contentLength;
             PipeReader = pipeReader;
+            CancellationToken = cancellationToken;
         }
     }
 }
