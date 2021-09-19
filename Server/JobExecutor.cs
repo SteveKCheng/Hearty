@@ -25,6 +25,39 @@ namespace JobBank.Server
     public delegate ValueTask<Job> JobExecutor(JobInput input, Promise promise);
 
     /// <summary>
+    /// Progress updates on a background job for a promise.
+    /// </summary>
+    public struct JobProgress
+    {
+        /// <summary>
+        /// The number of discrete items or stages that have completed.
+        /// </summary>
+        public int Numerator { get; set; }
+
+        /// <summary>
+        /// The total number of discrete items or stages.
+        /// </summary>
+        /// <remarks>
+        /// No discrete count will be considered if this member is not positive.
+        /// </remarks>
+        public int Denominator { get; set; }
+
+        /// <summary>
+        /// A fractional measurement of the degree of completion.
+        /// </summary>
+        /// <remarks>
+        /// This number should be from zero to one, or NaN if no
+        /// fraction is being reported.
+        /// </remarks>
+        public double Fraction { get; set; }
+
+        /// <summary>
+        /// A brief message describing what the background job is doing.
+        /// </summary>
+        public string? Message { get; set; }
+    }
+
+    /// <summary>
     /// Details about the job made available by <see cref="JobExecutor"/>.
     /// </summary>
     /// <remarks>
@@ -39,7 +72,12 @@ namespace JobBank.Server
         /// The ID that clients can look up to retrieve the promise object
         /// for the job.
         /// </summary>
-        public string PromiseId { get; set; }
+        public string? PromiseId { get; set; }
+
+        /// <summary>
+        /// Provides continuing status updates on the background job.
+        /// </summary>
+        public IProgress<JobProgress>? Progress { get; set; }
 
         /// <summary>
         /// A task that returns the results of the job to post into
