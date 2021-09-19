@@ -95,7 +95,7 @@ namespace JobBank.Server
                 {
                     try
                     {
-                        subscriptions[i].InvokeRegisteredCallback(SubscriptionNode.CallbackStage.Completed);
+                        subscriptions[i].SetPublished();
                     }
                     catch
                     {

@@ -56,15 +56,9 @@ namespace JobBank.Server
             public uint Index => _index;
 
             /// <summary>
-            /// Function registered by <see cref="RegisterCallback"/>, if any,
-            /// that has yet to be invoked.
+            /// Manages the continuation passed in from <see cref="IValueTaskSource{TResult}.OnCompleted" />.
             /// </summary>
-            private Action<object?>? _callbackFunc;
-
-            /// <summary>
-            /// User-specified state object to pass into <see cref="_callbackFunc"/>.
-            /// </summary>
-            private object? _callbackArg;
+            private ValueTaskContinuation _continuation;
 
             /// <summary>
             /// Initializes the object to store subscription data, but
@@ -90,56 +84,20 @@ namespace JobBank.Server
                 Client.OnUnsubscribe(new Subscription(this), Index);
             }
 
-            /// <summary>
-            /// Register a function to be called when a full result has been posted
-            /// to the parent promise.
-            /// </summary>
-            /// <remarks>
-            /// If the promise has already completed, the callback is invoked synchronously.
-            /// </remarks>
-            private bool RegisterCallback(Action<object?> callback, object? state)
-            {
-                lock (Promise.SyncObject)
-                {
-                    if (_callbackFunc != null)
-                        throw new InvalidOperationException("Callback has already been registered. ");
+            internal void SetPublished() => SetStatus(CallbackStage.Completed);
 
-                    if (!Promise.IsCompleted)
-                    {
-                        _callbackFunc = callback;
-                        _callbackArg = state;
-
-                        // Add self to parent's list
-                        base.AppendSelf(ref Promise._firstSubscription);
-
-                        return true;
-                    }
-                }
-
-                // Parent has already completed
-                _callbackStage = (int)CallbackStage.Completed;
-                callback.Invoke(state);
-                _timeoutTrigger.Dispose();
-                return false;
-            }
-
-            internal void InvokeRegisteredCallback(CallbackStage stage)
+            private void SetStatus(CallbackStage stage)
             {
                 if ((CallbackStage)Interlocked.CompareExchange(ref _callbackStage,
                                                                (int)stage, 
                                                                (int)CallbackStage.Start) != CallbackStage.Start)
                     return;
 
+                // FIXME these can race with registration!
                 _cancelTokenRegistration.Dispose();
                 _timeoutTokenRegistration.Dispose();
 
-                Action<object?>? callbackFunc;
-                object? callbackArg;
-                
-                callbackFunc = _callbackFunc;
-                callbackArg = _callbackArg;
-
-                callbackFunc!.Invoke(callbackArg);
+                _continuation.Invoke(forceAsync: true);
                 _timeoutTrigger.Dispose();
             }
 
@@ -176,16 +134,50 @@ namespace JobBank.Server
                 return Promise.IsCompleted ? ValueTaskSourceStatus.Succeeded : ValueTaskSourceStatus.Pending;
             }
 
-            void IValueTaskSource<PromiseResult>.OnCompleted(Action<object?> continuation, object? state, short token, ValueTaskSourceOnCompletedFlags flags)
+            void IValueTaskSource<PromiseResult>.OnCompleted(Action<object?> action, object? argument, short token, ValueTaskSourceOnCompletedFlags flags)
             {
-                if (RegisterCallback(continuation, state))
-                    return;
+                // Capture the continuation outside the lock below.
+                // We do not bother checking Promise.IsCompleted before embarking on this work,
+                // because the user of ValueTask should be doing that already.
+                var continuation = new ValueTaskContinuation(action, argument, flags);
 
+                lock (Promise.SyncObject)
+                {
+                    if (_continuation.IsValid)
+                        throw new InvalidOperationException("Callback has already been registered. ");
+
+                    if (!Promise.IsCompleted)
+                    {
+                        // Move continuation into instance member
+                        _continuation = continuation;
+                        continuation = default;
+
+                        // Add self to parent's list
+                        base.AppendSelf(ref Promise._firstSubscription);
+                    }
+                }
+
+                // Promise is already completed after we checked inside the lock above
+                if (continuation.IsValid)
+                {
+                    // Same as SetStatus but we can execute the continuation synchronously.
+                    // There can be no concurrent writes on _callbackStage, unless the ValueTask
+                    // is improperly accessed, but even if so they would be harmless.
+                    _callbackStage = (int)CallbackStage.Completed;
+                    continuation.InvokeIgnoringExecutionContext(forceAsync: false);
+
+                    _timeoutTrigger.Dispose();
+                    return;
+                }
+
+                // Register cancellation callbacks.
+                // But do not do so when result is already immediately available, as we
+                // would have to do extra work to clean it up.
                 _cancelTokenRegistration = _cancellationToken.UnsafeRegister(
-                                                s => ((SubscriptionNode)s!).InvokeRegisteredCallback(CallbackStage.Cancelled),
+                                                s => ((SubscriptionNode)s!).SetStatus(CallbackStage.Cancelled),
                                                 this);
                 _timeoutTokenRegistration = _timeoutTrigger.Token.UnsafeRegister(
-                                                s => ((SubscriptionNode)s!).InvokeRegisteredCallback(CallbackStage.TimedOut),
+                                                s => ((SubscriptionNode)s!).SetStatus(CallbackStage.TimedOut),
                                                 this);
             }
 
