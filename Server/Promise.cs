@@ -1,6 +1,6 @@
 ﻿using System;
-using System.Buffers;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace JobBank.Server
 {
@@ -18,9 +18,6 @@ namespace JobBank.Server
     /// </remarks>
     public partial class Promise
     {
-        private static readonly ArrayPool<SubscriptionNode> SubscriptionArrayPool
-            = ArrayPool<SubscriptionNode>.Create();
-
         public Payload? ResultPayload
         {
             get
@@ -61,53 +58,27 @@ namespace JobBank.Server
         /// <remarks>
         /// Any subscribers to this promise are notified.
         /// </remarks>
-        public void PostResult(Payload resultPayload)
+        internal void PostResult(Payload resultPayload)
         {
-            const int initialCapacity = 1024;
-            int count = 0;
-            var rentedArray = SubscriptionArrayPool.Rent(initialCapacity);
-            var subscriptions = rentedArray;
+            Debug.Assert(_isFulfilled == 0);
 
-            try
+            _resultPayload = resultPayload;
+            _isFulfilled = 1;   // Implies release fence to publish _resultPayload
+
+            // Loop through subscribers to wake up one by one.
+            // Releases the list lock after de-queuing each node,
+            // before invoking its continuation (involving user-defined code).
+            SubscriptionNode? node;
+            while ((node = SubscriptionNode.PrepareToWakeUpNextSubscriber(this)) != null)
             {
-                lock (this.SyncObject)
+                try
                 {
-                    if (_isFulfilled != 0)
-                        throw new PromiseException("Cannot post into a promise that has already been posted. ");
-
-                    _resultPayload = resultPayload;
-                    _isFulfilled = 1;
-
-                    foreach (var s in new CircularListView<SubscriptionNode>(_firstSubscription))
-                    {
-                        if (count == subscriptions.Length)
-                        {
-                            var newSubscriptions = new SubscriptionNode[subscriptions.Length * 2];
-                            subscriptions.CopyTo(newSubscriptions.AsSpan());
-                            subscriptions = newSubscriptions;
-                        }
-
-                        subscriptions[count++] = s;
-                    }
+                    node.SetPublished();
                 }
-
-                for (int i = 0; i < count; ++i)
+                catch
                 {
-                    try
-                    {
-                        subscriptions[i].SetPublished();
-                    }
-                    catch
-                    {
-                        // FIXME log error
-                        throw;
-                    }
+                    // FIXME log the error, do not swallow
                 }
-            }
-            finally
-            {
-                rentedArray.AsSpan().Slice(0, Math.Min(initialCapacity, count)).Clear();
-                SubscriptionArrayPool.Return(rentedArray);
             }
         }
 

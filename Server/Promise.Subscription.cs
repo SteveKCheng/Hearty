@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Sources;
@@ -78,10 +79,47 @@ namespace JobBank.Server
             {
                 lock (Promise.SyncObject)
                 {
-                    base.RemoveSelf(ref Promise._firstSubscription);
+                    base.RemoveSelf(ref (_inWakeUpList ? ref Promise._firstToWake
+                                                       : ref Promise._firstSubscription));
+                    _inWakeUpList = false;
+
+                    Client.OnUnsubscribe(new Subscription(this), Index);
+                }
+            }
+
+            /// <summary>
+            /// Retrieves the next subscriber to wake up, and moves it to the non-wake-up list
+            /// of subscribers.
+            /// </summary>
+            /// <remarks>
+            /// This operation is performed under a very short-lived lock to make
+            /// it safe, yet efficient, to wake up subscribers when subscriptions 
+            /// can be added or removed concurrently.  In particular, we can release
+            /// the lock after each subscriber is "de-queued", and the list lock 
+            /// certainly will not be held when invoking the continuation.
+            /// </remarks>
+            /// <returns>
+            /// The next subscriber in the list after it has been "de-queued" from
+            /// the wake-up list.
+            /// </returns>
+            internal static SubscriptionNode? PrepareToWakeUpNextSubscriber(Promise promise)
+            {
+                SubscriptionNode? target;
+                lock (promise.SyncObject)
+                {
+                    target = promise._firstToWake;
+
+                    if (target != null)
+                    {
+                        Debug.Assert(target._inWakeUpList);
+
+                        target.RemoveSelf(ref promise._firstToWake);
+                        target._inWakeUpList = false;
+                        target.AppendSelf(ref promise._firstSubscription);
+                    }
                 }
 
-                Client.OnUnsubscribe(new Subscription(this), Index);
+                return target;
             }
 
             internal void SetPublished() => SetStatus(CallbackStage.Completed);
@@ -153,7 +191,8 @@ namespace JobBank.Server
                         continuation = default;
 
                         // Add self to parent's list
-                        base.AppendSelf(ref Promise._firstSubscription);
+                        _inWakeUpList = true;
+                        base.AppendSelf(ref Promise._firstToWake);
                     }
                 }
 
@@ -218,12 +257,33 @@ namespace JobBank.Server
             }
 
             private int _callbackStage;
+
+            /// <summary>
+            /// True when this node has been queued under <see cref="Promise._firstToWake"/>;
+            /// otherwise false.
+            /// </summary>
+            private bool _inWakeUpList;
         }
 
         /// <summary>
-        /// Points to the first subscription entry attached to this promise.
+        /// Points to the first of subscription entries attached to this promise
+        /// that are not waiting for something to be published.
         /// </summary>
         private SubscriptionNode? _firstSubscription;
+
+        /// <summary>
+        /// Points to the first of subscription entries attached to this promise
+        /// that are waiting for <see cref="PromiseResult"/> to be published.
+        /// </summary>
+        /// <remarks>
+        /// This list is kept separate from <see cref="_firstSubscription" />
+        /// to avoid having to lock the entire list when calling continuations
+        /// for <see cref="IValueTaskSource{PromiseResult}" />.  
+        /// That may not be good for performance since there can be many nodes.
+        /// The nodes in this list are, necessarily, disjoint from those in 
+        /// <see cref="_firstSubscription" />.  
+        /// </remarks>
+        private SubscriptionNode? _firstToWake;
 
         /// <summary>
         /// Subscribes to this promise and asynchronously retrieve results from it.
