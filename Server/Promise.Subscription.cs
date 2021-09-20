@@ -39,11 +39,6 @@ namespace JobBank.Server
             public IPromiseClientInfo Client { get; }
 
             /// <summary>
-            /// Backing field for <see cref="Index" />.
-            /// </summary>
-            private readonly uint _index;
-
-            /// <summary>
             /// An arbitrary integer that the client can associate to the subscribed promise, 
             /// so that it can distinguish its other subscriptions.
             /// </summary>
@@ -54,7 +49,7 @@ namespace JobBank.Server
             /// connections (for authentication and monitoring), which tend
             /// to be heavier objects.
             /// </remarks>
-            public uint Index => _index;
+            public uint Index { get; private set; }
 
             /// <summary>
             /// Manages the continuation passed in from <see cref="IValueTaskSource{TResult}.OnCompleted" />.
@@ -69,7 +64,22 @@ namespace JobBank.Server
             {
                 Promise = promise;
                 Client = client;
-                _index = client.OnSubscribe(new Subscription(this));
+            }
+
+            internal void AttachSelfWithoutWakeUp()
+            {
+                Debug.Assert(!_inWakeUpList);
+                lock (Promise.SyncObject)
+                {
+                    if (_isAttached)
+                        return;
+
+                    base.AppendSelf(ref Promise._firstSubscription);
+                    _isAttached = true;
+
+                }
+
+                Index = Client.OnSubscribe(new Subscription(this));
             }
 
             /// <summary>
@@ -79,12 +89,16 @@ namespace JobBank.Server
             {
                 lock (Promise.SyncObject)
                 {
+                    if (!_isAttached)
+                        return;
+
                     base.RemoveSelf(ref (_inWakeUpList ? ref Promise._firstToWake
                                                        : ref Promise._firstSubscription));
                     _inWakeUpList = false;
-
-                    Client.OnUnsubscribe(new Subscription(this), Index);
+                    _isAttached = false;
                 }
+
+                Client.OnUnsubscribe(new Subscription(this), Index);
             }
 
             /// <summary>
@@ -111,7 +125,7 @@ namespace JobBank.Server
 
                     if (target != null)
                     {
-                        Debug.Assert(target._inWakeUpList);
+                        Debug.Assert(target._isAttached && target._inWakeUpList);
 
                         target.RemoveSelf(ref promise._firstToWake);
                         target._inWakeUpList = false;
@@ -157,6 +171,9 @@ namespace JobBank.Server
                     payload = Promise.ResultPayload;
                     if (payload == null)
                         throw new InvalidOperationException("Cannot call IValueTaskSource.GetResult on an uncompleted promise. ");
+
+                    if (!_isAttached)
+                        AttachSelfWithoutWakeUp();
                 }
                 catch
                 {
@@ -192,6 +209,7 @@ namespace JobBank.Server
 
                         // Add self to parent's list
                         _inWakeUpList = true;
+                        _isAttached = true;
                         base.AppendSelf(ref Promise._firstToWake);
                     }
                 }
@@ -208,6 +226,8 @@ namespace JobBank.Server
                     _timeoutTrigger.Dispose();
                     return;
                 }
+
+                Index = Client.OnSubscribe(new Subscription(this));
 
                 // Register cancellation callbacks.
                 // But do not do so when result is already immediately available, as we
@@ -263,6 +283,8 @@ namespace JobBank.Server
             /// otherwise false.
             /// </summary>
             private bool _inWakeUpList;
+
+            private bool _isAttached;
         }
 
         /// <summary>
@@ -290,14 +312,17 @@ namespace JobBank.Server
         /// </summary>
         public ValueTask<PromiseResult> GetResultAsync(IPromiseClientInfo client, in TimeSpan? timeout, CancellationToken cancellationToken)
         {
+            var subscription = new SubscriptionNode(this, client);
+
             var payload = ResultPayload;
             if (payload != null)
-                return new ValueTask<PromiseResult>(new PromiseResult(null, payload.GetValueOrDefault()));
+            {
+                subscription.AttachSelfWithoutWakeUp();
+                return new ValueTask<PromiseResult>(new PromiseResult(subscription, payload.GetValueOrDefault()));
+            }
 
-            var subscription = new SubscriptionNode(this, client);
             subscription.PrepareForCancellation(timeout, cancellationToken);
             return new ValueTask<PromiseResult>(subscription, token: 0);
         }
-
     }
 }
