@@ -24,12 +24,15 @@ namespace JobBank.Server
     {
         private Promise.SubscriptionNode? _subscription;
 
-        public Payload Payload { get; }
+        /// <summary>
+        /// The result of the promise made available in various forms.
+        /// </summary>
+        public PromiseOutput Output { get; }
 
-        internal PromiseResult(Promise.SubscriptionNode? subscription, Payload payload)
+        internal PromiseResult(Promise.SubscriptionNode? subscription, PromiseOutput output)
         {
             _subscription = subscription;
-            Payload = payload;
+            Output = output;
         }
 
         /// <summary>

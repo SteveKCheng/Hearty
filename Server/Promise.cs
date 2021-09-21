@@ -18,14 +18,14 @@ namespace JobBank.Server
     /// </remarks>
     public partial class Promise
     {
-        public Payload? ResultPayload
+        public PromiseOutput? ResultOutput
         {
             get
             {
                 if (_isFulfilled == 0)
                     return null;
 
-                return _resultPayload;
+                return _resultOutput;
             }
         }
 
@@ -34,17 +34,17 @@ namespace JobBank.Server
         /// </summary>
         public DateTime CreationTime { get; }
 
-        public Payload RequestPayload { get; }
+        public PromiseOutput RequestOutput { get; }
 
         public bool IsCompleted => _isFulfilled != 0;
 
-        public Promise(Payload requestPayload)
+        public Promise(PromiseOutput request)
         {
             CreationTime = DateTime.UtcNow;
-            RequestPayload = requestPayload;
+            RequestOutput = request;
         }
 
-        private Payload _resultPayload;
+        private PromiseOutput? _resultOutput;
 
         /// <summary>
         /// The .NET object that must be locked to safely 
@@ -58,12 +58,12 @@ namespace JobBank.Server
         /// <remarks>
         /// Any subscribers to this promise are notified.
         /// </remarks>
-        internal void PostResult(Payload resultPayload)
+        internal void PostResult(PromiseOutput result)
         {
             Debug.Assert(_isFulfilled == 0);
 
-            _resultPayload = resultPayload;
-            _isFulfilled = 1;   // Implies release fence to publish _resultPayload
+            _resultOutput = result;
+            _isFulfilled = 1;   // Implies release fence to publish _resultOutput
 
             // Loop through subscribers to wake up one by one.
             // Releases the list lock after de-queuing each node,

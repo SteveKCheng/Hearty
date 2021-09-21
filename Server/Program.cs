@@ -26,10 +26,10 @@ namespace JobBank.Server
                 endpoints.MapGet("/", () => "Hello World!");
                 jobsController.MapHttpRoutes(endpoints, "pricing", (JobInput input, Promise promise) => {
                     
-                    static async ValueTask<PromiseResult> MockWork()
+                    static async ValueTask<PromiseOutput> MockWork()
                     {
                         await Task.Delay(TimeSpan.FromSeconds(30));
-                        return PromiseResult.CreatePayload("application/json", Encoding.ASCII.GetBytes(@"{ ""status"": ""completed"" }"));
+                        return new Payload("application/json", Encoding.ASCII.GetBytes(@"{ ""status"": ""completed"" }"));
                     }
 
                     return ValueTask.FromResult(new Job(MockWork())

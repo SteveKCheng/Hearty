@@ -99,16 +99,16 @@ namespace JobBank.Server
         /// the asynchronous task that <see cref="JobExecutor"/> returns.
         /// </para>
         /// </remarks>
-        public ValueTask<PromiseResult> Task { get; }
+        public ValueTask<PromiseOutput> Task { get; }
 
-        public Job(ValueTask<PromiseResult> task)
+        public Job(ValueTask<PromiseOutput> task)
         {
             PromiseId = null;
             Progress = null;
             Task = task;
         }
 
-        public Job(PromiseResult result)
+        public Job(PromiseOutput result)
             : this(ValueTask.FromResult(result))
         {
         }

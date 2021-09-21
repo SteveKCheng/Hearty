@@ -94,9 +94,9 @@ namespace JobBank.Server
                 
                 if (stage != CallbackStage.Start)
                 {
-                    var payload = promise.ResultPayload;
+                    var output = promise.ResultOutput;
                     self.AttachSelfWithoutWakeUp();
-                    return new ValueTask<PromiseResult>(new PromiseResult(self, payload!));
+                    return new ValueTask<PromiseResult>(new PromiseResult(self, output!));
                 }
 
                 return new ValueTask<PromiseResult>(self, token: 0);
@@ -239,7 +239,7 @@ namespace JobBank.Server
             /// </summary>
             PromiseResult IValueTaskSource<PromiseResult>.GetResult(short token)
             {
-                Payload? payload;
+                PromiseOutput? output;
 
                 try
                 {
@@ -250,8 +250,8 @@ namespace JobBank.Server
                     if (stage == CallbackStage.TimedOut)
                         throw new TimeoutException("Data for the promise was not available before timing out. ");
 
-                    payload = Promise.ResultPayload;
-                    if (payload == null)
+                    output = Promise.ResultOutput;
+                    if (output == null)
                         throw new InvalidOperationException("Cannot call IValueTaskSource.GetResult on an uncompleted promise. ");
 
                     if (!_isAttached)
@@ -263,7 +263,7 @@ namespace JobBank.Server
                     throw;
                 }
 
-                return new PromiseResult(this, payload);
+                return new PromiseResult(this, output);
             }
 
             /// <summary>

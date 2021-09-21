@@ -2,7 +2,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
-using Nerdbank.Streams;
 using System;
 using System.Buffers;
 using System.Threading;
@@ -22,7 +21,7 @@ namespace JobBank.Server
             // FIXME This should be managed by a cache
             IPromiseClientInfo clientInfo = new BasicPromiseClientInfo();
 
-            endpoints.MapPost("/jobs/v1/queue/" + routeKey, 
+            endpoints.MapPost("/jobs/v1/queue/" + routeKey,
                        async (HttpRequest httpRequest, HttpResponse httpResponse, CancellationToken cancellationToken) =>
                        {
                            Payload payload;
@@ -53,14 +52,14 @@ namespace JobBank.Server
                            var backgroundTask = job.Task;
                            if (backgroundTask.IsCompleted)
                            {
-                               promise.PostResult(backgroundTask.Result.Payload);
+                               promise.PostResult(backgroundTask.Result);
                            }
                            else
                            {
-                               static async void AwaitAndPostResultAsync(ValueTask<PromiseResult> backgroundTask, Promise promise)
+                               static async void AwaitAndPostResultAsync(ValueTask<PromiseOutput> backgroundTask, Promise promise)
                                {
-                                   var result = await backgroundTask.ConfigureAwait(false);
-                                   promise.PostResult(result.Payload);
+                                   var output = await backgroundTask.ConfigureAwait(false);
+                                   promise.PostResult(output);
                                }
 
                                AwaitAndPostResultAsync(backgroundTask, promise);
@@ -80,8 +79,7 @@ namespace JobBank.Server
                                return Results.NotFound();
 
                            using var result = await promise.GetResultAsync(clientInfo, timeout?.Value, cancellationToken);
-                           return Results.Stream(new ReadOnlySequence<byte>(result.Payload.Body).AsStream(),
-                                                 result.Payload.SuggestedContentType);
+                           return Results.Stream(await result.Output.GetByteStreamAsync(result.Output.SuggestedContentType, cancellationToken));
                        });
         }
 
