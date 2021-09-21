@@ -56,15 +56,24 @@ namespace JobBank.Server
 
         /// <inheritdoc />
         public override ValueTask<PipeReader> GetPipeReaderAsync(string contentType, long position, CancellationToken cancellationToken)
+            => ValueTask.FromResult(GetPipeReaderInternal(contentType, position, cancellationToken));
+
+        private PipeReader GetPipeReaderInternal(string contentType, long position, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            VerifyContentType(contentType);
+            var sequence = new ReadOnlySequence<byte>(Body);
+            var pipeReader = PipeReader.Create(sequence);
+            if (position > 0)
+                pipeReader.AdvanceTo(sequence.GetPosition(position));
+            return pipeReader;
         }
 
         /// <inheritdoc />
         public override ValueTask<Stream> GetByteStreamAsync(string contentType, CancellationToken cancellationToken)
         {
             VerifyContentType(contentType);
-            return ValueTask.FromResult(new ReadOnlySequence<byte>(Body).AsStream());
+            var pipeReader = GetPipeReaderInternal(contentType, 0, cancellationToken);
+            return ValueTask.FromResult(pipeReader.AsStream());
         }
 
         private void VerifyContentType(string contentType)
