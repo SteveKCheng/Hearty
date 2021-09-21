@@ -24,30 +24,30 @@ namespace JobBank.Server
             endpoints.MapPost("/jobs/v1/queue/" + routeKey,
                        async (HttpRequest httpRequest, HttpResponse httpResponse, CancellationToken cancellationToken) =>
                        {
-                           Payload payload;
-                           try
-                           {
-                               payload = await ReadPayloadSafelyAsync(httpRequest, 16 * 1024 * 1024, cancellationToken);
-                           }
-                           catch (PayloadTooLargeException)
-                           {
-                               return Results.StatusCode(413);
-                           }
-                           
-                           var promise = jobsController.CreatePromise(routeKey, payload, out var id);
-                           httpResponse.Headers.Add("x-job-id", id);
+                           var promise = jobsController.CreatePromise(routeKey, out var id);
+
+                           var jobInput = new JobInput(httpRequest.ContentType,
+                                                       httpRequest.ContentLength,
+                                                       httpRequest.BodyReader,
+                                                       cancellationToken);
 
                            Job job;
                            
                            try
                            {
                                // FIXME CancellationToken should be separately created for the promise.
-                               job = await executor.Invoke(new JobInput(payload.SuggestedContentType, payload.Body.Length, null!, cancellationToken), promise);
+                               job = await executor.Invoke(jobInput, promise);
+                           }
+                           catch (PayloadTooLargeException)
+                           {
+                               return Results.StatusCode(413);
                            }
                            catch (Exception e)
                            {
                                return Results.Problem(e.ToString(), statusCode: 400);
                            }
+
+                           httpResponse.Headers.Add("x-job-id", id);
 
                            var backgroundTask = job.Task;
                            if (backgroundTask.IsCompleted)
@@ -81,53 +81,6 @@ namespace JobBank.Server
                            using var result = await promise.GetResultAsync(clientInfo, timeout?.Value, cancellationToken);
                            return Results.Stream(await result.Output.GetByteStreamAsync(result.Output.SuggestedContentType, cancellationToken));
                        });
-        }
-
-        /// <summary>
-        /// Read the body of a HTTP (POST/PUT) request as a sequence of bytes with an associated
-        /// media type, applying limits on the amount of data.
-        /// </summary>
-        private static async Task<Payload>
-            ReadPayloadSafelyAsync(HttpRequest httpRequest, int lengthLimit, CancellationToken cancellationToken)
-        {
-            var headers = httpRequest.Headers;
-            var contentType = headers.ContentType.ToString();
-            var contentLength = headers.ContentLength;
-
-            if (contentLength > lengthLimit)
-                throw new PayloadTooLargeException();
-
-            var payload = new byte[(contentLength + 1) ?? 8092];
-
-            var stream = httpRequest.Body;
-            int bytesTotalRead = 0;
-
-            while (true)
-            {
-                int bytesJustRead = await stream.ReadAsync(new Memory<byte>(payload).Slice(bytesTotalRead),
-                                                           cancellationToken);
-                if (bytesJustRead == 0)
-                    break;
-
-                bytesTotalRead += bytesJustRead;
-
-                if (contentLength != null)
-                {
-                    if (bytesTotalRead > contentLength.Value)
-                        throw new PromiseException("Got more bytes of payload than what the HTTP header Content-Length indicated. ");
-                }
-                else
-                {
-                    if (payload.Length - bytesTotalRead < payload.Length / 4)
-                    {
-                        var newPayload = new byte[payload.Length * 2];
-                        payload.AsSpan().Slice(0, bytesTotalRead).CopyTo(newPayload);
-                        payload = newPayload;
-                    }
-                }
-            }
-
-            return new Payload(contentType, new Memory<byte>(payload, 0, bytesTotalRead));
         }
     }
 }

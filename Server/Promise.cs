@@ -34,14 +34,13 @@ namespace JobBank.Server
         /// </summary>
         public DateTime CreationTime { get; }
 
-        public PromiseOutput RequestOutput { get; }
+        public PromiseOutput? RequestOutput { get; internal set; }
 
         public bool IsCompleted => _isFulfilled != 0;
 
-        public Promise(PromiseOutput request)
+        public Promise()
         {
             CreationTime = DateTime.UtcNow;
-            RequestOutput = request;
         }
 
         private PromiseOutput? _resultOutput;

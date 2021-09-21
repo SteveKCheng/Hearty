@@ -22,9 +22,9 @@ namespace JobBank.Server
             });
         }
 
-        internal Promise CreatePromise(string key, Payload requestPayload, out string id)
+        internal Promise CreatePromise(string key, out string id)
         {
-            var promise = new Promise(requestPayload);
+            var promise = new Promise();
 
             var idNum = Interlocked.Increment(ref _currentId);
             id = idNum.ToString();

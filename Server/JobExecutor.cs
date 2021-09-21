@@ -127,7 +127,7 @@ namespace JobBank.Server
         /// This member corresponds with the "Content-Type" field
         /// sent by the client in the HTTP POST request.
         /// </remarks>
-        public string ContentType { get; }
+        public string? ContentType { get; }
 
         /// <summary>
         /// Supposed size of the payload, in bytes.
@@ -161,7 +161,7 @@ namespace JobBank.Server
         /// </summary>
         public CancellationToken CancellationToken { get; }
 
-        internal JobInput(string contentType, 
+        internal JobInput(string? contentType, 
                           long? contentLength, 
                           PipeReader pipeReader, 
                           CancellationToken cancellationToken)
