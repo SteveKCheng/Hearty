@@ -45,7 +45,7 @@ namespace JobBank.Server
             if (subscription != null)
             {
                 _subscription = null;
-                subscription.DetachSelf();
+                subscription.Dispose();
             }
         }
 

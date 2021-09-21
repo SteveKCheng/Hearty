@@ -73,7 +73,7 @@ namespace JobBank.Server
             {
                 try
                 {
-                    node.SetPublished();
+                    node.TryMarkPublished();
                 }
                 catch
                 {
