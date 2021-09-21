@@ -64,13 +64,45 @@ namespace JobBank.Server
             /// To avoid taking locks twice when the ValueTask that this node backs
             /// is awaited, we do not register the node at construction.
             /// </remarks>
-            public SubscriptionNode(Promise promise, IPromiseClientInfo client)
+            private SubscriptionNode(Promise promise, IPromiseClientInfo client)
             {
                 Promise = promise;
                 Client = client;
             }
 
-            internal void AttachSelfWithoutWakeUp()
+            /// <summary>
+            /// Returns the asynchronous task backed by a new instance of this class.
+            /// </summary>
+            /// <remarks>
+            /// This code is put into a static method that can access private data of the new instance,
+            /// to coordinate concurrency much more easily.
+            /// </remarks>
+            [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "VSTHRD200:Use \"Async\" suffix for async methods")]
+            internal static ValueTask<PromiseResult> CreateValueTask(Promise promise, 
+                                                                     IPromiseClientInfo client,
+                                                                     in TimeSpan? timeout,
+                                                                     CancellationToken cancellationToken)
+            {
+                var self = new SubscriptionNode(promise, client);
+
+                self._cancellationToken = cancellationToken;
+                if (timeout is TimeSpan t)
+                    self._timeoutTrigger = CancellationPool.CancelAfter(t);
+
+                var stage = self.Poll();
+                self._callbackStage = (int)stage;
+                
+                if (stage != CallbackStage.Start)
+                {
+                    var payload = promise.ResultPayload;
+                    self.AttachSelfWithoutWakeUp();
+                    return new ValueTask<PromiseResult>(new PromiseResult(self, payload.GetValueOrDefault()));
+                }
+
+                return new ValueTask<PromiseResult>(self, token: 0);
+            }
+
+            private void AttachSelfWithoutWakeUp()
             {
                 Debug.Assert(!_inWakeUpList);
                 lock (Promise.SyncObject)
@@ -235,14 +267,17 @@ namespace JobBank.Server
             }
 
             /// <summary>
-            /// Get the status of the ValueTask which will complete if the parent promise publishes
+            /// Get the status of the ValueTask that this node is backing.
+            /// </summary>
+            /// <remarks>
+            /// The ValueTask is considered complete if the parent promise publishes
             /// something, or cancellation happened specifically for the current subscriber 
             /// (and not necessarily in the parent promise).
-            /// </summary>
+            /// </remarks>
             ValueTaskSourceStatus IValueTaskSource<PromiseResult>.GetStatus(short token)
-            {
-                return Promise.IsCompleted ? ValueTaskSourceStatus.Succeeded : ValueTaskSourceStatus.Pending;
-            }
+                => ((CallbackStage)_callbackStage) != CallbackStage.Start
+                        ? ValueTaskSourceStatus.Succeeded
+                        : ValueTaskSourceStatus.Pending;
 
             /// <summary>
             /// Registers the continuation to invoke when the ValueTask completes asynchronously,
@@ -356,17 +391,6 @@ namespace JobBank.Server
             private CancellationTokenRegistration _timeoutTokenRegistration;
 
             /// <summary>
-            /// Prepare for timeout and cancellation as part of asynchronous retrieval
-            /// of the parent promise's result.
-            /// </summary>
-            internal void PrepareForCancellation(in TimeSpan? timeout, CancellationToken cancellationToken)
-            {
-                _cancellationToken = cancellationToken;
-                if (timeout != null)
-                    _timeoutTrigger = CancellationPool.CancelAfter(timeout.GetValueOrDefault());
-            }
-
-            /// <summary>
             /// The canellation token passed in by the client as part of an asynchronously
             /// retrieving from the promise.
             /// </summary>
@@ -442,21 +466,11 @@ namespace JobBank.Server
         private SubscriptionNode? _firstToWake;
 
         /// <summary>
-        /// Subscribes to this promise and asynchronously retrieve results from it.
+        /// Subscribes to this promise and prepare to await/retrieve its results.
         /// </summary>
-        public ValueTask<PromiseResult> GetResultAsync(IPromiseClientInfo client, in TimeSpan? timeout, CancellationToken cancellationToken)
-        {
-            var subscription = new SubscriptionNode(this, client);
-
-            var payload = ResultPayload;
-            if (payload != null)
-            {
-                subscription.AttachSelfWithoutWakeUp();
-                return new ValueTask<PromiseResult>(new PromiseResult(subscription, payload.GetValueOrDefault()));
-            }
-
-            subscription.PrepareForCancellation(timeout, cancellationToken);
-            return new ValueTask<PromiseResult>(subscription, token: 0);
-        }
+        public ValueTask<PromiseResult> GetResultAsync(IPromiseClientInfo client, 
+                                                       in TimeSpan? timeout, 
+                                                       CancellationToken cancellationToken)
+            => SubscriptionNode.CreateValueTask(this, client, timeout, cancellationToken);
     }
 }
