@@ -43,7 +43,7 @@ namespace JobBank.Server
                            try
                            {
                                // FIXME CancellationToken should be separately created for the promise.
-                               job = await executor.Invoke(new JobInput(payload.ContentType, payload.Body.Length, null!, cancellationToken), promise);
+                               job = await executor.Invoke(new JobInput(payload.SuggestedContentType, payload.Body.Length, null!, cancellationToken), promise);
                            }
                            catch (Exception e)
                            {
@@ -81,7 +81,7 @@ namespace JobBank.Server
 
                            using var result = await promise.GetResultAsync(clientInfo, timeout?.Value, cancellationToken);
                            return Results.Stream(new ReadOnlySequence<byte>(result.Payload.Body).AsStream(),
-                                                 result.Payload.ContentType);
+                                                 result.Payload.SuggestedContentType);
                        });
         }
 

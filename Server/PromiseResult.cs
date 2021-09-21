@@ -26,7 +26,7 @@ namespace JobBank.Server
 
         public Payload Payload { get; }
 
-        internal PromiseResult(Promise.SubscriptionNode? subscription, in Payload payload)
+        internal PromiseResult(Promise.SubscriptionNode? subscription, Payload payload)
         {
             _subscription = subscription;
             Payload = payload;

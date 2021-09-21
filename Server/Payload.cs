@@ -1,5 +1,12 @@
-﻿using System;
+﻿using Nerdbank.Streams;
+using System;
+using System.Buffers;
+using System.Collections.Generic;
+using System.IO;
+using System.IO.Pipelines;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace JobBank.Server
 {
@@ -7,13 +14,13 @@ namespace JobBank.Server
     /// Encapsulates a payload, stored in memory, of arbitrary content (media) type
     /// that is uploaded or downloaded.
     /// </summary>
-    public readonly struct Payload : IEquatable<Payload>
+    public sealed class Payload : PromiseOutput, IEquatable<Payload>
     {
         /// <summary>
         /// Content (media) type describing the data format of <see cref="Body"/>,
         /// specified in the same way as HTTP and MIME.
         /// </summary>
-        public string ContentType { get; }
+        public override string SuggestedContentType { get; }
 
         /// <summary>
         /// The sequence of bytes forming the user-defined data.
@@ -23,11 +30,11 @@ namespace JobBank.Server
         /// <summary>
         /// Label a sequence of bytes with its content type.
         /// </summary>
-        /// <param name="contentType"><see cref="ContentType"/>. </param>
+        /// <param name="contentType"><see cref="SuggestedContentType"/>. </param>
         /// <param name="body"><see cref="Body"/>. </param>
         public Payload(string contentType, Memory<byte> body)
         {
-            ContentType = contentType;
+            SuggestedContentType = contentType;
             Body = body;
         }
 
@@ -36,8 +43,8 @@ namespace JobBank.Server
         /// (compared as strings) and the contents are byte-wise equal.
         /// </summary>
         /// <param name="other">The payload to compare this payload against. </param>
-        public bool Equals(Payload other)
-            => ContentType == other.ContentType && Body.Span.SequenceEqual(other.Body.Span);
+        public bool Equals(Payload? other)
+            => other != null && SuggestedContentType == other.SuggestedContentType && Body.Span.SequenceEqual(other.Body.Span);
 
         /// <inheritdoc />
         public override bool Equals(object? obj)
@@ -45,6 +52,38 @@ namespace JobBank.Server
 
         /// <inheritdoc />
         public override int GetHashCode()
-            => ContentType.GetHashCode();   // FIXME should hash first few bytes of Body
+            => SuggestedContentType.GetHashCode();   // FIXME should hash first few bytes of Body
+
+        /// <inheritdoc />
+        public override ValueTask<PipeReader> GetPipeReaderAsync(string contentType, long position, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
+
+        /// <inheritdoc />
+        public override ValueTask<Stream> GetByteStreamAsync(string contentType, CancellationToken cancellationToken)
+        {
+            VerifyContentType(contentType);
+            return ValueTask.FromResult(new ReadOnlySequence<byte>(Body).AsStream());
+        }
+
+        private void VerifyContentType(string contentType)
+        {
+            if (contentType != SuggestedContentType)
+                throw new NotSupportedException($"Requested content type {contentType} not supported for this promise output. ");
+        }
+
+        /// <inheritdoc />
+        public override ValueTask<ReadOnlySequence<byte>> GetPayloadAsync(string contentType, CancellationToken cancellationToken)
+        {
+            VerifyContentType(contentType);
+            return ValueTask.FromResult(new ReadOnlySequence<byte>(Body));
+        }
+
+        /// <inheritdoc />
+        public override ValueTask<IAsyncEnumerator<ReadOnlyMemory<byte>>> GetPayloadStreamAsync(string contentType, int position, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

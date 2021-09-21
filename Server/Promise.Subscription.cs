@@ -96,7 +96,7 @@ namespace JobBank.Server
                 {
                     var payload = promise.ResultPayload;
                     self.AttachSelfWithoutWakeUp();
-                    return new ValueTask<PromiseResult>(new PromiseResult(self, payload.GetValueOrDefault()));
+                    return new ValueTask<PromiseResult>(new PromiseResult(self, payload!));
                 }
 
                 return new ValueTask<PromiseResult>(self, token: 0);
@@ -263,7 +263,7 @@ namespace JobBank.Server
                     throw;
                 }
 
-                return new PromiseResult(this, payload.GetValueOrDefault());
+                return new PromiseResult(this, payload);
             }
 
             /// <summary>
