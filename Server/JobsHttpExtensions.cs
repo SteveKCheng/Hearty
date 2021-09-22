@@ -70,18 +70,34 @@ namespace JobBank.Server
                        });
 
             endpoints.MapGet("/jobs/v1/current/" + routeKey + "/{**id}",
-                       async ([FromRoute] string id,
-                              [FromQuery] ExpiryTimeSpan? timeout,
-                              CancellationToken cancellationToken) =>
-                       {
-                           var promise = jobsController.GetPromiseById(id);
-                           if (promise == null || (timeout == null && !promise.IsCompleted))
-                               return Results.NotFound();
+                    async ([FromRoute] string id,
+                           [FromQuery] ExpiryTimeSpan? timeout,
+                           CancellationToken cancellationToken,
+                           HttpResponse httpResponse) =>
+                    {
+                        var promise = jobsController.GetPromiseById(id);
+                        if (promise == null)
+                        {
+                            httpResponse.StatusCode = StatusCodes.Status404NotFound;
+                            return;
+                        }          
+                        
+                        if (timeout == null && !promise.IsCompleted)
+                        {
+                            httpResponse.StatusCode = StatusCodes.Status204NoContent;
+                            return;
+                        }
 
-                           using var result = await promise.GetResultAsync(clientInfo, timeout?.Value, cancellationToken);
-                           var output = result.NormalOutput;
-                           return Results.Stream(await output.GetByteStreamAsync(output.SuggestedContentType, cancellationToken));
-                       });
+                        using var result = await promise.GetResultAsync(clientInfo, timeout?.Value, cancellationToken);
+                        var output = result.NormalOutput;
+                        var pipeReader = await output.GetPipeReaderAsync(output.SuggestedContentType, 0, cancellationToken);
+
+                        httpResponse.StatusCode = StatusCodes.Status200OK;
+                        httpResponse.ContentType = output.SuggestedContentType;
+                        httpResponse.ContentLength = output.ContentLength;
+
+                        await pipeReader.CopyToAsync(httpResponse.BodyWriter, cancellationToken);
+                    });
         }
     }
 }

@@ -20,6 +20,9 @@ namespace JobBank.Server
         /// </summary>
         public override string SuggestedContentType { get; }
 
+        /// <inheritdoc />
+        public override long? ContentLength => Body.Length;
+
         /// <summary>
         /// The sequence of bytes forming the user-defined data.
         /// </summary>
