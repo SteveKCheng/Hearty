@@ -51,8 +51,5 @@ namespace JobBank.Server
                 subscription.Dispose();
             }
         }
-
-        public static PromiseResult CreatePayload(string contentType, Memory<byte> data)
-            => new PromiseResult(null, new Payload(contentType, data));
     }
 }
