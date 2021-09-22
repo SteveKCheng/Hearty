@@ -62,10 +62,16 @@ namespace JobBank.Server
     /// Details about the job made available by <see cref="JobExecutor"/>.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// To clarify on the terminology used in this .NET API, the "promise"
     /// is the shared object that clients can consult to retrieve results,
     /// while the "job" refers to the process and the work to provide
     /// those results to the promise.
+    /// </para>
+    /// <para>
+    /// All settable properties here default to null, or the "default" instance
+    /// for value types.
+    /// </para>
     /// </remarks>
     public struct Job
     {
@@ -122,12 +128,32 @@ namespace JobBank.Server
         /// </remarks>
         public PromiseOutput? RequestOutput { get; set; }
 
+        /// <summary>
+        /// Task that completes when the job executor is done reading 
+        /// the request data from the client.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The job executor function is allowed to continue reading the request data 
+        /// from the client after it has provided the initial properties for the job
+        /// present in this structure.  If so, the Job Bank framework may need to
+        /// await this task before it can send a status reply to the client or
+        /// close the connection, depending on how the communication protocol works.
+        /// </para>
+        /// <para>
+        /// In particular, this task completing must imply that <see cref="JobInput.PipeReader"/>
+        /// has been completely consumed.
+        /// </para>
+        /// </remarks>
+        public ValueTask RequestReadingDone { get; set; }
+
         public Job(ValueTask<PromiseOutput> task)
         {
             PromiseId = null;
             Progress = null;
             RequestOutput = null;
             Task = task;
+            RequestReadingDone = ValueTask.CompletedTask;
         }
 
         public Job(PromiseOutput result)
@@ -168,12 +194,8 @@ namespace JobBank.Server
         /// Incrementally reads the byte stream of the payload.
         /// </summary>
         /// <remarks>
-        /// This byte stream must be consumed completely before
-        /// <see cref="JobExecutor"/> returns, as the Job Bank implementation
-        /// or underlying protocol may not support keeping open the connection
-        /// or pipe receiving the job inputs.  Also, another client 
-        /// cannot reliably share a promise initiated by the first, if the
-        /// input is only partially determined.
+        /// This pipe must be completed by the job executor before
+        /// <see cref="Job.RequestReadingDone"/> completes.
         /// </remarks>
         public PipeReader PipeReader { get; }
 

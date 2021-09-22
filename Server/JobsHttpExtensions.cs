@@ -65,6 +65,8 @@ namespace JobBank.Server
                                AwaitAndPostResultAsync(backgroundTask, promise);
                            }
 
+                           await job.RequestReadingDone;
+
                            // URL encoding??
                            return Results.Redirect($"/jobs/v1/current/{id}", permanent: true, preserveMethod: false);
                        });
