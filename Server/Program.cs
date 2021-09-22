@@ -5,6 +5,7 @@ using System;
 using System.Text;
 using System.IO;
 using System.Threading;
+using System.Buffers;
 
 namespace JobBank.Server
 {
@@ -29,10 +30,11 @@ namespace JobBank.Server
                 jobsController.MapHttpRoutes(endpoints, "pricing", async (JobInput input, Promise promise) => 
                 {
                     using var stream = input.PipeReader.AsStream();
-                    Memory<byte> requestData = await ReadStreamIntoMemorySafelyAsync(stream, 
-                                                                                     input.ContentLength, 
-                                                                                     16 * 1024 * 1024, 
-                                                                                     input.CancellationToken);
+                    var requestData = await ReadStreamIntoMemorySafelyAsync(stream, 
+                                                                            input.ContentLength, 
+                                                                            16 * 1024 * 1024,
+                                                                            8192,
+                                                                            input.CancellationToken);
                     static async ValueTask<PromiseOutput> MockWork()
                     {
                         await Task.Delay(TimeSpan.FromSeconds(30));
@@ -50,47 +52,57 @@ namespace JobBank.Server
         }
 
         /// <summary>
-        /// Read a (non-seekable) stream into memory, applying limits on the amount of data.
+        /// Read a (non-seekable) stream into a set of buffers in memory, 
+        /// applying limits on the amount of data.
         /// </summary>
-        private static async Task<Memory<byte>>
+        private static async Task<ReadOnlySequence<byte>>
             ReadStreamIntoMemorySafelyAsync(Stream stream, 
                                             long? streamLength, 
                                             int lengthLimit, 
+                                            int initialBufferSize,
                                             CancellationToken cancellationToken)
         {
             if (streamLength > lengthLimit)
                 throw new PayloadTooLargeException();
 
-            var payload = new byte[(streamLength + 1) ?? 8092];
+            SegmentedArrayBufferWriter<byte> bufferWriter;
 
-            int bytesTotalRead = 0;
-
-            while (true)
+            // Pre-allocate for the supposed length if known, unless it is too large.
+            // There needs to be one extra byte in the buffer, unless the length
+            // calculation overflows, to reliably determine when Stream.ReadAsync
+            // reaches the end of the stream.
+            if (streamLength is long n)
             {
-                int bytesJustRead = await stream.ReadAsync(new Memory<byte>(payload).Slice(bytesTotalRead),
-                                                           cancellationToken);
-                if (bytesJustRead == 0)
-                    break;
-
-                bytesTotalRead += bytesJustRead;
-
-                if (streamLength != null)
-                {
-                    if (bytesTotalRead > streamLength.Value)
-                        throw new PromiseException("Got more bytes of payload than what the HTTP header Content-Length indicated. ");
-                }
-                else
-                {
-                    if (payload.Length - bytesTotalRead < payload.Length / 4)
-                    {
-                        var newPayload = new byte[payload.Length * 2];
-                        payload.AsSpan().Slice(0, bytesTotalRead).CopyTo(newPayload);
-                        payload = newPayload;
-                    }
-                }
+                int m = (int)n;
+                bufferWriter = new(1, 0);
+                bufferWriter.GetMemory(m + (m != int.MaxValue ? 1 : 0)); 
+            }
+            else
+            {
+                bufferWriter = new(initialBufferSize, 1);
             }
 
-            return new Memory<byte>(payload, 0, bytesTotalRead);
+            uint bytesTotalRead = 0;
+            int bytesJustRead;
+
+            while ((bytesJustRead = await stream.ReadAsync(bufferWriter.GetMemory(), cancellationToken)
+                                                .ConfigureAwait(false)) > 0)
+            {
+                bytesTotalRead += (uint)bytesJustRead;
+
+                if (bytesTotalRead > streamLength)
+                    throw new InvalidDataException("Received more bytes from the input stream than what had been expected beforehand. ");
+
+                if (bytesTotalRead > lengthLimit)
+                    throw new PayloadTooLargeException();
+
+                bufferWriter.Advance(bytesJustRead);
+            }
+
+            if (streamLength != null && (int)bytesTotalRead != (int)streamLength)
+                throw new InvalidDataException("Received fewer bytes from the input stream than what had been expected beforehand. ");
+
+            return bufferWriter.GetSequence();
         }
     }
 }
