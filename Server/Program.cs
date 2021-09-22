@@ -44,6 +44,7 @@ namespace JobBank.Server
                     return new Job(MockWork())
                     {
                         PromiseId = "x",
+                        RequestOutput = new Payload(input.ContentType ?? string.Empty, requestData)
                     };
                 });
             });

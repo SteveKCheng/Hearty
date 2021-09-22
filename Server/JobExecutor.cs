@@ -101,10 +101,32 @@ namespace JobBank.Server
         /// </remarks>
         public ValueTask<PromiseOutput> Task { get; }
 
+        /// <summary>
+        /// The input request data that had been submitted to start this job.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This input is basically what the client has uploaded in the HTTP
+        /// POST body to start the job, but there is no requirement that the
+        /// input be pristine.  It is registered only so it can be echoed
+        /// back to clients that observe the cached promise. 
+        /// </para>
+        /// <para>
+        /// The job executor is allowed to normalize inputs to help with
+        /// de-duplicating jobs.  It might even not provide the full inputs, 
+        /// which would mean either the job can never be de-duplicated, or 
+        /// de-duplication happens in a manner which is not entirely 
+        /// reproducible/observable, e.g. by comparing (cryptographic)
+        /// digests of the request data.
+        /// </para>
+        /// </remarks>
+        public PromiseOutput? RequestOutput { get; set; }
+
         public Job(ValueTask<PromiseOutput> task)
         {
             PromiseId = null;
             Progress = null;
+            RequestOutput = null;
             Task = task;
         }
 

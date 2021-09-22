@@ -29,6 +29,10 @@ namespace JobBank.Server
     /// caching database.  Without the "outer" task objects, you would be forced to wrap the 
     /// off-the-shelf implementations to await the source and then forward all methods.   
     /// </para>
+    /// <para>
+    /// This class is used to represent not only a promise's result, but also the request data
+    /// that is output by the server when clients query it.
+    /// </para>
     /// </remarks>
     public abstract class PromiseOutput
     {
