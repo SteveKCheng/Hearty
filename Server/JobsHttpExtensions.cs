@@ -79,7 +79,8 @@ namespace JobBank.Server
                                return Results.NotFound();
 
                            using var result = await promise.GetResultAsync(clientInfo, timeout?.Value, cancellationToken);
-                           return Results.Stream(await result.Output.GetByteStreamAsync(result.Output.SuggestedContentType, cancellationToken));
+                           var output = result.NormalOutput;
+                           return Results.Stream(await output.GetByteStreamAsync(output.SuggestedContentType, cancellationToken));
                        });
         }
     }

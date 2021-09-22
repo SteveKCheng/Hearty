@@ -25,14 +25,55 @@ namespace JobBank.Server
         private Promise.SubscriptionNode? _subscription;
 
         /// <summary>
+        /// The result of the promise made available in various forms,
+        /// or null if there is some error that makes the output unavailable.
+        /// </summary>
+        public PromiseOutput? Output { get; }
+
+        /// <summary>
+        /// Status of the promise.
+        /// </summary>
+        public PromiseStatus Status { get; }
+
+        /// <summary>
         /// The result of the promise made available in various forms.
         /// </summary>
-        public PromiseOutput Output { get; }
-
-        internal PromiseResult(Promise.SubscriptionNode? subscription, PromiseOutput output)
+        /// <remarks>
+        /// If the normal output is not available because of some error or exception,
+        /// accessing this property throws an exception.
+        /// </remarks>
+        public PromiseOutput NormalOutput
+        {
+            get
+            {
+                switch (Status)
+                {
+                    case PromiseStatus.Published: 
+                        return Output!;
+                    case PromiseStatus.ClientCancelled:
+                        if (_subscription != null)
+                            _subscription.CancellationToken.ThrowIfCancellationRequested();
+                        throw new OperationCanceledException();
+                    case PromiseStatus.ClientTimedOut:
+                        throw new TimeoutException("Data for the promise was not available before timing out. ");
+                    default:
+                        throw new PromiseException("Error retrieving result for promise. ");
+                }
+            }
+        }
+ 
+        internal PromiseResult(Promise.SubscriptionNode subscription, PromiseOutput output)
         {
             _subscription = subscription;
             Output = output;
+            Status = PromiseStatus.Published;
+        }
+
+        internal PromiseResult(Promise.SubscriptionNode subscription, PromiseStatus status)
+        {
+            _subscription = subscription;
+            Output = null;
+            Status = status;
         }
 
         /// <summary>
@@ -52,4 +93,14 @@ namespace JobBank.Server
             }
         }
     }
+
+    public enum PromiseStatus
+    {
+        InternalError,
+        Published,
+        Faulted,
+        ClientCancelled,
+        ClientTimedOut
+    }
+
 }

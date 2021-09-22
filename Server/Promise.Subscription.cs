@@ -85,7 +85,7 @@ namespace JobBank.Server
             {
                 var self = new SubscriptionNode(promise, client);
 
-                self._cancellationToken = cancellationToken;
+                self.CancellationToken = cancellationToken;
                 if (timeout is TimeSpan t)
                     self._timeoutTrigger = CancellationPool.CancelAfter(t);
 
@@ -239,31 +239,22 @@ namespace JobBank.Server
             /// </summary>
             PromiseResult IValueTaskSource<PromiseResult>.GetResult(short token)
             {
-                PromiseOutput? output;
+                var stage = (CallbackStage)_callbackStage;
 
-                try
+                if (stage == CallbackStage.Completed)
                 {
-                    var stage = (CallbackStage)_callbackStage;
-
-                    if (stage == CallbackStage.Cancelled)
-                        _cancellationToken.ThrowIfCancellationRequested();
-                    if (stage == CallbackStage.TimedOut)
-                        throw new TimeoutException("Data for the promise was not available before timing out. ");
-
-                    output = Promise.ResultOutput;
-                    if (output == null)
-                        throw new InvalidOperationException("Cannot call IValueTaskSource.GetResult on an uncompleted promise. ");
-
-                    if (!_isAttached)
-                        AttachSelfWithoutWakeUp();
+                    return new PromiseResult(this, Promise.ResultOutput);
                 }
-                catch
+                else if (stage == CallbackStage.Start)
                 {
-                    Dispose();
-                    throw;
+                    // Should we dispose ourselves here, since the caller cannot do so? 
+                    throw new InvalidOperationException("Cannot call IValueTaskSource.GetResult on an uncompleted promise. ");
                 }
-
-                return new PromiseResult(this, output);
+                else
+                {
+                    return new PromiseResult(this, stage == CallbackStage.Cancelled ? PromiseStatus.ClientCancelled
+                                                                                    : PromiseStatus.ClientTimedOut);
+                }
             }
 
             /// <summary>
@@ -347,7 +338,7 @@ namespace JobBank.Server
                     // Register cancellation callbacks.
                     // We do not do so when the result is already immediately available,
                     // as we would end up doing extra work to cancel these registrations.
-                    _cancelTokenRegistration = _cancellationToken.UnsafeRegister(
+                    _cancelTokenRegistration = CancellationToken.UnsafeRegister(
                                                     s => ((SubscriptionNode)s!).TryTransitioningStage(CallbackStage.Cancelled),
                                                     this);
                     _timeoutTokenRegistration = _timeoutTrigger.Token.UnsafeRegister(
@@ -380,7 +371,7 @@ namespace JobBank.Server
 
             /// <summary>
             /// For de-registering, when this node is disposed, the callback for asynchronous 
-            /// cancellation from <see cref="_cancellationToken"/>.
+            /// cancellation from <see cref="CancellationToken"/>.
             /// </summary>
             private CancellationTokenRegistration _cancelTokenRegistration;
 
@@ -394,7 +385,7 @@ namespace JobBank.Server
             /// The canellation token passed in by the client as part of an asynchronously
             /// retrieving from the promise.
             /// </summary>
-            private CancellationToken _cancellationToken;
+            public CancellationToken CancellationToken { get; private set; }
 
             /// <summary>
             /// Triggers timeout if desired by the client.
@@ -428,7 +419,7 @@ namespace JobBank.Server
             /// </remarks>
             private CallbackStage Poll()
                 => Promise.IsCompleted ? CallbackStage.Completed :
-                   _cancellationToken.IsCancellationRequested ? CallbackStage.Cancelled :
+                   CancellationToken.IsCancellationRequested ? CallbackStage.Cancelled :
                    _timeoutTrigger.Token.IsCancellationRequested ? CallbackStage.TimedOut :
                    CallbackStage.Start;
 
