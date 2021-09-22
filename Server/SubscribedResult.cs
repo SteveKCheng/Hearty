@@ -20,7 +20,7 @@ namespace JobBank.Server
     /// gets completely sent (to the best approximation).  Thus the scope of the
     /// subscription does not end as soon as awaiting the promise result ends.
     /// </remarks>
-    public struct PromiseResult : IDisposable
+    public struct SubscribedResult : IDisposable
     {
         private Promise.SubscriptionNode? _subscription;
 
@@ -62,14 +62,14 @@ namespace JobBank.Server
             }
         }
  
-        internal PromiseResult(Promise.SubscriptionNode subscription, PromiseOutput output)
+        internal SubscribedResult(Promise.SubscriptionNode subscription, PromiseOutput output)
         {
             _subscription = subscription;
             Output = output;
             Status = PromiseStatus.Published;
         }
 
-        internal PromiseResult(Promise.SubscriptionNode subscription, PromiseStatus status)
+        internal SubscribedResult(Promise.SubscriptionNode subscription, PromiseStatus status)
         {
             _subscription = subscription;
             Output = null;

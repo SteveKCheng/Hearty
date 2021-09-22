@@ -26,7 +26,7 @@ namespace JobBank.Server
         /// (custom) task source provided to each client.
         /// </para>
         /// </remarks>
-        internal class SubscriptionNode : CircularListNode<SubscriptionNode>, IValueTaskSource<PromiseResult>
+        internal class SubscriptionNode : CircularListNode<SubscriptionNode>, IValueTaskSource<SubscribedResult>
         {
             /// <summary>
             /// The (parent) promise object that is being subscribed to.
@@ -78,7 +78,7 @@ namespace JobBank.Server
             /// to coordinate concurrency much more easily.
             /// </remarks>
             [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "VSTHRD200:Use \"Async\" suffix for async methods")]
-            internal static ValueTask<PromiseResult> CreateValueTask(Promise promise, 
+            internal static ValueTask<SubscribedResult> CreateValueTask(Promise promise, 
                                                                      IPromiseClientInfo client,
                                                                      in TimeSpan? timeout,
                                                                      CancellationToken cancellationToken)
@@ -96,10 +96,10 @@ namespace JobBank.Server
                 {
                     var output = promise.ResultOutput;
                     self.AttachSelfWithoutWakeUp();
-                    return new ValueTask<PromiseResult>(new PromiseResult(self, output!));
+                    return new ValueTask<SubscribedResult>(new SubscribedResult(self, output!));
                 }
 
-                return new ValueTask<PromiseResult>(self, token: 0);
+                return new ValueTask<SubscribedResult>(self, token: 0);
             }
 
             private void AttachSelfWithoutWakeUp()
@@ -237,13 +237,13 @@ namespace JobBank.Server
             /// Retrieve the result of the ValueTask which forwards the result from the parent promise,
             /// or indicates subscriber-specific cancellation.
             /// </summary>
-            PromiseResult IValueTaskSource<PromiseResult>.GetResult(short token)
+            SubscribedResult IValueTaskSource<SubscribedResult>.GetResult(short token)
             {
                 var stage = (CallbackStage)_callbackStage;
 
                 if (stage == CallbackStage.Completed)
                 {
-                    return new PromiseResult(this, Promise.ResultOutput);
+                    return new SubscribedResult(this, Promise.ResultOutput);
                 }
                 else if (stage == CallbackStage.Start)
                 {
@@ -252,7 +252,7 @@ namespace JobBank.Server
                 }
                 else
                 {
-                    return new PromiseResult(this, stage == CallbackStage.Cancelled ? PromiseStatus.ClientCancelled
+                    return new SubscribedResult(this, stage == CallbackStage.Cancelled ? PromiseStatus.ClientCancelled
                                                                                     : PromiseStatus.ClientTimedOut);
                 }
             }
@@ -265,7 +265,7 @@ namespace JobBank.Server
             /// something, or cancellation happened specifically for the current subscriber 
             /// (and not necessarily in the parent promise).
             /// </remarks>
-            ValueTaskSourceStatus IValueTaskSource<PromiseResult>.GetStatus(short token)
+            ValueTaskSourceStatus IValueTaskSource<SubscribedResult>.GetStatus(short token)
                 => ((CallbackStage)_callbackStage) != CallbackStage.Start
                         ? ValueTaskSourceStatus.Succeeded
                         : ValueTaskSourceStatus.Pending;
@@ -277,7 +277,7 @@ namespace JobBank.Server
             /// <remarks>
             /// This method will also register this node under the parent promise, if not already.
             /// </remarks>
-            void IValueTaskSource<PromiseResult>.OnCompleted(Action<object?> action, object? argument, short token, ValueTaskSourceOnCompletedFlags flags)
+            void IValueTaskSource<SubscribedResult>.OnCompleted(Action<object?> action, object? argument, short token, ValueTaskSourceOnCompletedFlags flags)
             {
                 // Capture the continuation outside the lock below.
                 //
@@ -444,7 +444,7 @@ namespace JobBank.Server
 
         /// <summary>
         /// Points to the first of subscription entries attached to this promise
-        /// that are waiting for <see cref="PromiseResult"/> to be published.
+        /// that are waiting for <see cref="SubscribedResult"/> to be published.
         /// </summary>
         /// <remarks>
         /// This list is kept separate from <see cref="_firstSubscription" />
@@ -459,9 +459,9 @@ namespace JobBank.Server
         /// <summary>
         /// Subscribes to this promise and prepare to await/retrieve its results.
         /// </summary>
-        public ValueTask<PromiseResult> GetResultAsync(IPromiseClientInfo client, 
-                                                       in TimeSpan? timeout, 
-                                                       CancellationToken cancellationToken)
+        public ValueTask<SubscribedResult> GetResultAsync(IPromiseClientInfo client, 
+                                                          in TimeSpan? timeout, 
+                                                          CancellationToken cancellationToken)
             => SubscriptionNode.CreateValueTask(this, client, timeout, cancellationToken);
     }
 }
