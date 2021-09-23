@@ -16,13 +16,13 @@ namespace JobBank.Server
             Value = timeSpan;
         }
 
-        public static bool TryParse(string value, out ExpiryTimeSpan result)
+        public static bool TryParse(string value, out TimeSpan result)
         {
             try
             {
                 if (!string.IsNullOrEmpty(value))
                 {
-                    result = new ExpiryTimeSpan(XmlConvert.ToTimeSpan(value));
+                    result = XmlConvert.ToTimeSpan(value);
                     return true;
                 }
             }
@@ -30,8 +30,15 @@ namespace JobBank.Server
             {
             }
 
-            result = default;
+            result = TimeSpan.Zero;
             return false;
+        }
+
+        public static bool TryParse(string value, out ExpiryTimeSpan result)
+        {
+            bool success = TryParse(value, out TimeSpan timeSpan);
+            result = new ExpiryTimeSpan(timeSpan);
+            return success;
         }
     }
 }
