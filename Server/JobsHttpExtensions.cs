@@ -96,23 +96,10 @@ namespace JobBank.Server
                                             httpRequest.BodyReader,
                                             cancellationToken);
 
-                Job job = await executor.Invoke(jobInput, promise);
+                Job job = await executor.Invoke(jobInput, promise)
+                                        .ConfigureAwait(false);
 
-                var backgroundTask = job.Task;
-                if (backgroundTask.IsCompleted)
-                {
-                    promise.PostResult(backgroundTask.Result);
-                }
-                else
-                {
-                    static async void AwaitAndPostResultAsync(ValueTask<PromiseOutput> backgroundTask, Promise promise)
-                    {
-                        var output = await backgroundTask.ConfigureAwait(false);
-                        promise.PostResult(output);
-                    }
-
-                    AwaitAndPostResultAsync(backgroundTask, promise);
-                }
+                promise.AwaitAndPostResult(job.Task);
 
                 await job.RequestReadingDone;
             }

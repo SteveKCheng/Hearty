@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading.Tasks;
 
 namespace JobBank.Server
 {
@@ -79,6 +80,37 @@ namespace JobBank.Server
                     // FIXME log the error, do not swallow
                 }
             }
+        }
+
+        /// <summary>
+        /// Awaits, in the background, for a job's result object to be published,
+        /// and then forwards notifications to waiting subscribers.
+        /// </summary>
+        internal void AwaitAndPostResult(in ValueTask<PromiseOutput> task)
+        {
+            _ = PostResultAsync(task);
+        }
+
+        /// <summary>
+        /// Calls <see cref="PostResult"/> with a job's output when the result task
+        /// completes.
+        /// </summary>
+        /// <remarks>
+        /// Since this method is only called by <see cref="AwaitAndPostResult"/>
+        /// which discards the <see cref="Task" /> object, it could be declared
+        /// as <c>async void</c> instead.  But <c>async void</c> is implemented
+        /// behind the scenes by wrapping <c>async Task</c> and is in fact slightly
+        /// less efficient.  Recent versions of .NET (Core) already reduce the
+        /// number of allocations for <c>async</c> methods to one: 
+        /// a single object works as <see cref="Task"/> and holds the data
+        /// needed to continue the method after it suspends.  And if this
+        /// method completes synchronously, then the pre-allocated
+        /// <see cref="Task.CompletedTask"/> gets returned.
+        /// </remarks>
+        private async Task PostResultAsync(ValueTask<PromiseOutput> task)
+        {
+            var output = await task.ConfigureAwait(false);
+            PostResult(output);
         }
 
         private volatile int _isFulfilled;
