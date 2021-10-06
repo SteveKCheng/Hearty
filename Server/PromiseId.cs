@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Globalization;
 
 namespace JobBank.Server
 {
@@ -54,5 +55,39 @@ namespace JobBank.Server
         /// by the service instance.
         /// </summary>
         public uint SequenceNumber => (uint)(_number & 0xFFFFFFFF);
+
+        /// <summary>
+        /// Display the promise ID in the canonical format defined
+        /// by the Job Bank framework.
+        /// </summary>
+        /// <remarks>
+        /// The service ID is displayed as fixed-length hexadecimal,
+        /// while the sequence number is in decimal without leading zeros.
+        /// The two parts are separated by a slash ('/').
+        /// </remarks>
+        public override string ToString()
+        {
+            return $"{ServiceId:X8}/{SequenceNumber}";
+        }
+
+        /// <summary>
+        /// Attempt to parse a promise ID from its components represented as strings.
+        /// </summary>
+        public static bool TryParse(ReadOnlySpan<char> serviceIdStr, 
+                                    ReadOnlySpan<char> sequenceNumberStr,
+                                    out PromiseId promiseId)
+        {
+            if (uint.TryParse(serviceIdStr, NumberStyles.HexNumber, null, out var serviceId))
+            {
+                if (uint.TryParse(sequenceNumberStr, NumberStyles.None, null, out var sequenceNumber))
+                {
+                    promiseId = new PromiseId(serviceId, sequenceNumber);
+                    return true;
+                }
+            }
+
+            promiseId = default;
+            return false;
+        }
     }
 }

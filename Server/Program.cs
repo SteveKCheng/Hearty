@@ -21,13 +21,13 @@ namespace JobBank.Server
                 app.UseDeveloperExceptionPage();
             }
 
-            var jobsController = new JobsController();
+            var promiseStorage = new BasicPromiseStorage();
 
             app.UseRouting();
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapGet("/", () => "Hello World!");
-                jobsController.MapHttpRoutes(endpoints, "pricing", async (JobInput input, Promise promise) => 
+                endpoints.MapHttpRoutes(promiseStorage, "pricing", async (JobInput input, Promise promise) => 
                 {
                     using var stream = input.PipeReader.AsStream();
                     var requestData = await ReadStreamIntoMemorySafelyAsync(stream, 
