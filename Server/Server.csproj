@@ -19,6 +19,7 @@
     </Content>
     <None Include="Properties\launchSettings.json" />
     <Compile Include="BasicPromiseClientInfo.cs" />
+    <Compile Include="BasicPromiseStorage.cs" />
     <Compile Include="CancellationPool.cs" />
     <Compile Include="CircularListNode.cs" />
     <Compile Include="ExpiryTimeSpan.cs" />
@@ -33,6 +34,7 @@
     <Compile Include="Promise.Subscription.cs" />
     <Compile Include="PromiseException.cs" />
     <Compile Include="PromiseId.cs" />
+    <Compile Include="PromiseStorage.cs" />
     <Compile Include="SegmentedArrayBufferWriter.cs" />
     <Compile Include="SubscribedResult.cs" />
     <Compile Include="PromiseOutput.cs" />

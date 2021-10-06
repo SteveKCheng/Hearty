@@ -39,8 +39,11 @@ namespace JobBank.Server
 
         public bool IsCompleted => _isFulfilled != 0;
 
-        public Promise()
+        public PromiseId Id { get; }
+
+        public Promise(PromiseId id)
         {
+            Id = id;
             CreationTime = DateTime.UtcNow;
         }
 

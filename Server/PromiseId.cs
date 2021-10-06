@@ -36,6 +36,14 @@ namespace JobBank.Server
         }
 
         /// <summary>
+        /// Construct the promise ID from the raw 64-bit integer.
+        /// </summary>
+        public PromiseId(ulong number)
+        {
+            _number = number;
+        }
+
+        /// <summary>
         /// The ID assigned to the service instance that
         /// created the promise.
         /// </summary>
