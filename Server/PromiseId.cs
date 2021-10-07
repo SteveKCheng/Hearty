@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Globalization;
+using System.Diagnostics.CodeAnalysis;
 
 namespace JobBank.Server
 {
@@ -21,7 +19,8 @@ namespace JobBank.Server
     /// promise IDs would be ultra-safe, but is not done for the
     /// sake of conserving memory.
     /// </remarks>
-    public readonly struct PromiseId
+    public readonly struct PromiseId : IComparable<PromiseId>
+                                     , IEquatable<PromiseId>
     {
         /// <summary>
         /// The 64-bit integer representing the promise ID.
@@ -89,5 +88,40 @@ namespace JobBank.Server
             promiseId = default;
             return false;
         }
+
+        /// <summary>
+        /// Compares promise IDs as integers.
+        /// </summary>
+        public int CompareTo(PromiseId other)
+            => _number.CompareTo(other._number);
+
+        /// <inheritdoc cref="IEquatable{T}.Equals"/>
+        public bool Equals(PromiseId other)
+            => _number == other._number;
+
+        /// <inheritdoc />
+        public override bool Equals([NotNullWhen(true)] object? obj)
+            => obj is PromiseId other && Equals(other);
+
+        /// <inheritdoc />
+        public override int GetHashCode() => _number.GetHashCode();
+
+        public static bool operator ==(PromiseId left, PromiseId right)
+            => left.Equals(right);
+
+        public static bool operator !=(PromiseId left, PromiseId right)
+            => !left.Equals(right);
+
+        public static bool operator <(PromiseId left, PromiseId right)
+            => left.CompareTo(right) < 0;
+
+        public static bool operator <=(PromiseId left, PromiseId right)
+            => left.CompareTo(right) >= 0;
+
+        public static bool operator >(PromiseId left, PromiseId right)
+            => left.CompareTo(right) > 0;
+
+        public static bool operator >=(PromiseId left, PromiseId right)
+            => left.CompareTo(right) >= 0;
     }
 }
