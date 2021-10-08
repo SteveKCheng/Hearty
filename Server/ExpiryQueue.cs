@@ -1,0 +1,274 @@
+﻿using System;
+using System.Collections.Generic;
+using GoldSaucer.BTree;
+using System.Threading.Channels;
+using System.Threading.Tasks;
+using System.Threading;
+
+namespace JobBank.Server
+{
+    /// <summary>
+    /// Allows queuing up objects to be processed at a later time,
+    /// typically for expiring them from cache.
+    /// </summary>
+    /// <remarks>
+    /// This implementation uses the proper algorithms that can 
+    /// scale to millions of items.  
+    /// B+Trees are used instead of much simpler priority 
+    /// heaps to allow changing expirations.
+    /// </remarks>
+    public class ExpiryQueue<T>
+    {
+        /// <summary>
+        /// An element in the sorted sequence of targets to expire.
+        /// </summary>
+        private readonly struct Entry
+        {
+            /// <summary>
+            /// The target object to expire; passed to the user-specified expiry functor.
+            /// </summary>
+            public readonly T Target;
+
+            /// <summary>
+            /// The recorded expiry time.
+            /// </summary>
+            public readonly DateTime Expiry;
+
+            public Entry(T target, DateTime expiry)
+            {
+                Target = target;
+                Expiry = expiry;
+            }
+        }
+
+        /// <summary>
+        /// Stores the targets to process sorted by expiry time, then by the target
+        /// itself.
+        /// </summary>
+        private readonly BTreeMap<Entry, bool> _sortedEntries;
+
+        /// <summary>
+        /// Queue of requests to (asynchronously) change the expiry of a target. 
+        /// </summary>
+        private readonly Channel<(T Target, DateTime? NewExpiry, DateTime? OldExpiry)> _queuedRequests;
+
+        /// <summary>
+        /// The timer that fires when at the earliest time there is a target to expire.
+        /// </summary>
+        private readonly Timer _timer;
+
+        /// <summary>
+        /// The earliest expiry time seen in the requests processed so far.
+        /// </summary>
+        private DateTime _earliestExpiry;
+
+        /// <summary>
+        /// The user's function to invoke when a target item expires.
+        /// </summary>
+        private readonly Action<T> _expiryAction;
+
+        /// <summary>
+        /// Task that processes requests to add, change or remove expiries
+        /// </summary>
+        private readonly Task _requestsActor;
+
+        /// <summary>
+        /// Orders the items by reverse chronological order of their expiry time.
+        /// </summary>
+        /// <remarks>
+        /// When expiry times tie in the ordering, the items themselves
+        /// are compared according to a user-specified comparer.
+        /// </remarks>
+        private class EntryComparer : IComparer<Entry>
+        {
+            private readonly IComparer<T> _targetComparer;
+
+            public int Compare(ExpiryQueue<T>.Entry x, ExpiryQueue<T>.Entry y)
+            {
+                int c = x.Expiry.CompareTo(y.Expiry);
+                if (c != 0)
+                    return -c;
+
+                return _targetComparer.Compare(x.Target, y.Target);
+            }
+
+            public EntryComparer(IComparer<T> targetComparer)
+                => _targetComparer = targetComparer;
+        }
+
+        /// <summary>
+        /// Remove up to a certain number of items from
+        /// <see cref="_sortedEntries" /> and run 
+        /// <see cref="_expiryAction" /> if the current time
+        /// is after their expiry time.
+        /// </summary>
+        /// <returns>The due time for triggering the next timer
+        /// event, in milliseconds.  This value is 0 if there
+        /// are more items to expire now.  This value is <see cref="Timeout.Infinite" />
+        /// if there are no more items to expire at all, until more
+        /// requests come in.
+        /// </returns>
+        private int ExpireOneBatch(int count)
+        {
+            lock (_sortedEntries)
+            {
+                var now = DateTime.UtcNow;
+
+                var enumerator = _sortedEntries.GetEnumerator(toBeginning: false);
+
+                try
+                {
+                    while (enumerator.MovePrevious())
+                    {
+                        var entry = enumerator.Current.Key;
+
+                        // Quit loop if the next item, and therefore all items afterward,
+                        // have not yet expired
+                        if (entry.Expiry > now)
+                        {
+                            var nextTimerExpiry = _earliestExpiry = BucketExpiryTime(entry.Expiry);
+                            return GetDueTime(nextTimerExpiry, now);
+                        }
+
+                        // Pause processing if we already processed enough items in this run
+                        if (count <= 0)
+                        {
+                            _earliestExpiry = BucketExpiryTime(enumerator.Current.Key.Expiry);
+                            return 0;
+                        }
+
+                        --count;
+
+                        enumerator.RemoveCurrent();
+                        _expiryAction.Invoke(entry.Target);
+                    }
+
+                    // No more items, so do not trigger the timer until more are added.
+                    _earliestExpiry = DateTime.MaxValue;
+                    return Timeout.Infinite;
+                }
+                finally
+                {
+                    enumerator.Dispose();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Prepare to accept items to expire.
+        /// </summary>
+        /// <param name="targetComparer">
+        /// Total ordering on the possible items, required for this implementation
+        /// to maintain its sorted sequence of active items. 
+        /// </param>
+        /// <param name="expiryAction">
+        /// A function called for an item when it expires.
+        /// </param>
+        public ExpiryQueue(IComparer<T> targetComparer, 
+                           Action<T> expiryAction)
+        {
+            var entryComparer = new EntryComparer(targetComparer);
+            _sortedEntries = new BTreeMap<Entry, bool>(32, entryComparer);
+            _queuedRequests = Channel.CreateUnbounded<(T, DateTime?, DateTime?)>(
+                            new UnboundedChannelOptions
+                            {
+                                SingleReader = true
+                            });
+            _expiryAction = expiryAction;
+            _timer = new Timer(s => OnTimerFiring(s), this, 
+                               dueTime: Timeout.Infinite, 
+                               period: Timeout.Infinite);
+            _requestsActor = Task.Run(ProcessExpiryRequests);
+        }
+
+        /// <summary>
+        /// Callback function for <see cref="_timer"/> to expire
+        /// items from <see cref="_sortedEntries" />.
+        /// </summary>
+        private static void OnTimerFiring(object? state)
+        {
+            var self = (ExpiryQueue<T>)state!;
+            int dueTime;
+            do
+            {
+                dueTime = self.ExpireOneBatch(count: 10);
+            } while (dueTime == 0);
+
+            if (dueTime > 0)
+                self._timer.Change(dueTime, period: Timeout.Infinite);
+        }
+
+        private static DateTime BucketExpiryTime(DateTime expiry)
+        {
+            // FIXME avoid overflow
+            var divisor = 10 * TimeSpan.TicksPerSecond;
+            var ticks = (expiry.Ticks + (divisor - 1)) / divisor * divisor;
+            return new DateTime(ticks);
+        }
+
+        private static int GetDueTime(DateTime expiry, DateTime now)
+        {
+            var ticks = (expiry - now).Ticks;
+            if (ticks <= 0)
+                return 0;
+
+            ulong milliseconds = (ulong)ticks / (ulong)TimeSpan.TicksPerMillisecond;
+            if (milliseconds <= int.MaxValue)
+                return (int)milliseconds;
+
+            return int.MaxValue;
+        }
+
+        /// <summary>
+        /// Add, change or remove the expiration for a target item.
+        /// </summary>
+        /// <param name="target">The item that may be expired. </param>
+        /// <param name="oldExpiry">
+        /// The old expiry time for the target item.  If the item was
+        /// requested to be expired before, this argument must match the
+        /// expiry time given then, so that the old expiration can be
+        /// cancelled.  Set to null when adding a new item.
+        /// </param>
+        /// <param name="newExpiry">
+        /// The new expiry time for the target item. Set to null
+        /// to remove the item from being expired.
+        /// </param>
+        public ValueTask ChangeExpiryAsync(T target, DateTime? oldExpiry, DateTime? newExpiry)
+        {
+            return _queuedRequests.Writer.WriteAsync((target, newExpiry, oldExpiry));
+        }
+
+        private async Task ProcessExpiryRequests()
+        {
+            var reader = _queuedRequests.Reader;
+
+            while (await reader.WaitToReadAsync().ConfigureAwait(false))
+            {
+                while (reader.TryRead(out var request))
+                {
+                    lock (_sortedEntries)
+                    {
+                        if (request.OldExpiry == request.NewExpiry)
+                            continue;
+
+                        if (request.OldExpiry is DateTime oldExpiry)
+                            _sortedEntries.Remove(new Entry(request.Target, oldExpiry));
+
+                        if (request.NewExpiry is DateTime newExpiry)
+                        {
+                            _sortedEntries.Add(new Entry(request.Target, newExpiry), true);
+
+                            newExpiry = BucketExpiryTime(newExpiry);
+                            if (newExpiry < _earliestExpiry)
+                            {
+                                _earliestExpiry = newExpiry;
+                                _timer.Change(dueTime: GetDueTime(newExpiry, DateTime.UtcNow), 
+                                              period: Timeout.Infinite);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

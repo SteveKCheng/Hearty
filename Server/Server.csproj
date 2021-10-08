@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="GoldSaucer.BTree" Version="0.2.1" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="5.0.0" />
   </ItemGroup>
 
@@ -22,6 +23,7 @@
     <Compile Include="BasicPromiseStorage.cs" />
     <Compile Include="CancellationPool.cs" />
     <Compile Include="CircularListNode.cs" />
+    <Compile Include="ExpiryQueue.cs" />
     <Compile Include="ExpiryTimeSpan.cs" />
     <Compile Include="IPromiseClientInfo.cs" />
     <Compile Include="JobExecutor.cs" />
