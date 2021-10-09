@@ -44,7 +44,7 @@ namespace JobBank.Server
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapGet("/", () => "Hello World!");
-                endpoints.MapHttpRoutes(jobsServerConfig, "pricing", async (JobInput input, PromiseId promiseId) => 
+                endpoints.MapPostJob(jobsServerConfig, "pricing", async (JobInput input, PromiseId promiseId) => 
                 {
                     using var stream = input.PipeReader.AsStream();
                     var requestData = await ReadStreamIntoMemorySafelyAsync(stream, 
@@ -63,6 +63,9 @@ namespace JobBank.Server
                         RequestOutput = new Payload(input.ContentType ?? string.Empty, requestData)
                     };
                 });
+
+                endpoints.MapGetPromiseById(jobsServerConfig);
+                endpoints.MapGetPromiseByPath(jobsServerConfig);
             });
 
             app.Run();

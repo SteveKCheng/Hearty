@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 
 namespace JobBank.Server
 {
@@ -149,5 +150,51 @@ namespace JobBank.Server
 
         public static bool operator >=(PromisePath left, PromisePath right)
             => left.CompareTo(right) >= 0;
+
+        /// <summary>
+        /// Parse a path string for a promise 
+        /// into the folder + name/number representation.
+        /// </summary>
+        public static PromisePath Parse(string pathString)
+        {
+            Span<char> normalizedString = stackalloc char[255];
+
+            bool collapseSlash = true;
+
+            int slashIndex = -1;
+            int outputIndex = 0;
+            for (int inputIndex = 0; inputIndex < pathString.Length; ++inputIndex)
+            {
+                char c = pathString[inputIndex];
+                bool isSlash = (c == '/');
+
+                if (isSlash)
+                {
+                    if (collapseSlash)
+                        continue;
+
+                    slashIndex = outputIndex;
+                }
+
+                collapseSlash = isSlash;
+
+                if (outputIndex == normalizedString.Length)
+                    throw new InvalidOperationException("Path string is too long. ");
+
+                normalizedString[outputIndex++] = c;
+            }
+
+            var folderPath = slashIndex > 0 ? normalizedString[0..slashIndex].ToString()
+                                            : string.Empty;
+
+            if (slashIndex == outputIndex - 1)
+                return PromisePath.ForFolder(folderPath);
+
+            var namePart = normalizedString[(slashIndex + 1)..outputIndex];
+            if (uint.TryParse(namePart, NumberStyles.None, null, out var number))
+                return PromisePath.ForNumberedFile(folderPath, number);
+
+            return PromisePath.ForNamedFile(folderPath, namePart.ToString());
+        }
     }
 }
