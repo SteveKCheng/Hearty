@@ -109,12 +109,10 @@ namespace JobBank.Server
         /// if there are no more items to expire at all, until more
         /// requests come in.
         /// </returns>
-        private int ExpireOneBatch(int count)
+        private DateTime? ExpireOneBatch(int count, DateTime now)
         {
             lock (_sortedEntries)
             {
-                var now = DateTime.UtcNow;
-
                 var enumerator = _sortedEntries.GetEnumerator(toBeginning: false);
 
                 try
@@ -124,19 +122,10 @@ namespace JobBank.Server
                         var entry = enumerator.Current.Key;
 
                         // Quit loop if the next item, and therefore all items afterward,
-                        // have not yet expired
-                        if (entry.Expiry > now)
-                        {
-                            var nextTimerExpiry = _earliestExpiry = BucketExpiryTime(entry.Expiry);
-                            return GetDueTime(nextTimerExpiry, now);
-                        }
-
-                        // Pause processing if we already processed enough items in this run
-                        if (count <= 0)
-                        {
-                            _earliestExpiry = BucketExpiryTime(enumerator.Current.Key.Expiry);
-                            return 0;
-                        }
+                        // have not yet expired, or if enough items have been processed
+                        // in this run.
+                        if (entry.Expiry > now || count <= 0)
+                            return entry.Expiry;
 
                         --count;
 
@@ -145,8 +134,7 @@ namespace JobBank.Server
                     }
 
                     // No more items, so do not trigger the timer until more are added.
-                    _earliestExpiry = DateTime.MaxValue;
-                    return Timeout.Infinite;
+                    return null;
                 }
                 finally
                 {
@@ -183,14 +171,31 @@ namespace JobBank.Server
         private static void OnTimerFiring(object? state)
         {
             var self = (ExpiryQueue<T>)state!;
-            int dueTime;
+            DateTime now;
+            DateTime? nextExpiry;
             do
             {
-                dueTime = self.ExpireOneBatch(count: 10);
-            } while (dueTime == 0);
+                now = DateTime.UtcNow;
+                nextExpiry = self.ExpireOneBatch(10, now);
+            } while (nextExpiry < now);
 
-            if (dueTime > 0)
-                self._timer.Change(dueTime, period: Timeout.Infinite);
+            if (nextExpiry != null)
+                self.AdjustTimer(nextExpiry.GetValueOrDefault(), now);
+        }
+
+        private void AdjustTimer(DateTime expiry, DateTime now)
+        {
+            expiry = BucketExpiryTime(expiry);
+
+            lock (_timer)
+            {
+                if (expiry < _earliestExpiry)
+                {
+                    _earliestExpiry = expiry;
+                    int dueTime = GetDueTime(expiry, now);
+                    _timer.Change(dueTime, period: Timeout.Infinite);
+                }
+            }
         }
 
         private static DateTime BucketExpiryTime(DateTime expiry)
@@ -243,13 +248,7 @@ namespace JobBank.Server
                 {
                     _sortedEntries.Add(new Entry(target, newExpiry.GetValueOrDefault()), true);
 
-                    var expiry = BucketExpiryTime(newExpiry.GetValueOrDefault());
-                    if (expiry < _earliestExpiry)
-                    {
-                        _earliestExpiry = expiry;
-                        int dueTime = GetDueTime(expiry, DateTime.Now);
-                        _timer.Change(dueTime, period: Timeout.Infinite);
-                    }
+                    AdjustTimer(newExpiry.GetValueOrDefault(), DateTime.Now);
                 }
 
                 return newExpiry;
