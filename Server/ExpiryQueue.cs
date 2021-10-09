@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using GoldSaucer.BTree;
-using System.Threading.Channels;
-using System.Threading.Tasks;
 using System.Threading;
 
 namespace JobBank.Server
@@ -12,12 +10,25 @@ namespace JobBank.Server
     /// typically for expiring them from cache.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This implementation uses the proper algorithms that can 
     /// scale to millions of items.  
+    /// </para>
+    /// <para>
+    /// The implementation and interface of this class are, unfortunately,
+    /// complex, so that this class can safely and correctly process 
+    /// possibly conflicting changes to expiration times that may be 
+    /// requested concurrently.  
     /// B+Trees are used instead of much simpler priority 
-    /// heaps to allow changing expirations.
+    /// heaps to allow accessing arbitrary entries to cancel them.
+    /// </para>
     /// </remarks>
-    public class ExpiryQueue<T>
+    /// <typeparam name="T">
+    /// The type of object subject to expirations.  This type must have some
+    /// total ordering, and must be able to remember any registered
+    /// expiration time.
+    /// </typeparam>
+    public class ExpiryQueue<T> where T: class
     {
         /// <summary>
         /// An element in the sorted sequence of targets to expire.
@@ -48,11 +59,6 @@ namespace JobBank.Server
         private readonly BTreeMap<Entry, bool> _sortedEntries;
 
         /// <summary>
-        /// Queue of requests to (asynchronously) change the expiry of a target. 
-        /// </summary>
-        private readonly Channel<(T Target, DateTime? SuggestedExpiry, ExchangeExpiryFunc ExchangeFunc)> _queuedRequests;
-
-        /// <summary>
         /// The timer that fires when at the earliest time there is a target to expire.
         /// </summary>
         private readonly Timer _timer;
@@ -66,11 +72,6 @@ namespace JobBank.Server
         /// The user's function to invoke when a target item expires.
         /// </summary>
         private readonly Action<T> _expiryAction;
-
-        /// <summary>
-        /// Task that processes requests to add, change or remove expiries
-        /// </summary>
-        private readonly Task _requestsActor;
 
         /// <summary>
         /// Orders the items by reverse chronological order of their expiry time.
@@ -162,23 +163,17 @@ namespace JobBank.Server
         /// to maintain its sorted sequence of active items. 
         /// </param>
         /// <param name="expiryAction">
-        /// A function called for an item when it expires.
+        /// A function called on an item when it expires.
         /// </param>
         public ExpiryQueue(IComparer<T> targetComparer, 
                            Action<T> expiryAction)
         {
             var entryComparer = new EntryComparer(targetComparer);
             _sortedEntries = new BTreeMap<Entry, bool>(32, entryComparer);
-            _queuedRequests = Channel.CreateUnbounded<(T, DateTime?, ExchangeExpiryFunc)>(
-                            new UnboundedChannelOptions
-                            {
-                                SingleReader = true
-                            });
             _expiryAction = expiryAction;
             _timer = new Timer(s => OnTimerFiring(s), this, 
                                dueTime: Timeout.Infinite, 
                                period: Timeout.Infinite);
-            _requestsActor = Task.Run(ProcessExpiryRequests);
         }
 
         /// <summary>
@@ -219,10 +214,6 @@ namespace JobBank.Server
             return int.MaxValue;
         }
 
-        public delegate DateTime? ExchangeExpiryFunc(T target, 
-                                                     DateTime? suggestedExpiry, 
-                                                     out DateTime? oldExpiry);
-
         /// <summary>
         /// Add, change or remove the expiration for a target item.
         /// </summary>
@@ -237,46 +228,58 @@ namespace JobBank.Server
         /// The new expiry time for the target item. Set to null
         /// to remove the item from being expired.
         /// </param>
-        public ValueTask ChangeExpiryAsync(T target, DateTime? newExpiry, ExchangeExpiryFunc exchangeFunc)
+        public DateTime? ChangeExpiry<TArg>(T target, in TArg arg, ExpiryExchangeFunc<T, TArg> exchangeFunc)
         {
-            return _queuedRequests.Writer.WriteAsync((target, newExpiry, exchangeFunc));
-        }
-
-        private async Task ProcessExpiryRequests()
-        {
-            var reader = _queuedRequests.Reader;
-
-            while (await reader.WaitToReadAsync().ConfigureAwait(false))
+            lock (_sortedEntries)
             {
-                while (reader.TryRead(out var request))
+                var newExpiry = exchangeFunc(target, arg, out var oldExpiry);
+                if (newExpiry == oldExpiry)
+                    return newExpiry;
+
+                if (oldExpiry != null)
+                    _sortedEntries.Remove(new Entry(target, oldExpiry.GetValueOrDefault()));
+
+                if (newExpiry != null)
                 {
-                    lock (_sortedEntries)
+                    _sortedEntries.Add(new Entry(target, newExpiry.GetValueOrDefault()), true);
+
+                    var expiry = BucketExpiryTime(newExpiry.GetValueOrDefault());
+                    if (expiry < _earliestExpiry)
                     {
-                        var newExpiry = request.ExchangeFunc(request.Target, 
-                                                             request.SuggestedExpiry, 
-                                                             out var oldExpiry);
-
-                        if (newExpiry == oldExpiry)
-                            continue;
-
-                        if (oldExpiry != null)
-                            _sortedEntries.Remove(new Entry(request.Target, oldExpiry.GetValueOrDefault()));
-
-                        if (newExpiry != null)
-                        {
-                            _sortedEntries.Add(new Entry(request.Target, newExpiry.GetValueOrDefault()), true);
-
-                            var expiry = BucketExpiryTime(newExpiry.GetValueOrDefault());
-                            if (expiry < _earliestExpiry)
-                            {
-                                _earliestExpiry = expiry;
-                                int dueTime = GetDueTime(expiry, DateTime.Now);
-                                _timer.Change(dueTime, period: Timeout.Infinite);
-                            }
-                        }
+                        _earliestExpiry = expiry;
+                        int dueTime = GetDueTime(expiry, DateTime.Now);
+                        _timer.Change(dueTime, period: Timeout.Infinite);
                     }
                 }
+
+                return newExpiry;
             }
         }
     }
+
+    /// <summary>
+    /// A function called by <see cref="ExpiryQueue{T}.ChangeExpiry" /> to safely 
+    /// effect a change of the expiry when there are concurrent requests on
+    /// the same object.
+    /// </summary>
+    /// <typeparam name="T">The type of object to be expired. </typeparam>
+    /// <typeparam name="TArg">The type of the arbitrary argument</typeparam>
+    /// <param name="target">The object whose expiry is to be changed. </param>
+    /// <param name="arg">An arbitrary argument passed through from 
+    /// <see cref="ExpiryQueue{T}.ChangeExpiry" />, which can be taken
+    /// as an input or suggestion as to how to change the expiry.
+    /// </param>
+    /// <param name="oldExpiry">
+    /// The expiry time that had been registered in <see cref="ExpiryQueue{T}" />
+    /// previously for <paramref name="target" />.  It is needed to look
+    /// up its existing entry in the expiry queue to delete it, so that
+    /// it can be re-added to the queue with the new expiry time.  Set to
+    /// null if the object has not been registered before.
+    /// </param>
+    /// <returns>
+    /// The desired new expiry time, or null if <paramref name="target" />
+    /// should no longer be scheduled to be expired. 
+    /// </returns>
+    public delegate DateTime? ExpiryExchangeFunc<T, TArg>(
+        T target, in TArg arg, out DateTime? oldExpiry);
 }
