@@ -50,7 +50,7 @@ namespace JobBank.Server
         /// <summary>
         /// Queue of requests to (asynchronously) change the expiry of a target. 
         /// </summary>
-        private readonly Channel<(T Target, DateTime? NewExpiry, DateTime? OldExpiry)> _queuedRequests;
+        private readonly Channel<(T Target, DateTime? SuggestedExpiry, ExchangeExpiryFunc ExchangeFunc)> _queuedRequests;
 
         /// <summary>
         /// The timer that fires when at the earliest time there is a target to expire.
@@ -169,7 +169,7 @@ namespace JobBank.Server
         {
             var entryComparer = new EntryComparer(targetComparer);
             _sortedEntries = new BTreeMap<Entry, bool>(32, entryComparer);
-            _queuedRequests = Channel.CreateUnbounded<(T, DateTime?, DateTime?)>(
+            _queuedRequests = Channel.CreateUnbounded<(T, DateTime?, ExchangeExpiryFunc)>(
                             new UnboundedChannelOptions
                             {
                                 SingleReader = true
@@ -219,6 +219,10 @@ namespace JobBank.Server
             return int.MaxValue;
         }
 
+        public delegate DateTime? ExchangeExpiryFunc(T target, 
+                                                     DateTime? suggestedExpiry, 
+                                                     out DateTime? oldExpiry);
+
         /// <summary>
         /// Add, change or remove the expiration for a target item.
         /// </summary>
@@ -233,9 +237,9 @@ namespace JobBank.Server
         /// The new expiry time for the target item. Set to null
         /// to remove the item from being expired.
         /// </param>
-        public ValueTask ChangeExpiryAsync(T target, DateTime? oldExpiry, DateTime? newExpiry)
+        public ValueTask ChangeExpiryAsync(T target, DateTime? newExpiry, ExchangeExpiryFunc exchangeFunc)
         {
-            return _queuedRequests.Writer.WriteAsync((target, newExpiry, oldExpiry));
+            return _queuedRequests.Writer.WriteAsync((target, newExpiry, exchangeFunc));
         }
 
         private async Task ProcessExpiryRequests()
@@ -248,22 +252,26 @@ namespace JobBank.Server
                 {
                     lock (_sortedEntries)
                     {
-                        if (request.OldExpiry == request.NewExpiry)
+                        var newExpiry = request.ExchangeFunc(request.Target, 
+                                                             request.SuggestedExpiry, 
+                                                             out var oldExpiry);
+
+                        if (newExpiry == oldExpiry)
                             continue;
 
-                        if (request.OldExpiry is DateTime oldExpiry)
-                            _sortedEntries.Remove(new Entry(request.Target, oldExpiry));
+                        if (oldExpiry != null)
+                            _sortedEntries.Remove(new Entry(request.Target, oldExpiry.GetValueOrDefault()));
 
-                        if (request.NewExpiry is DateTime newExpiry)
+                        if (newExpiry != null)
                         {
-                            _sortedEntries.Add(new Entry(request.Target, newExpiry), true);
+                            _sortedEntries.Add(new Entry(request.Target, newExpiry.GetValueOrDefault()), true);
 
-                            newExpiry = BucketExpiryTime(newExpiry);
-                            if (newExpiry < _earliestExpiry)
+                            var expiry = BucketExpiryTime(newExpiry.GetValueOrDefault());
+                            if (expiry < _earliestExpiry)
                             {
-                                _earliestExpiry = newExpiry;
-                                _timer.Change(dueTime: GetDueTime(newExpiry, DateTime.UtcNow), 
-                                              period: Timeout.Infinite);
+                                _earliestExpiry = expiry;
+                                int dueTime = GetDueTime(expiry, DateTime.Now);
+                                _timer.Change(dueTime, period: Timeout.Infinite);
                             }
                         }
                     }
