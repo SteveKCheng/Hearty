@@ -86,6 +86,7 @@ namespace JobBank.Server
             var httpResponse = httpContext.Response;
             var cancellationToken = httpContext.RequestAborted;
             Promise promise;
+            PromiseId promiseId;
 
             try
             {
@@ -96,24 +97,36 @@ namespace JobBank.Server
                                             httpRequest.BodyReader,
                                             cancellationToken);
 
+                
                 Job job = await executor.Invoke(jobInput, promise.Id)
                                         .ConfigureAwait(false);
 
-                promise.AwaitAndPostResult(job.Task);
-
-                await job.RequestReadingDone;
+                if (job.PromiseId != null)
+                {
+                    promiseId = job.PromiseId.GetValueOrDefault();
+                    if (promiseId == promise.Id)
+                        throw new InvalidOperationException("Job cannot refer to promise with an ID that is the same as itself. ");
+                    
+                    // FIXME remove the Promise object here
+                }
+                else
+                {
+                    promiseId = promise.Id;
+                    promise.AwaitAndPostResult(job.Task);
+                    await job.RequestReadingDone;
+                }
             }
             catch (Exception e)
             {
+                // FIXME remove the Promise object here
                 await TranslateExceptionToHttpResponseAsync(e, httpResponse).ConfigureAwait(false);
                 return;
             }
 
             httpResponse.StatusCode = StatusCodes.Status303SeeOther;
-            httpResponse.Headers.Add("x-job-id", promise.Id.ToString());
+            httpResponse.Headers.Add("x-promise-id", promiseId.ToString());
 
-            // URL encoding??
-            httpResponse.Headers.Location = $"/jobs/v1/id/{promise.Id.ServiceId:X8}/{promise.Id.SequenceNumber}";
+            httpResponse.Headers.Location = $"/jobs/v1/id/{promiseId.ServiceId:X8}/{promiseId.SequenceNumber}";
         }
 
         /// <summary>
