@@ -300,14 +300,25 @@ namespace JobBank.Server
             {
                 newExpiry = exchangeFunc(target, arg, out var oldExpiry);
 
+                newExpiry = EnsureInUtc(newExpiry);
+                oldExpiry = EnsureInUtc(oldExpiry);
+
                 if (newExpiry != oldExpiry)
                     ModifyEntry(target, oldExpiry, newExpiry);
             }
 
             // Schedule the expiry timer to fire when needed
-            AdjustTimer(newExpiry, DateTime.Now);
+            AdjustTimer(newExpiry, DateTime.UtcNow);
 
             return newExpiry;
+        }
+
+        private static DateTime? EnsureInUtc(DateTime? expiry)
+        {
+            if (expiry == null || expiry.GetValueOrDefault().Kind == DateTimeKind.Utc)
+                return expiry;
+
+            return expiry.GetValueOrDefault().ToUniversalTime();
         }
 
         /// <summary>
