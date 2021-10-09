@@ -85,6 +85,11 @@ namespace JobBank.Server
         private readonly object[] _targetLockObjects;
 
         /// <summary>
+        /// Buffer to expire items in a batch.
+        /// </summary>
+        private readonly T[] _currentExpiredTargets;
+
+        /// <summary>
         /// Orders the items by reverse chronological order of their expiry time.
         /// </summary>
         /// <remarks>
@@ -117,8 +122,12 @@ namespace JobBank.Server
         /// <returns>The expiry time for the next unprocessed item
         /// in the queue, or null if there are no more items.
         /// </returns>
-        private DateTime? ExpireOneBatch(int count, DateTime now)
+        private DateTime? ExpireOneBatch(DateTime now)
         {
+            DateTime? nextExpiry = null;
+            int count = 0;
+            var currentExpiredTargets = _currentExpiredTargets;
+
             lock (_sortedEntries)
             {
                 var enumerator = _sortedEntries.GetEnumerator(toBeginning: false);
@@ -132,23 +141,41 @@ namespace JobBank.Server
                         // Quit loop if the next item, and therefore all items afterward,
                         // have not yet expired, or if enough items have been processed
                         // in this run.
-                        if (entry.Expiry > now || count <= 0)
-                            return entry.Expiry;
-
-                        --count;
-
+                        if (entry.Expiry > now || count == currentExpiredTargets.Length)
+                        {
+                            nextExpiry = entry.Expiry;
+                            break;
+                        }
+                            
                         enumerator.RemoveCurrent();
-                        _expiryAction.Invoke(entry.Target);
-                    }
 
-                    // No more items, so do not trigger the timer until more are added.
-                    return null;
+                        // Save in an array so we can invoke the expiry action
+                        // outside the B+Tree lock.
+                        currentExpiredTargets[count++] = entry.Target;
+                    }
                 }
                 finally
                 {
                     enumerator.Dispose();
                 }
             }
+
+            for (int i = 0; i < count; ++i)
+            {
+                ref var target = ref currentExpiredTargets[i];
+                try
+                {
+                    _expiryAction.Invoke(target);
+                }
+                catch
+                {
+                    // FIXME log the error
+                }
+
+                target = null;
+            }
+
+            return nextExpiry;
         }
 
         /// <summary>
@@ -170,6 +197,8 @@ namespace JobBank.Server
             _timer = new Timer(s => OnTimerFiring(s), this, 
                                dueTime: Timeout.Infinite, 
                                period: Timeout.Infinite);
+
+            _currentExpiredTargets = new T[10];
 
             // Create striped locks
             uint countLockObjects = BitOperations.RoundUpToPowerOf2((uint)Environment.ProcessorCount);
@@ -193,7 +222,7 @@ namespace JobBank.Server
             do
             {
                 now = DateTime.UtcNow;
-                nextExpiry = self.ExpireOneBatch(10, now);
+                nextExpiry = self.ExpireOneBatch(now);
             } while (nextExpiry < now);
 
             self.AdjustTimer(nextExpiry, now);
