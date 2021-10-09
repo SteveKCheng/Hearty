@@ -52,6 +52,8 @@ namespace JobBank.Server
         {
             var newId = new PromiseId(Interlocked.Increment(ref _currentId));
 
+            InvokeOnStorageEvent(new EventArgs { Type = OperationType.Create, PromiseId = newId });
+
             var currentTime = DateTime.UtcNow;
             var promise = new Promise(currentTime, newId);
             var expiryTime = GetDefaultPromiseExpiryTime(currentTime);
@@ -83,6 +85,8 @@ namespace JobBank.Server
         /// <inheritdoc />
         public override void SchedulePromiseExpiry(Promise promise, DateTime expiry)
         {
+            InvokeOnStorageEvent(new EventArgs { Type = OperationType.ScheduleExpiry, PromiseId = promise.Id });
+
             if (!_promisesById.TryGetValue(promise.Id, out var value))
                 throw new KeyNotFoundException($"Promise with key {promise.Id} was not created from this storage instance. ");
 

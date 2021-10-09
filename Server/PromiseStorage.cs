@@ -1,7 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace JobBank.Server
 {
@@ -63,5 +60,58 @@ namespace JobBank.Server
         /// <param name="expiry">Suggested time when the promise can expire. </param>
         public abstract void SchedulePromiseExpiry(Promise promise,
                                                    DateTime expiry);
+
+        /// <summary>
+        /// The type of promise operation when logging an event.
+        /// </summary>
+        public enum OperationType
+        {
+            /// <summary>
+            /// A new promise is being created.
+            /// </summary>
+            Create,
+
+            /// <summary>
+            /// The expiration time for a promise being changed.
+            /// </summary>
+            ScheduleExpiry
+        }
+
+        /// <summary>
+        /// Information about an event being logged.
+        /// </summary>
+        public readonly struct EventArgs
+        {
+            /// <summary>
+            /// The type of operation that triggered logging of this event.
+            /// </summary>
+            public OperationType Type { get; init; }
+
+            /// <summary>
+            /// The ID of the promise being subject to the operation.
+            /// </summary>
+            public PromiseId PromiseId { get; init; }
+        }
+
+        /// <summary>
+        /// Receives simple logs of non-trivial operations as they occur.
+        /// </summary>
+        public event EventHandler<EventArgs>? OnStorageEvent;
+
+        /// <summary>
+        /// Call any registered event handlers to log an operation on
+        /// the promise storage, in a safe manner.
+        /// </summary>
+        protected void InvokeOnStorageEvent(in EventArgs args)
+        {
+            try
+            {
+                OnStorageEvent?.Invoke(this, args);
+            }
+            catch (Exception)
+            {
+                // FIXME log this?
+            }
+        }
     }
 }

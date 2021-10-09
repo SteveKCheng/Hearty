@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Text;
 using System.IO;
@@ -21,7 +22,19 @@ namespace JobBank.Server
                 app.UseDeveloperExceptionPage();
             }
 
+            var logger = app.Logger;
             var promiseStorage = new BasicPromiseStorage();
+            promiseStorage.OnStorageEvent += (sender, args) =>
+            {
+                string message = args.Type switch
+                {
+                    PromiseStorage.OperationType.Create => "Created promise ID {id}",
+                    PromiseStorage.OperationType.ScheduleExpiry => "Scheduled expiry for promise ID {id}",
+                    _ => "Unknown event for promise ID {id}"
+                };
+
+                logger.LogInformation(message, args.PromiseId);
+            };
 
             app.UseRouting();
             app.UseEndpoints(endpoints =>
