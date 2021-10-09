@@ -26,7 +26,7 @@ namespace JobBank.Server
         /// <summary>
         /// Register a new path to a promise.
         /// </summary>
-        public abstract void AddPath(PromisePath path, PromiseId id);
+        public abstract void AddPath(ref PromisePath path, PromiseId id);
 
         /// <summary>
         /// Remove a previously registered path to a promise.

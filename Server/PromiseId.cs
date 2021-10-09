@@ -56,6 +56,11 @@ namespace JobBank.Server
         public uint SequenceNumber => (uint)(_number & 0xFFFFFFFF);
 
         /// <summary>
+        /// The raw 64-bit integer representation of the promise ID.
+        /// </summary>
+        public ulong RawInteger => _number;
+
+        /// <summary>
         /// Display the promise ID in the canonical format defined
         /// by the Job Bank framework.
         /// </summary>

@@ -25,6 +25,7 @@
     <Compile Include="CircularListNode.cs" />
     <Compile Include="ExpiryQueue.cs" />
     <Compile Include="ExpiryTimeSpan.cs" />
+    <Compile Include="InMemoryPathsDirectory.cs" />
     <Compile Include="IPromiseClientInfo.cs" />
     <Compile Include="JobExecutor.cs" />
     <Compile Include="JobsHttpExtensions.cs" />
