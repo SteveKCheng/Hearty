@@ -41,11 +41,15 @@ namespace JobBank.Server
 
         public PromiseId Id { get; }
 
-        public Promise(PromiseId id)
+        public Promise(DateTime creationTime, PromiseId id)
         {
             Id = id;
-            CreationTime = DateTime.UtcNow;
+            CreationTime = creationTime;
         }
+
+        public DateTime? Expiry { get; internal set; }
+
+        public override int GetHashCode() => Id.GetHashCode();
 
         private PromiseOutput? _resultOutput;
 

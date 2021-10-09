@@ -47,13 +47,21 @@ namespace JobBank.Server
         /// Schedule a promise to expire at a future date/time.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// Expiry allows an implementation to not use unbounded
         /// amounts of memory to store promises, that users are
         /// unlikely to access again.
+        /// </para>
+        /// <para>
+        /// Expirations are necessarily processed in the background.  
+        /// If queuing the promise to expire is implemented as an 
+        /// asynchronous operation, that too can occur in the background
+        /// so this method is not defined to return an asynchronous task.
+        /// </para>
         /// </remarks>
         /// <param name="promise">The promise to be expiring later. </param>
-        /// <param name="when">Suggested time when the promise can expire. </param>
+        /// <param name="expiry">Suggested time when the promise can expire. </param>
         public abstract void SchedulePromiseExpiry(Promise promise,
-                                                   DateTime when);
+                                                   DateTime expiry);
     }
 }
