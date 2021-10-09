@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using GoldSaucer.BTree;
 using System.Threading;
+using System.Numerics;
 
 namespace JobBank.Server
 {
@@ -74,6 +75,16 @@ namespace JobBank.Server
         private readonly Action<T> _expiryAction;
 
         /// <summary>
+        /// Striped locks for serializing requests to change expiries
+        /// for a given target object.
+        /// </summary>
+        /// <remarks>
+        /// The number of locks is the degree of hardware concurrency
+        /// possible, rounded up to the next power of 2.
+        /// </remarks>
+        private readonly object[] _targetLockObjects;
+
+        /// <summary>
         /// Orders the items by reverse chronological order of their expiry time.
         /// </summary>
         /// <remarks>
@@ -103,11 +114,8 @@ namespace JobBank.Server
         /// <see cref="_expiryAction" /> if the current time
         /// is after their expiry time.
         /// </summary>
-        /// <returns>The due time for triggering the next timer
-        /// event, in milliseconds.  This value is 0 if there
-        /// are more items to expire now.  This value is <see cref="Timeout.Infinite" />
-        /// if there are no more items to expire at all, until more
-        /// requests come in.
+        /// <returns>The expiry time for the next unprocessed item
+        /// in the queue, or null if there are no more items.
         /// </returns>
         private DateTime? ExpireOneBatch(int count, DateTime now)
         {
@@ -162,6 +170,15 @@ namespace JobBank.Server
             _timer = new Timer(s => OnTimerFiring(s), this, 
                                dueTime: Timeout.Infinite, 
                                period: Timeout.Infinite);
+
+            // Create striped locks
+            uint countLockObjects = BitOperations.RoundUpToPowerOf2((uint)Environment.ProcessorCount);
+            countLockObjects = Math.Min(countLockObjects, 1024);
+            var targetLockObjects = new object[countLockObjects];
+            targetLockObjects[0] = targetLockObjects;
+            for (uint i = 1; i < countLockObjects; ++i)
+                targetLockObjects[i] = new object();
+            _targetLockObjects = targetLockObjects;
         }
 
         /// <summary>
@@ -179,20 +196,22 @@ namespace JobBank.Server
                 nextExpiry = self.ExpireOneBatch(10, now);
             } while (nextExpiry < now);
 
-            if (nextExpiry != null)
-                self.AdjustTimer(nextExpiry.GetValueOrDefault(), now);
+            self.AdjustTimer(nextExpiry, now);
         }
 
-        private void AdjustTimer(DateTime expiry, DateTime now)
+        private void AdjustTimer(DateTime? expiry, DateTime now)
         {
-            expiry = BucketExpiryTime(expiry);
+            if (expiry == null)
+                return;
+
+            var bucketedExpiry = BucketExpiryTime(expiry.GetValueOrDefault());
 
             lock (_timer)
             {
-                if (expiry < _earliestExpiry)
+                if (bucketedExpiry < _earliestExpiry)
                 {
-                    _earliestExpiry = expiry;
-                    int dueTime = GetDueTime(expiry, now);
+                    _earliestExpiry = bucketedExpiry;
+                    int dueTime = GetDueTime(bucketedExpiry, now);
                     _timer.Change(dueTime, period: Timeout.Infinite);
                 }
             }
@@ -223,35 +242,53 @@ namespace JobBank.Server
         /// Add, change or remove the expiration for a target item.
         /// </summary>
         /// <param name="target">The item that may be expired. </param>
-        /// <param name="oldExpiry">
-        /// The old expiry time for the target item.  If the item was
-        /// requested to be expired before, this argument must match the
-        /// expiry time given then, so that the old expiration can be
-        /// cancelled.  Set to null when adding a new item.
+        /// <param name="arg">Any argument desired to be passed into <paramref name="exchangeFunc" />.
+        /// It probably should represent the new expiry time that is suggested or
+        /// desired to be set. 
         /// </param>
-        /// <param name="newExpiry">
-        /// The new expiry time for the target item. Set to null
-        /// to remove the item from being expired.
+        /// <param name="exchangeFunc">
+        /// Function called to exchange the old and new record of the expiry time 
+        /// within <paramref name="target" />.  For the same target, calls to this 
+        /// "exchange function" will be serialized in the face of concurrent requests
+        /// to change the expiry time.  It can resolve conflicting requests, e.g.
+        /// by taking the maximum or minimum.  This function needs to record its
+        /// decision inside <paramref name="target" /> so that it can report any
+        /// old expiry setting, which is needed to cancel it.
         /// </param>
         public DateTime? ChangeExpiry<TArg>(T target, in TArg arg, ExpiryExchangeFunc<T, TArg> exchangeFunc)
         {
+            DateTime? newExpiry;
+
+            var targetLockObjects = _targetLockObjects;
+            int lockIndex = target.GetHashCode() & (targetLockObjects.Length - 1);
+
+            // Serialize execution for any given target object
+            lock (targetLockObjects[lockIndex])
+            {
+                newExpiry = exchangeFunc(target, arg, out var oldExpiry);
+
+                if (newExpiry != oldExpiry)
+                    ModifyEntry(target, oldExpiry, newExpiry);
+            }
+
+            // Schedule the expiry timer to fire when needed
+            AdjustTimer(newExpiry, DateTime.Now);
+
+            return newExpiry;
+        }
+
+        /// <summary>
+        /// Add, modify or remove an expiration entry in <see cref="_sortedEntries" />. 
+        /// </summary>
+        private void ModifyEntry(T target, DateTime? oldExpiry, DateTime? newExpiry)
+        {
             lock (_sortedEntries)
             {
-                var newExpiry = exchangeFunc(target, arg, out var oldExpiry);
-                if (newExpiry == oldExpiry)
-                    return newExpiry;
-
                 if (oldExpiry != null)
                     _sortedEntries.Remove(new Entry(target, oldExpiry.GetValueOrDefault()));
 
                 if (newExpiry != null)
-                {
                     _sortedEntries.Add(new Entry(target, newExpiry.GetValueOrDefault()), true);
-
-                    AdjustTimer(newExpiry.GetValueOrDefault(), DateTime.Now);
-                }
-
-                return newExpiry;
             }
         }
     }
