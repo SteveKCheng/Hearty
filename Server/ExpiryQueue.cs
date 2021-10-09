@@ -284,6 +284,10 @@ namespace JobBank.Server
         /// decision inside <paramref name="target" /> so that it can report any
         /// old expiry setting, which is needed to cancel it.
         /// </param>
+        /// <returns>
+        /// The new expiry time as decided by <paramref name="exchangeFunc" />
+        /// (based on <paramref name="arg" />.
+        /// </returns>
         public DateTime? ChangeExpiry<TArg>(T target, in TArg arg, ExpiryExchangeFunc<T, TArg> exchangeFunc)
         {
             DateTime? newExpiry;
