@@ -34,13 +34,13 @@ namespace JobBank.Server
         /// </returns>
         public static IEndpointConventionBuilder 
             MapPostJob(this IEndpointRouteBuilder endpoints,
-                       PromiseStorage promiseStorage,
+                       JobsServerConfiguration config,
                        string routeKey,
                        JobExecutor executor)
         {
             return endpoints.MapPost(
                     "/jobs/v1/queue/" + routeKey,
-                    httpContext => PostJobAsync(promiseStorage, httpContext, routeKey, executor));
+                    httpContext => PostJobAsync(config, httpContext, routeKey, executor));
         }
 
         /// <summary>
@@ -77,7 +77,7 @@ namespace JobBank.Server
         /// <summary>
         /// Invokes a job executor to process a job posted by an HTTP client.
         /// </summary>
-        private static async Task PostJobAsync(PromiseStorage promiseStorage, 
+        private static async Task PostJobAsync(JobsServerConfiguration config, 
                                                HttpContext httpContext,
                                                string routeKey,
                                                JobExecutor executor)
@@ -90,7 +90,7 @@ namespace JobBank.Server
 
             try
             {
-                promise = promiseStorage.CreatePromise();
+                promise = config.PromiseStorage.CreatePromise();
 
                 var jobInput = new JobInput(httpRequest.ContentType,
                                             httpRequest.ContentLength,
@@ -139,17 +139,17 @@ namespace JobBank.Server
         /// </returns>
         public static IEndpointConventionBuilder
             MapGetPromise(this IEndpointRouteBuilder endpoints,
-                          PromiseStorage promiseStorage)
+                          JobsServerConfiguration config)
         {
             // FIXME This should be managed by a cache
             IPromiseClientInfo clientInfo = new BasicPromiseClientInfo();
 
             return endpoints.MapGet(
                     "/jobs/v1/id/{serviceId}/{sequenceNumber}",
-                    httpContext => GetPromiseAsync(promiseStorage, httpContext, clientInfo));
+                    httpContext => GetPromiseAsync(config, httpContext, clientInfo));
         }
 
-        private static async Task GetPromiseAsync(PromiseStorage promiseStorage, 
+        private static async Task GetPromiseAsync(JobsServerConfiguration config, 
                                                   HttpContext httpContext,
                                                   IPromiseClientInfo client)
         {
@@ -171,7 +171,7 @@ namespace JobBank.Server
             if (timeoutString.Count == 1 && !string.IsNullOrEmpty(timeoutString[0]))
                 ExpiryTimeSpan.TryParse(timeoutString[0], out timeout);
 
-            var promise = promiseStorage.GetPromiseById(promiseId);
+            var promise = config.PromiseStorage.GetPromiseById(promiseId);
             if (promise == null)
             {
                 httpResponse.StatusCode = StatusCodes.Status404NotFound;
@@ -200,14 +200,14 @@ namespace JobBank.Server
 
 
         public static void MapHttpRoutes(this IEndpointRouteBuilder endpoints, 
-                                         PromiseStorage promiseStorage,
+                                         JobsServerConfiguration config,
                                          string routeKey,
                                          JobExecutor executor)
         {
             routeKey = routeKey.Trim('/');
 
-            endpoints.MapPostJob(promiseStorage, routeKey, executor);
-            endpoints.MapGetPromise(promiseStorage);
+            endpoints.MapPostJob(config, routeKey, executor);
+            endpoints.MapGetPromise(config);
         }
     }
 }

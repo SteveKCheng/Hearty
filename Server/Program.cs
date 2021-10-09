@@ -36,11 +36,15 @@ namespace JobBank.Server
                 logger.LogInformation(message, args.PromiseId);
             };
 
+            var pathsDirectory = new InMemoryPathsDirectory();
+
+            var jobsServerConfig = new JobsServerConfiguration(promiseStorage, pathsDirectory);
+
             app.UseRouting();
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapGet("/", () => "Hello World!");
-                endpoints.MapHttpRoutes(promiseStorage, "pricing", async (JobInput input, PromiseId promiseId) => 
+                endpoints.MapHttpRoutes(jobsServerConfig, "pricing", async (JobInput input, PromiseId promiseId) => 
                 {
                     using var stream = input.PipeReader.AsStream();
                     var requestData = await ReadStreamIntoMemorySafelyAsync(stream, 
