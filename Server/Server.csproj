@@ -35,6 +35,7 @@
     <Compile Include="Promise.Subscription.cs" />
     <Compile Include="PromiseException.cs" />
     <Compile Include="PromiseId.cs" />
+    <Compile Include="PromisePath.cs" />
     <Compile Include="PromiseStorage.cs" />
     <Compile Include="SegmentedArrayBufferWriter.cs" />
     <Compile Include="SubscribedResult.cs" />
