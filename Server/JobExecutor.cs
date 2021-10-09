@@ -12,8 +12,10 @@ namespace JobBank.Server
     /// Inputs that describe the job.
     /// </param>
     /// <param name="promise">
-    /// Promise object that this function may cache to de-duplicate jobs
-    /// with the same inputs.
+    /// Promise ID that the executor may remember to de-duplicate jobs
+    /// with the same inputs.  If <see cref="Job.PromiseId" />
+    /// is populated (by a different ID) then the promise represented 
+    /// by this ID may be deleted afterwards.
     /// </param>
     /// <returns>
     /// Parsed description of the job to make available to (other) clients.
@@ -23,7 +25,7 @@ namespace JobBank.Server
     /// actual work that the job entails should be set as an asynchronous task
     /// in <see cref="Job.Task"/>.
     /// </returns>
-    public delegate ValueTask<Job> JobExecutor(JobInput input, Promise promise);
+    public delegate ValueTask<Job> JobExecutor(JobInput input, PromiseId promiseId);
 
     /// <summary>
     /// Progress updates on a background job for a promise.
@@ -79,7 +81,19 @@ namespace JobBank.Server
         /// The ID that clients can look up to retrieve the promise object
         /// for the job.
         /// </summary>
-        public string? PromiseId { get; set; }
+        /// <remarks>
+        /// <para>
+        /// This property is non-null when the job has been determined to be 
+        /// fulfilled by another existing promise, with the ID given here.  
+        /// In that case all the other properties in this structure should 
+        /// be left at their default values.  
+        /// </para>
+        /// <para>
+        /// This ID must refer to a valid promise that is not the one that had
+        /// just been created for the job.
+        /// </para>
+        /// </remarks>
+        public PromiseId? PromiseId { get; }
 
         /// <summary>
         /// Provides continuing status updates on the background job.
@@ -147,6 +161,10 @@ namespace JobBank.Server
         /// </remarks>
         public ValueTask RequestReadingDone { get; set; }
 
+        /// <summary>
+        /// Report that an output object will be provided in the
+        /// future for the job.
+        /// </summary>
         public Job(ValueTask<PromiseOutput> task)
         {
             PromiseId = null;
@@ -156,9 +174,31 @@ namespace JobBank.Server
             RequestReadingDone = ValueTask.CompletedTask;
         }
 
+        /// <summary>
+        /// Report the output object that is synchronously available
+        /// for the job.
+        /// </summary>
+        /// <remarks>
+        /// Note that as <see cref="PromiseOutput" /> is an asynchronous
+        /// interface, calling this constructor does not imply
+        /// that the job must be complete.
+        /// </remarks>
         public Job(PromiseOutput result)
             : this(ValueTask.FromResult(result))
         {
+        }
+        
+        /// <summary>
+        /// Refer to an existing promise for the (eventual) results of
+        /// a job.
+        /// </summary>
+        public Job(PromiseId promiseId)
+        {
+            PromiseId = promiseId;
+            Progress = null;
+            RequestOutput = null;
+            Task = default;
+            RequestReadingDone = ValueTask.CompletedTask;
         }
     }
 

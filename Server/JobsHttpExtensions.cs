@@ -96,7 +96,7 @@ namespace JobBank.Server
                                             httpRequest.BodyReader,
                                             cancellationToken);
 
-                Job job = await executor.Invoke(jobInput, promise)
+                Job job = await executor.Invoke(jobInput, promise.Id)
                                         .ConfigureAwait(false);
 
                 promise.AwaitAndPostResult(job.Task);
