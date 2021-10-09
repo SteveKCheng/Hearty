@@ -22,7 +22,8 @@ namespace JobBank.Server
     /// The same promise may be made available at multiple paths.
     /// The paths can be queried in path-comparison order, 
     /// which means they can be used to implement secondary indices
-    /// (like in SQL databases) on promises.  A folder can name
+    /// (like in SQL databases) on promises (which would be analogous
+    /// to rows in a database table).  A folder can name
     /// the secondary index, and sub-paths within it are the
     /// string- or integer-valued entries in the secondary index.
     /// </para>

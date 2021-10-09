@@ -28,6 +28,7 @@
     <Compile Include="IPromiseClientInfo.cs" />
     <Compile Include="JobExecutor.cs" />
     <Compile Include="JobsHttpExtensions.cs" />
+    <Compile Include="PathsDirectory.cs" />
     <Compile Include="Payload.cs" />
     <Compile Include="PayloadTooLargeException.cs" />
     <Compile Include="Program.cs" />
