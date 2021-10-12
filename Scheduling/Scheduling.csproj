@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net5.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <RootNamespace>JobBank.Scheduling</RootNamespace>
+    <DisableImplicitNamespaceImports>true</DisableImplicitNamespaceImports>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultContentItems>false</EnableDefaultContentItems>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="IArrayIndexTracker.cs" />
+    <Compile Include="IntPriorityHeap.cs" />
+  </ItemGroup>
+
+</Project>
