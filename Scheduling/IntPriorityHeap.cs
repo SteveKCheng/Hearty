@@ -31,22 +31,33 @@ namespace JobBank.Scheduling
     /// </remarks>
     /// <typeparam name="TValue">The type of value to store
     /// in the heap, associated to the integer priority key. </typeparam>
-    /// <typeparam name="TArrayIndexTracker">
-    /// Called to record indices of objects stored in the heap,
-    /// thus allowing priority keys of existing elements to be changed
-    /// efficiently, given their indices.  Generally, this feature can only work 
-    /// if <see cref="TValue" /> is an object reference or (is a structure that)
-    /// wraps an object reference.  This "tracker" is put as a type parameter
-    /// only to let .NET generate efficient direct calls, avoiding interfaces
-    /// and delegates.
-    /// </typeparam>
-    internal struct IntPriorityHeap<TValue, TArrayIndexTracker>
-        where TArrayIndexTracker : IArrayIndexTracker<TValue>
+    internal struct IntPriorityHeap<TValue>
     {
         /// <summary>
         /// Called whenever indices must be updated in the heap.
         /// </summary>
-        private TArrayIndexTracker _indexTracker;
+        private readonly IndexUpdateCallback? _indexUpdateCallback;
+
+        /// <summary>
+        /// A function that is called whenever an element in the priority
+        /// heap moves and is assigned a new index.
+        /// </summary>
+        /// <remarks>
+        /// This feature allows priority keys of existing elements to be changed
+        /// efficiently, given their indices. Generally, this feature can only work 
+        /// if <see cref="TValue" /> is an object reference or (is a structure that)
+        /// wraps an object reference.  
+        /// </remarks>
+        /// <param name="element">Reference to the element in the array. </param>
+        /// <param name="index">The new index being assigned. 
+        /// If the element is about to be removed, this index is -1. </param>
+        public delegate void IndexUpdateCallback(ref TValue element, int index);
+
+        /// <summary>
+        /// Invokes <see cref="_indexUpdateCallback" /> if it is non-null.
+        /// </summary>
+        private void InvokeIndexUpdateCallback(ref TValue element, int index)
+            => _indexUpdateCallback?.Invoke(ref element, index);
 
         /// <summary>
         /// The number of active (valid) elements in <see cref="_keys" />
@@ -72,11 +83,11 @@ namespace JobBank.Scheduling
         /// <param name="capacity">The initial capacity 
         /// of the arrays allocates for the priority heap.
         /// </param>
-        public IntPriorityHeap(in TArrayIndexTracker indexTracker, int capacity = 73)
+        public IntPriorityHeap(IndexUpdateCallback? callback, int capacity = 73)
         {
             int newCapacity = RoundUpCapacity(capacity);
 
-            _indexTracker = indexTracker;
+            _indexUpdateCallback = callback;
             _count = 0;
 
             var keys = newCapacity > 0 ? new int[newCapacity] : Array.Empty<int>();
@@ -200,7 +211,7 @@ namespace JobBank.Scheduling
             valueA = valueB;
             valueB = tempValue;
 
-            _indexTracker.ChangeIndex(ref valueA, indexA);
+            InvokeIndexUpdateCallback(ref valueA, indexA);
         }
 
         /// <summary>
@@ -247,7 +258,7 @@ namespace JobBank.Scheduling
                 childrenIndex = GetLeftmostChildIndex(index);
             } while (childrenIndex < count);
 
-            _indexTracker.ChangeIndex(ref _values[index], index);
+            InvokeIndexUpdateCallback(ref _values[index], index);
         }
 
         /// <summary>
@@ -280,7 +291,7 @@ namespace JobBank.Scheduling
                 key = ref parentKey;
             } while (index > 0);
 
-            _indexTracker.ChangeIndex(ref _values[index], index);
+            InvokeIndexUpdateCallback(ref _values[index], index);
         }
 
         /// <summary>
@@ -305,7 +316,7 @@ namespace JobBank.Scheduling
 
             _count = newCount;
 
-            _indexTracker.ChangeIndex(ref valueSlot, index);
+            InvokeIndexUpdateCallback(ref valueSlot, index);
 
             BubbleUp(index, ref keySlot);
         }
@@ -323,7 +334,7 @@ namespace JobBank.Scheduling
             ref int keySlot = ref keys[0];
             ref TValue valueSlot = ref _values[0];
 
-            _indexTracker.ChangeIndex(ref valueSlot, -1);
+            InvokeIndexUpdateCallback(ref valueSlot, -1);
 
             var key = keySlot;
             var value = valueSlot;
@@ -392,7 +403,7 @@ namespace JobBank.Scheduling
                 ref TValue valueSlot = ref _values[index];
                 valueSlot = value.Value;
 
-                _indexTracker.ChangeIndex(ref valueSlot, index);
+                InvokeIndexUpdateCallback(ref valueSlot, index);
 
                 if (newKey > oldKey)
                     BubbleUp(index, ref keySlot);
@@ -614,7 +625,7 @@ namespace JobBank.Scheduling
             // Set indices on elements in deepest layer
             var values = _values;
             for (int j = 0; j < countAtLevel; ++j)
-                _indexTracker.ChangeIndex(ref values[startIndex + j], startIndex + j);
+                InvokeIndexUpdateCallback(ref values[startIndex + j], startIndex + j);
 
             // Bubble down elements, in order from the second-deepest layer
             // to the top-most layer.
@@ -628,7 +639,7 @@ namespace JobBank.Scheduling
 
                 for (int j = 0; j < countAtLevel; ++j)
                 {
-                    _indexTracker.ChangeIndex(ref values[startIndex + j], startIndex + j);
+                    InvokeIndexUpdateCallback(ref values[startIndex + j], startIndex + j);
                     BubbleDown(startIndex + j);
                 }
                     

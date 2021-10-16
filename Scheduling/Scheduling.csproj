@@ -11,7 +11,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="IArrayIndexTracker.cs" />
     <Compile Include="IntPriorityHeap.cs" />
   </ItemGroup>
 
