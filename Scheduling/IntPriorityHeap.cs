@@ -633,6 +633,17 @@ namespace JobBank.Scheduling
         }
 
         /// <summary>
+        /// Clear all entries from the priority heap.
+        /// </summary>
+        public void Clear()
+        {
+            int count = _count;
+            _count = 0;
+            _keys[0..count].AsSpan().Fill(int.MinValue);
+            _values[0..count].AsSpan().Fill(default(TValue)!);
+        }
+
+        /// <summary>
         /// Clear the heap and add many elements into it in one shot.
         /// </summary>
         /// <typeparam name="TState">Type of the 
