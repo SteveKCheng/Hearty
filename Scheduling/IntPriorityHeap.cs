@@ -403,6 +403,11 @@ namespace JobBank.Scheduling
         public bool IsNonEmpty => _count > 0;
 
         /// <summary>
+        /// Whether this priority heap is devoid of any elements.
+        /// </summary>
+        public bool IsEmpty => _count == 0;
+
+        /// <summary>
         /// Number of elements stored in this priority heap currently.
         /// </summary>
         public int Count => _count;
