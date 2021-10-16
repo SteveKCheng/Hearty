@@ -11,7 +11,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="SchedulingUnit.cs" />
+    <Compile Include="IJobSource.cs" />
     <Compile Include="IntPriorityHeap.cs" />
+    <Compile Include="SchedulingGroup.cs" />
   </ItemGroup>
 
 </Project>
