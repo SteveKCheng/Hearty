@@ -322,6 +322,39 @@ namespace JobBank.Scheduling
         }
 
         /// <summary>
+        /// Remove an element from the priority heap.
+        /// </summary>
+        /// <param name="index">Index in the priority heap of the
+        /// existing element. </param>
+        public void Delete(int index)
+        {
+            int[] keys = _keys;
+
+            if ((uint)index >= (uint)_count)
+                throw new ArgumentOutOfRangeException(nameof(index));
+
+            ref int keySlot = ref keys[index];
+            ref TValue valueSlot = ref _values[index];
+
+            InvokeIndexUpdateCallback(ref valueSlot, -1);
+
+            var key = keySlot;
+            keySlot = int.MinValue;
+            valueSlot = default!;
+
+            int lastIndex = --_count;
+            if (lastIndex > 0)
+            {
+                SwapEntries(ref keySlot, ref keys[lastIndex], index, lastIndex);
+
+                if (keySlot > key)
+                    BubbleUp(index, ref keySlot);
+                else if (keySlot < key)
+                    BubbleDown(index, ref keySlot);
+            }
+        }
+
+        /// <summary>
         /// Extract the element with the maximum priority out
         /// of this priority heap.
         /// </summary>
@@ -339,18 +372,16 @@ namespace JobBank.Scheduling
             var key = keySlot;
             var value = valueSlot;
 
+            keySlot = int.MinValue;
             valueSlot = default!;
 
-            int index = _count - 1;
+            int lastIndex = --_count;
+            if (lastIndex > 0)
+            {
+                SwapEntries(ref keySlot, ref keys[lastIndex], 0, lastIndex);
 
-            ref int lastKeySlot = ref keys[index];
-
-            SwapEntries(ref keySlot, ref lastKeySlot, 0, index);
-            --_count;
-
-            lastKeySlot = int.MinValue;
-
-            BubbleDown(0, ref keySlot);
+                BubbleDown(0, ref keySlot);
+            }
 
             return new KeyValuePair<int, TValue>(key, value);
         }
@@ -389,27 +420,56 @@ namespace JobBank.Scheduling
         {
             get
             {
+                if ((uint)index >= (uint)_count)
+                    throw new ArgumentOutOfRangeException(nameof(index));
+
                 return new KeyValuePair<int, TValue>(_keys[index], _values[index]);
             }
             set
             {
+                if ((uint)index >= (uint)_count)
+                    throw new ArgumentOutOfRangeException(nameof(index));
+
                 ref int keySlot = ref _keys[index];
-
-                var oldKey = keySlot;
-                var newKey = value.Key;
-                
-                keySlot = newKey;
-
                 ref TValue valueSlot = ref _values[index];
+
                 valueSlot = value.Value;
-
-                InvokeIndexUpdateCallback(ref valueSlot, index);
-
-                if (newKey > oldKey)
-                    BubbleUp(index, ref keySlot);
-                else if (newKey < oldKey)
-                    BubbleDown(index, ref keySlot);
+                ChangeKeyCore(index, value.Key, ref keySlot, ref valueSlot);
             }
+        }
+
+        /// <summary>
+        /// Common code used by <see cref="ChangeKey"/> and the setter 
+        /// of <see cref="this[int]" />.
+        /// </summary>
+        /// <param name="index">The index of the element in the priority heap. </param>
+        /// <param name="key">The new key of the element to change to. </param>
+        private void ChangeKeyCore(int index, int newKey, 
+                                   ref int keySlot, ref TValue valueSlot)
+        {
+            var oldKey = keySlot;
+            keySlot = newKey;
+            InvokeIndexUpdateCallback(ref valueSlot, index);
+
+            if (newKey > oldKey)
+                BubbleUp(index, ref keySlot);
+            else if (newKey < oldKey)
+                BubbleDown(index, ref keySlot);
+        }
+
+        /// <summary>
+        /// Change the (priority) key of an existing element.
+        /// </summary>
+        /// <param name="index">The index of the element in the priority heap. </param>
+        /// <param name="key">The new key to change to. </param>
+        public void ChangeKey(int index, int key)
+        {
+            if ((uint)index >= (uint)_count)
+                throw new ArgumentOutOfRangeException(nameof(index));
+
+            ref int keySlot = ref _keys[index];
+            ref TValue valueSlot = ref _values[index];
+            ChangeKeyCore(index, key, ref keySlot, ref valueSlot);
         }
 
         /// <summary>
