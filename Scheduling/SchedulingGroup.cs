@@ -14,8 +14,7 @@ namespace JobBank.Scheduling
         /// can be quickly accessed.
         /// </summary>
         /// <remarks>
-        /// Child queues that are inactive, or have negative or zero balances,
-        /// are not put into the priority queue.
+        /// Child queues that are inactive are not put into the priority queue.
         /// </remarks>
         private IntPriorityHeap<SchedulingUnit<TJob>> _priorityHeap;
 
@@ -113,11 +112,8 @@ namespace JobBank.Scheduling
 
                 child.Balance = newBalance;
 
-                if (newBalance > 0)
-                {
-                    _priorityHeap.Insert(newBalance, child);
-                    UpdateForAverageBalance(child, oldBalance, newBalance);
-                }
+                _priorityHeap.Insert(newBalance, child);
+                UpdateForAverageBalance(child, oldBalance, newBalance);
             }
 
             // There must be at least one queue above that now has positive balance.
@@ -141,9 +137,12 @@ namespace JobBank.Scheduling
                 // If no child queues are eligible for de-queuing,
                 // that means they are all inactive or they have
                 // run out of credits.  Try to re-fill their credits.
-                if (_priorityHeap.IsEmpty && !RefillBalances())
-                    break;
-
+                if (_priorityHeap.IsEmpty || _priorityHeap[0].Key <= 0)
+                {
+                    if (!RefillBalances())
+                        break;
+                }
+                    
                 var (oldBalance, child) = _priorityHeap[0];
                 Debug.Assert(oldBalance > 0 && child.IsActive);
 
@@ -157,11 +156,8 @@ namespace JobBank.Scheduling
 
                 if (job is not null)
                 {
-                    if (newBalance > 0)
-                        _priorityHeap.ChangeKey(0, newBalance);
-                    else
-                        _priorityHeap.TakeMaximum();
-                    UpdateForAverageBalance(child, oldBalance, 0);
+                    _priorityHeap.ChangeKey(child.PriorityHeapIndex, newBalance);
+                    UpdateForAverageBalance(child, oldBalance, newBalance);
                 }
                     
             } while (job is null);
@@ -219,11 +215,8 @@ namespace JobBank.Scheduling
                 child.Index = index;
                 _countChildren = index + 1;
 
-                if (child.Balance > 0)
-                {
-                    _priorityHeap.Insert(child.Balance, child);
-                    UpdateForAverageBalance(child, 0, child.Balance);
-                }
+                _priorityHeap.Insert(child.Balance, child);
+                UpdateForAverageBalance(child, 0, child.Balance);
             }
         }
 
@@ -239,12 +232,9 @@ namespace JobBank.Scheduling
         {
             if (child.IsActive)
             {
-                if (child.Balance > 0)
-                {
-                    _priorityHeap.Delete(child.PriorityHeapIndex);
-                    UpdateForAverageBalance(child, child.Balance, 0);
-                }
-
+                _priorityHeap.Delete(child.PriorityHeapIndex);
+                UpdateForAverageBalance(child, child.Balance, 0);
+                
                 // Delete the child's entry by swapping it
                 // with the last non-blank entry in the array.
                 int index = child.Index;
@@ -276,18 +266,7 @@ namespace JobBank.Scheduling
 
             if (child.IsActive)
             {
-                if (oldBalance > 0)
-                {
-                    if (newBalance > 0)
-                        _priorityHeap.ChangeKey(child.PriorityHeapIndex, newBalance);
-                    else
-                        _priorityHeap.Delete(child.PriorityHeapIndex);
-                }
-                else if (newBalance > 0)
-                {
-                    _priorityHeap.Insert(newBalance, child);
-                }
-
+                _priorityHeap.ChangeKey(child.PriorityHeapIndex, newBalance);
                 UpdateForAverageBalance(child, oldBalance, newBalance);
             }
 
