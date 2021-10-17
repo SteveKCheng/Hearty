@@ -95,7 +95,7 @@ namespace JobBank.Scheduling
                     int newBalance = oldBalance <= best ? oldBalance - best : 0;
 
                     // Then add a certain amount of credits to all queues.
-                    newBalance += 10000;
+                    newBalance += 10000 * child.Weight;
 
                     child.Balance = newBalance;
 
@@ -162,7 +162,10 @@ namespace JobBank.Scheduling
         /// <param name="jobSource">
         /// The source of the jobs in the new (abstract) child queue.
         /// </param>
-        protected SchedulingUnit<TJob> AddChild(IJobSource<TJob> jobSource)
+        /// <remarks>
+        /// The new abstract child queue, initially considered inactive.
+        /// </remarks>
+        protected SchedulingUnit<TJob> AddChild(IJobSource<TJob> jobSource, int weight)
         {
             var allChildren = _allChildren;
             int index = _numChildren;
@@ -178,13 +181,15 @@ namespace JobBank.Scheduling
                 _allChildren = allChildren = newArray;
             }
 
-            var child = new SchedulingUnit<TJob>(this, jobSource) { Index = index };
+            var child = new SchedulingUnit<TJob>(this, jobSource) 
+            { 
+                Index = index,
+                Weight = weight,
+                Balance = GetAverageBalance(weight)
+            };
+
             _numChildren = index + 1;
             allChildren[index] = child;
-
-            int newBalance = GetAverageBalance(child);
-            UpdateForAverageBalance(child, 0, newBalance);
-            child.Balance = newBalance;
 
             return child;
         }
@@ -332,9 +337,13 @@ namespace JobBank.Scheduling
                                              int oldBalance, 
                                              int newBalance)
         {
+            static long GetUnweightedBalance(SchedulingUnit<TJob> child, int balance)
+                => ((long)balance * child.ReciprocalWeight) 
+                    >> SchedulingUnit<TJob>.ReciprocalWeightLogScale;
+
             long sum = _sumUnweightedBalances;
-            sum -= oldBalance > 0 ? oldBalance : 0;
-            sum += newBalance > 0 ? newBalance : 0;
+            sum -= oldBalance > 0 ? GetUnweightedBalance(child, oldBalance) : 0;
+            sum += newBalance > 0 ? GetUnweightedBalance(child, newBalance) : 0;
             _sumUnweightedBalances = sum;
 
             _countPositiveBalances += (newBalance > 0 ? 1 : 0) 
@@ -345,17 +354,23 @@ namespace JobBank.Scheduling
         /// Return the running average of positive balances among
         /// all active child queues.
         /// </summary>
-        /// <param name="child">The child queue that the new average balance
-        /// will be applied to.  
+        /// <param name="weight">
+        /// The weight to apply to the returned balance,
+        /// same as <see cref="SchedulingUnit{TJob}.Weight" />
+        /// for the new child queue.
         /// </param>
         /// <returns>
-        /// The suggested balance to set on <paramref name="child"/>, based
+        /// The suggested balance to set on a new child queue, based
         /// on the running average.
         /// </returns>
-        private int GetAverageBalance(SchedulingUnit<TJob> child)
+        private int GetAverageBalance(int weight)
         {
-            int unweightedBalance = (int)(_sumUnweightedBalances / _countPositiveBalances);
-            return unweightedBalance;
+            if (_countPositiveBalances <= 0)
+                return 10000 * weight;
+
+            long unweightedBalance = _sumUnweightedBalances / _countPositiveBalances;
+            long balance = unweightedBalance * weight;
+            return balance <= int.MaxValue ? (int)balance : int.MaxValue;
         }
     }
 }

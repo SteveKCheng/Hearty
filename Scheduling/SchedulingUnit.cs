@@ -50,6 +50,47 @@ namespace JobBank.Scheduling
         public bool IsActive { get; internal set; }
 
         /// <summary>
+        /// Backing field for <see cref="Weight" />.
+        /// </summary>
+        private int _weight;
+
+        /// <summary>
+        /// Backing field for <see cref="ReciprocalWeight" />.
+        /// </summary>
+        private int _reciprocalWeight;
+
+        /// <summary>
+        /// A weight that is multiplies the amount of credits this child queue
+        /// receives on each time slice.
+        /// </summary>
+        /// <remarks>
+        /// This weight is always between 1 and 100 inclusive.
+        /// </remarks>
+        public int Weight
+        {
+            get => _weight;
+            internal set
+            {
+                if (value < 1 || value > 100)
+                    throw new ArgumentOutOfRangeException("The weight on a child queue is not between 1 to 100. ", (Exception?)null);
+
+                _weight = value;
+                _reciprocalWeight = (1 << ReciprocalWeightLogScale) / value;
+            }
+        }
+
+        internal const int ReciprocalWeightLogScale = 20;
+
+        /// <summary>
+        /// The reciprocal of the weight multiplied by 2^20.
+        /// </summary>
+        /// <remarks>
+        /// This quantity is cached only to avoid expensive integer
+        /// division when updating averages of unweighted balances.
+        /// </remarks>
+        public int ReciprocalWeight => _reciprocalWeight;
+
+        /// <summary>
         /// Prepare a new child queue.
         /// </summary>
         /// <param name="jobSource">
@@ -59,6 +100,10 @@ namespace JobBank.Scheduling
         {
             Parent = parent;
             JobSource = jobSource;
+            PriorityHeapIndex = -1;
+
+            _weight = 1;
+            _reciprocalWeight = (1 << ReciprocalWeightLogScale);
         }
 
         /// <summary>
