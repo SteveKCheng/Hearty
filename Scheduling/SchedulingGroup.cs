@@ -89,20 +89,12 @@ namespace JobBank.Scheduling
         /// </returns>
         protected TJob? TakeJob()
         {
-            TJob? job = default;
-
-            do
+            while (RefillBalancesAsNeeded())
             {
-                // If no child queues are eligible for de-queuing,
-                // that means they are all inactive or they have
-                // run out of credits.  Try to re-fill their credits.
-                if (!RefillBalancesAsNeeded())
-                    break;
-
                 var (oldBalance, child) = _priorityHeap[0];
                 Debug.Assert(oldBalance > 0 && child.IsActive);
 
-                job = child.TakeJob(out int charge);
+                TJob? job = child.TakeJob(out int charge);
 
                 if (job is null)
                     DeactivateChild(child);
@@ -114,11 +106,11 @@ namespace JobBank.Scheduling
                 {
                     _priorityHeap.ChangeKey(child.PriorityHeapIndex, newBalance);
                     UpdateForAverageBalance(child, oldBalance, newBalance);
+                    return job;
                 }
-                    
-            } while (job is null);
+            }
 
-            return job;
+            return default;
         }
 
         /// <summary>
