@@ -47,7 +47,7 @@ namespace JobBank.Scheduling
         /// Whether this queue is active, i.e. it may have a job available
         /// from the next call to <see cref="TakeJob" />.
         /// </summary>
-        public bool IsActive { get; internal set; }
+        public bool IsActive => Index >= 0;
 
         /// <summary>
         /// Backing field for <see cref="Weight" />.
@@ -101,6 +101,7 @@ namespace JobBank.Scheduling
             Parent = parent;
             JobSource = jobSource;
             PriorityHeapIndex = -1;
+            Index = -1;
 
             _weight = 1;
             _reciprocalWeight = (1 << ReciprocalWeightLogScale);

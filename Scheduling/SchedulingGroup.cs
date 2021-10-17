@@ -25,15 +25,7 @@ namespace JobBank.Scheduling
         /// <remarks>
         /// <para>
         /// In this array, the child queues can be in any order
-        /// as long as:
-        /// <list type="bullet">
-        /// <item>
-        /// <para>Blank slots all occur after non-blank entries. </para>
-        /// </item>
-        /// <item>
-        /// <para>Active child queues occur before inactive queues. </para>
-        /// </item>
-        /// </list>
+        /// as long as blank slots all occur after non-blank entries. </para>
         /// </para>
         /// <para>
         /// Thus, when deleting a member, the last member 
@@ -44,11 +36,6 @@ namespace JobBank.Scheduling
         /// are set to null; the first such slot can be taken
         /// when a new member has to be set.
         /// </para>
-        /// <para>
-        /// Having the active queues occur first in this array
-        /// lets us skip over inactive queues quickly when
-        /// re-filling credits.
-        /// </para>
         /// </remarks>
         private SchedulingUnit<TJob>?[] _allChildren;
 
@@ -57,11 +44,6 @@ namespace JobBank.Scheduling
         /// currently.
         /// </summary>
         private int _countChildren = 0;
-
-        /// <summary>
-        /// The number of child queues that are current active.
-        /// </summary>
-        private int _countActive = 0;
 
         protected const int MaxCapacity = 1024;
 
@@ -90,12 +72,12 @@ namespace JobBank.Scheduling
             bool willRefill = false;
 
             var allChildren = _allChildren;
-            int countActive = _countActive;
+            int countChildren = _countChildren;
 
             // Calculate the highest non-positive balance
             // among all active child queues
             int best = int.MinValue;
-            for (int i = 0; i < countActive; ++i)
+            for (int i = 0; i < countChildren; ++i)
             {
                 var child = allChildren[i]!;
                 Debug.Assert(child != null && child.IsActive);
@@ -112,7 +94,7 @@ namespace JobBank.Scheduling
 
             _priorityHeap.Clear();
 
-            for (int i = 0; i < countActive; ++i)
+            for (int i = 0; i < countChildren; ++i)
             {
                 var child = allChildren[i]!;
 
@@ -196,61 +178,15 @@ namespace JobBank.Scheduling
         /// <remarks>
         /// The new abstract child queue, initially considered inactive.
         /// </remarks>
-        protected SchedulingUnit<TJob> AddChild(IJobSource<TJob> jobSource, int weight)
+        protected SchedulingUnit<TJob> CreateChild(IJobSource<TJob> jobSource, int weight)
         {
-            var allChildren = _allChildren;
-            int index = _countChildren;
-            if (index == allChildren.Length)
-            {
-                if (index >= MaxCapacity)
-                    throw new InvalidOperationException("Cannot add a child queue because there is no more capacity. ");
-
-                // Grow capacity of array by 1/2
-                int newCapacity = Math.Min(index + (index >> 1), MaxCapacity);
-                var newArray = new SchedulingUnit<TJob>?[newCapacity];
-                Array.Copy(allChildren, newArray, allChildren.Length);
-                _allChildren = allChildren = newArray;
-            }
-
             var child = new SchedulingUnit<TJob>(this, jobSource) 
             { 
-                Index = index,
                 Weight = weight,
                 Balance = GetAverageBalance(weight)
             };
 
-            _countChildren = index + 1;
-            allChildren[index] = child;
-
             return child;
-        }
-
-        /// <summary>
-        /// Remove the child queue that had been added by <see cref="AddChild" />
-        /// earlier.
-        /// </summary>
-        /// <param name="child">
-        /// The child queue to remove, which must have been created by this
-        /// parent.
-        /// </param>
-        private void RemoveChild(SchedulingUnit<TJob> child)
-        {
-            var index = child.Index;
-            if (index < 0 || child.Parent != this)
-                throw new ArgumentException("Child queue is not present in the parent queue. ", nameof(child));
-
-            DeactivateChild(child);
-
-            // Delete the child's entry by swapping it
-            // with the last non-blank entry in the array.
-            var allChildren = _allChildren;
-            var lastIndex = --_countChildren;
-            ref var lastChild = ref allChildren[lastIndex];
-            allChildren[index] = lastChild;
-            lastChild!.Index = index;
-            lastChild = null;
-
-            child.Index = -1;
         }
 
         /// <summary>
@@ -265,15 +201,23 @@ namespace JobBank.Scheduling
         {
             if (!child.IsActive)
             {
-                child.IsActive = true;
-
-                // Ensure the child appears with its active siblings
                 var allChildren = _allChildren;
-                int newIndex = _countActive++;
-                int oldIndex = child.Index;
-                allChildren[oldIndex] = allChildren[newIndex];
-                allChildren[newIndex] = child;
-                child.Index = newIndex;
+                int index = _countChildren;
+                if (index == allChildren.Length)
+                {
+                    if (index >= MaxCapacity)
+                        throw new InvalidOperationException("Cannot add a child queue because there is no more capacity. ");
+
+                    // Grow capacity of array by 1/2
+                    int newCapacity = Math.Min(index + (index >> 1), MaxCapacity);
+                    var newArray = new SchedulingUnit<TJob>?[newCapacity];
+                    Array.Copy(allChildren, newArray, allChildren.Length);
+                    _allChildren = allChildren = newArray;
+                }
+
+                allChildren[index] = child;
+                child.Index = index;
+                _countChildren = index + 1;
 
                 if (child.Balance > 0)
                 {
@@ -295,21 +239,22 @@ namespace JobBank.Scheduling
         {
             if (child.IsActive)
             {
-                child.IsActive = false;
-
-                // Ensure the child appears with its inactive siblings
-                var allChildren = _allChildren;
-                int newIndex = --_countActive;
-                int oldIndex = child.Index;
-                allChildren[oldIndex] = allChildren[newIndex];
-                allChildren[newIndex] = child;
-                child.Index = newIndex;
-
                 if (child.Balance > 0)
                 {
                     _priorityHeap.Delete(child.PriorityHeapIndex);
                     UpdateForAverageBalance(child, child.Balance, 0);
                 }
+
+                // Delete the child's entry by swapping it
+                // with the last non-blank entry in the array.
+                int index = child.Index;
+                var lastIndex = --_countChildren;
+                var allChildren = _allChildren;
+                ref var lastChild = ref allChildren[lastIndex];
+                allChildren[index] = lastChild;
+                lastChild!.Index = index;
+                lastChild = null;
+                child.Index = -1;
             }
         }
 
