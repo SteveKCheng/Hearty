@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 
 namespace JobBank.Scheduling
 {
@@ -12,20 +13,42 @@ namespace JobBank.Scheduling
         /// active child with the highest credit balance
         /// can be quickly accessed.
         /// </summary>
+        /// <remarks>
+        /// Child queues that are inactive, or have negative or zero balances,
+        /// are not put into the priority queue.
+        /// </remarks>
         private IntPriorityHeap<SchedulingUnit<TJob>> _priorityHeap;
 
         /// <summary>
         /// List of all the child queues managed by this instance.
         /// </summary>
         /// <remarks>
-        /// In this array, the child queues can be in any order.
+        /// <para>
+        /// In this array, the child queues can be in any order
+        /// as long as:
+        /// <list type="bullet">
+        /// <item>
+        /// <para>Blank slots all occur after non-blank entries. </para>
+        /// </item>
+        /// <item>
+        /// <para>Active child queues occur before inactive queues. </para>
+        /// </item>
+        /// </list>
+        /// </para>
+        /// <para>
         /// Thus, when deleting a member, the last member 
         /// can be swapped in to the vacated slot, so that
         /// all the members occupy consecutive slots starting
         /// from the beginning of this array.  The slots
-        /// on and after the index <see cref="_numChildren" />
+        /// on and after the index <see cref="_countChildren" />
         /// are set to null; the first such slot can be taken
         /// when a new member has to be set.
+        /// </para>
+        /// <para>
+        /// Having the active queues occur first in this array
+        /// lets us skip over inactive queues quickly when
+        /// re-filling credits.
+        /// </para>
         /// </remarks>
         private SchedulingUnit<TJob>?[] _allChildren;
 
@@ -33,7 +56,12 @@ namespace JobBank.Scheduling
         /// The number of child queues managed by this instance
         /// currently.
         /// </summary>
-        private int _numChildren = 0;
+        private int _countChildren = 0;
+
+        /// <summary>
+        /// The number of child queues that are current active.
+        /// </summary>
+        private int _countActive = 0;
 
         protected const int MaxCapacity = 1024;
 
@@ -59,51 +87,54 @@ namespace JobBank.Scheduling
         /// </returns>
         private bool RefillBalances()
         {
-            bool hasActiveChild = false;
+            bool willRefill = false;
+
+            var allChildren = _allChildren;
+            int countActive = _countActive;
 
             // Calculate the highest non-positive balance
             // among all active child queues
             int best = int.MinValue;
-            for (int i = 0; i < _allChildren.Length; ++i)
+            for (int i = 0; i < countActive; ++i)
             {
-                var child = _allChildren[i];
-                if (child != null && child.IsActive && child.Balance <= 0)
+                var child = allChildren[i]!;
+                Debug.Assert(child != null && child.IsActive);
+
+                if (child.Balance <= 0)
                 {
-                    hasActiveChild = true;
+                    willRefill = true;
                     best = Math.Max(best, child.Balance);
                 }
             }
 
-            if (!hasActiveChild)
+            if (!willRefill)
                 return false;
 
             _priorityHeap.Clear();
 
-            for (int i = 0; i < _allChildren.Length; ++i)
+            for (int i = 0; i < countActive; ++i)
             {
-                var child = _allChildren[i];
-                if (child != null)
+                var child = allChildren[i]!;
+
+                int oldBalance = child.Balance;
+
+                // Brings the "best" child queue with previously non-positive
+                // balance to zero.  If an inactive child queue already had
+                // positive balance, reset it back to zero.
+                //
+                // Same as:
+                //   balance = Math.Min(0, MiscArithmetic.SaturatingSubtract(balance, best))
+                int newBalance = oldBalance <= best ? oldBalance - best : 0;
+
+                // Then add a certain amount of credits to all queues.
+                newBalance += 10000 * child.Weight;
+
+                child.Balance = newBalance;
+
+                if (newBalance > 0)
                 {
-                    int oldBalance = child.Balance;
-
-                    // Brings the "best" child queue with previously non-positive
-                    // balance to zero.  If an inactive child queue already had
-                    // positive balance, reset it back to zero.
-                    //
-                    // Same as:
-                    //   balance = Math.Min(0, MiscArithmetic.SaturatingSubtract(balance, best))
-                    int newBalance = oldBalance <= best ? oldBalance - best : 0;
-
-                    // Then add a certain amount of credits to all queues.
-                    newBalance += 10000 * child.Weight;
-
-                    child.Balance = newBalance;
-
-                    if (child.IsActive && newBalance > 0)
-                    {
-                        _priorityHeap.Insert(newBalance, child);
-                        UpdateForAverageBalance(child, oldBalance, newBalance);
-                    }
+                    _priorityHeap.Insert(newBalance, child);
+                    UpdateForAverageBalance(child, oldBalance, newBalance);
                 }
             }
 
@@ -132,22 +163,22 @@ namespace JobBank.Scheduling
                     break;
 
                 var (oldBalance, child) = _priorityHeap[0];
+                Debug.Assert(oldBalance > 0 && child.IsActive);
+
                 job = child.TakeJob(out int charge);
 
                 if (job is null)
-                    child.IsActive = false;
+                    DeactivateChild(child);
 
                 int newBalance = MiscArithmetic.SaturatingSubtract(oldBalance, charge);
                 child.Balance = newBalance;
 
-                if (job is not null && newBalance > 0)
+                if (job is not null)
                 {
-                    _priorityHeap.ChangeKey(0, newBalance);
-                    UpdateForAverageBalance(child, oldBalance, newBalance);
-                }
-                else
-                {
-                    _priorityHeap.TakeMaximum();
+                    if (newBalance > 0)
+                        _priorityHeap.ChangeKey(0, newBalance);
+                    else
+                        _priorityHeap.TakeMaximum();
                     UpdateForAverageBalance(child, oldBalance, 0);
                 }
                     
@@ -168,7 +199,7 @@ namespace JobBank.Scheduling
         protected SchedulingUnit<TJob> AddChild(IJobSource<TJob> jobSource, int weight)
         {
             var allChildren = _allChildren;
-            int index = _numChildren;
+            int index = _countChildren;
             if (index == allChildren.Length)
             {
                 if (index >= MaxCapacity)
@@ -188,7 +219,7 @@ namespace JobBank.Scheduling
                 Balance = GetAverageBalance(weight)
             };
 
-            _numChildren = index + 1;
+            _countChildren = index + 1;
             allChildren[index] = child;
 
             return child;
@@ -208,23 +239,18 @@ namespace JobBank.Scheduling
             if (index < 0 || child.Parent != this)
                 throw new ArgumentException("Child queue is not present in the parent queue. ", nameof(child));
 
+            DeactivateChild(child);
+
+            // Delete the child's entry by swapping it
+            // with the last non-blank entry in the array.
             var allChildren = _allChildren;
+            var lastIndex = --_countChildren;
+            ref var lastChild = ref allChildren[lastIndex];
+            allChildren[index] = lastChild;
+            lastChild!.Index = index;
+            lastChild = null;
+
             child.Index = -1;
-
-            if (child.PriorityHeapIndex >= 0)
-            {
-                _priorityHeap.Delete(child.PriorityHeapIndex);
-                UpdateForAverageBalance(child, child.Balance, 0);
-            }
-
-            var lastIndex = --_numChildren;
-            if (lastIndex > 0)
-            {
-                ref SchedulingUnit<TJob>? lastChild = ref allChildren[lastIndex];
-                allChildren[index] = lastChild;
-                lastChild!.Index = index;
-                lastChild = null;
-            }
         }
 
         /// <summary>
@@ -240,6 +266,15 @@ namespace JobBank.Scheduling
             if (!child.IsActive)
             {
                 child.IsActive = true;
+
+                // Ensure the child appears with its active siblings
+                var allChildren = _allChildren;
+                int newIndex = _countActive++;
+                int oldIndex = child.Index;
+                allChildren[oldIndex] = allChildren[newIndex];
+                allChildren[newIndex] = child;
+                child.Index = newIndex;
+
                 if (child.Balance > 0)
                 {
                     _priorityHeap.Insert(child.Balance, child);
@@ -261,8 +296,20 @@ namespace JobBank.Scheduling
             if (child.IsActive)
             {
                 child.IsActive = false;
-                _priorityHeap.Delete(child.PriorityHeapIndex);
-                UpdateForAverageBalance(child, child.Balance, 0);
+
+                // Ensure the child appears with its inactive siblings
+                var allChildren = _allChildren;
+                int newIndex = --_countActive;
+                int oldIndex = child.Index;
+                allChildren[oldIndex] = allChildren[newIndex];
+                allChildren[newIndex] = child;
+                child.Index = newIndex;
+
+                if (child.Balance > 0)
+                {
+                    _priorityHeap.Delete(child.PriorityHeapIndex);
+                    UpdateForAverageBalance(child, child.Balance, 0);
+                }
             }
         }
 
@@ -286,10 +333,10 @@ namespace JobBank.Scheduling
             {
                 if (oldBalance > 0)
                 {
-                    if (newBalance <= 0)
-                        _priorityHeap.Delete(child.PriorityHeapIndex);
-                    else
+                    if (newBalance > 0)
                         _priorityHeap.ChangeKey(child.PriorityHeapIndex, newBalance);
+                    else
+                        _priorityHeap.Delete(child.PriorityHeapIndex);
                 }
                 else if (newBalance > 0)
                 {
