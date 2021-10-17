@@ -14,16 +14,6 @@ namespace JobBank.Scheduling
         public SchedulingGroup<TJob> Parent { get; }
 
         /// <summary>
-        /// The index of this child in <see cref="SchedulingGroup._allChildren" />,
-        /// retained so that it can be deleted.
-        /// </summary>
-        /// <remarks>
-        /// This index is -1 if the child is no longer present in the
-        /// parent <see cref="SchedulingGroup" />.
-        /// </remarks>
-        internal int Index { get; set; }
-
-        /// <summary>
         /// The index of this child queue in the parent's priority heap.
         /// </summary>
         /// <remarks>
@@ -47,7 +37,7 @@ namespace JobBank.Scheduling
         /// Whether this queue is active, i.e. it may have a job available
         /// from the next call to <see cref="TakeJob" />.
         /// </summary>
-        public bool IsActive => Index >= 0;
+        public bool IsActive => PriorityHeapIndex >= 0;
 
         /// <summary>
         /// Backing field for <see cref="Weight" />.
@@ -101,7 +91,6 @@ namespace JobBank.Scheduling
             Parent = parent;
             JobSource = jobSource;
             PriorityHeapIndex = -1;
-            Index = -1;
 
             _weight = 1;
             _reciprocalWeight = (1 << ReciprocalWeightLogScale);

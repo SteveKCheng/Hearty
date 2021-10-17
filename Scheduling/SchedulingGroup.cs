@@ -18,32 +18,6 @@ namespace JobBank.Scheduling
         /// </remarks>
         private IntPriorityHeap<SchedulingUnit<TJob>> _priorityHeap;
 
-        /// <summary>
-        /// List of all the child queues managed by this instance.
-        /// </summary>
-        /// <remarks>
-        /// <para>
-        /// In this array, the child queues can be in any order
-        /// as long as blank slots all occur after non-blank entries. </para>
-        /// </para>
-        /// <para>
-        /// Thus, when deleting a member, the last member 
-        /// can be swapped in to the vacated slot, so that
-        /// all the members occupy consecutive slots starting
-        /// from the beginning of this array.  The slots
-        /// on and after the index <see cref="_countChildren" />
-        /// are set to null; the first such slot can be taken
-        /// when a new member has to be set.
-        /// </para>
-        /// </remarks>
-        private SchedulingUnit<TJob>?[] _allChildren;
-
-        /// <summary>
-        /// The number of child queues managed by this instance
-        /// currently.
-        /// </summary>
-        private int _countChildren = 0;
-
         protected const int MaxCapacity = 1024;
 
         protected SchedulingGroup(int capacity)
@@ -52,10 +26,8 @@ namespace JobBank.Scheduling
                 throw new ArgumentOutOfRangeException(nameof(capacity));
 
             _priorityHeap = new IntPriorityHeap<SchedulingUnit<TJob>>(
-                (ref SchedulingUnit<TJob> item, int index) => item.PriorityHeapIndex = index);
-
-            _allChildren = capacity > 0 ? new SchedulingUnit<TJob>?[capacity] 
-                                        : Array.Empty<SchedulingUnit<TJob>?>();
+                (ref SchedulingUnit<TJob> item, int index) => item.PriorityHeapIndex = index,
+                capacity: capacity);
         }
 
         /// <summary>
@@ -181,24 +153,6 @@ namespace JobBank.Scheduling
         {
             if (!child.IsActive)
             {
-                var allChildren = _allChildren;
-                int index = _countChildren;
-                if (index == allChildren.Length)
-                {
-                    if (index >= MaxCapacity)
-                        throw new InvalidOperationException("Cannot add a child queue because there is no more capacity. ");
-
-                    // Grow capacity of array by 1/2
-                    int newCapacity = Math.Min(index + (index >> 1), MaxCapacity);
-                    var newArray = new SchedulingUnit<TJob>?[newCapacity];
-                    Array.Copy(allChildren, newArray, allChildren.Length);
-                    _allChildren = allChildren = newArray;
-                }
-
-                allChildren[index] = child;
-                child.Index = index;
-                _countChildren = index + 1;
-
                 _priorityHeap.Insert(child.Balance, child);
                 UpdateForAverageBalance(child, 0, child.Balance);
             }
@@ -218,17 +172,6 @@ namespace JobBank.Scheduling
             {
                 _priorityHeap.Delete(child.PriorityHeapIndex);
                 UpdateForAverageBalance(child, child.Balance, 0);
-                
-                // Delete the child's entry by swapping it
-                // with the last non-blank entry in the array.
-                int index = child.Index;
-                var lastIndex = --_countChildren;
-                var allChildren = _allChildren;
-                ref var lastChild = ref allChildren[lastIndex];
-                allChildren[index] = lastChild;
-                lastChild!.Index = index;
-                lastChild = null;
-                child.Index = -1;
             }
         }
 
