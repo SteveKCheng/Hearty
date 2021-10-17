@@ -134,8 +134,7 @@ namespace JobBank.Scheduling
         {
             var child = new SchedulingUnit<TJob>(this, jobSource) 
             { 
-                Weight = weight,
-                Balance = GetAverageBalance(weight)
+                Weight = weight
             };
 
             return child;
@@ -153,6 +152,7 @@ namespace JobBank.Scheduling
         {
             if (!child.IsActive)
             {
+                child.Balance = GetAverageBalance(child.Weight);
                 _priorityHeap.Insert(child.Balance, child);
                 UpdateForAverageBalance(child, 0, child.Balance);
             }
