@@ -6,12 +6,12 @@ namespace JobBank.Scheduling
     /// Represents a generic child queue in a parent queue system
     /// for fair job scheduling.
     /// </summary>
-    public sealed class SchedulingUnit
+    public sealed class SchedulingUnit<TJob>
     {
         /// <summary>
         /// The queue group that owns this child queue.
         /// </summary>
-        public SchedulingGroup Parent { get; }
+        public SchedulingGroup<TJob> Parent { get; }
 
         /// <summary>
         /// The index of this child in <see cref="SchedulingGroup._allChildren" />,
@@ -55,7 +55,7 @@ namespace JobBank.Scheduling
         /// <param name="jobSource">
         /// Provides the job items when the abstract child queue is "de-queued".
         /// </param>
-        internal SchedulingUnit(SchedulingGroup parent, IJobSource jobSource)
+        internal SchedulingUnit(SchedulingGroup<TJob> parent, IJobSource<TJob> jobSource)
         {
             Parent = parent;
             JobSource = jobSource;
@@ -65,7 +65,7 @@ namespace JobBank.Scheduling
         /// Pulls out a job to process when requested
         /// by the parent <see cref="SchedulingGroup" />.
         /// </summary>
-        public IJobSource JobSource { get; }
+        public IJobSource<TJob> JobSource { get; }
 
         /// <summary>
         /// Calls <see cref="IJobSource.TakeJob" />.
@@ -78,7 +78,7 @@ namespace JobBank.Scheduling
         /// should be processing next, or null if there is none
         /// from this child queue.
         /// </returns>
-        internal ScheduledJob? TakeJob(out int charge)
+        internal TJob? TakeJob(out int charge)
             => JobSource.TakeJob(out charge);
 
         /// <summary>

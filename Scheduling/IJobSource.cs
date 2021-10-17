@@ -10,7 +10,7 @@ namespace JobBank.Scheduling
     /// Abstraction for the fair job scheduling system to pull out
     /// one job to execute.
     /// </summary>
-    public interface IJobSource
+    public interface IJobSource<TJob>
     {
         /// <summary>
         /// Provides one job to process.
@@ -30,6 +30,6 @@ namespace JobBank.Scheduling
         /// processing next, or null if this source instance
         /// currently has no job to process.  
         /// </returns>
-        ScheduledJob? TakeJob(out int charge);
+        TJob? TakeJob(out int charge);
     }
 }

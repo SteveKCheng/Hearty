@@ -2,22 +2,17 @@
 
 namespace JobBank.Scheduling
 {
-    public class ScheduledJob
-    {
-        public int EstimatedTime { get; set; }
-    }
-
     /// <summary>
     /// Credit-based scheduling from a set of <see cref="SchedulingUnit" />.
     /// </summary>
-    public class SchedulingGroup
+    public class SchedulingGroup<TJob>
     {
         /// <summary>
         /// Organizes the child queues so that the 
         /// active child with the highest credit balance
         /// can be quickly accessed.
         /// </summary>
-        private IntPriorityHeap<SchedulingUnit> _priorityHeap;
+        private IntPriorityHeap<SchedulingUnit<TJob>> _priorityHeap;
 
         /// <summary>
         /// List of all the child queues managed by this instance.
@@ -32,7 +27,7 @@ namespace JobBank.Scheduling
         /// are set to null; the first such slot can be taken
         /// when a new member has to be set.
         /// </remarks>
-        private SchedulingUnit?[] _allChildren;
+        private SchedulingUnit<TJob>?[] _allChildren;
 
         /// <summary>
         /// The number of child queues managed by this instance
@@ -47,11 +42,11 @@ namespace JobBank.Scheduling
             if (capacity < 0 || capacity > MaxCapacity)
                 throw new ArgumentOutOfRangeException(nameof(capacity));
 
-            _priorityHeap = new IntPriorityHeap<SchedulingUnit>(
-                (ref SchedulingUnit item, int index) => item.PriorityHeapIndex = index);
+            _priorityHeap = new IntPriorityHeap<SchedulingUnit<TJob>>(
+                (ref SchedulingUnit<TJob> item, int index) => item.PriorityHeapIndex = index);
 
-            _allChildren = capacity > 0 ? new SchedulingUnit?[capacity] 
-                                        : Array.Empty<SchedulingUnit?>();
+            _allChildren = capacity > 0 ? new SchedulingUnit<TJob>?[capacity] 
+                                        : Array.Empty<SchedulingUnit<TJob>?>();
         }
 
         /// <summary>
@@ -104,11 +99,17 @@ namespace JobBank.Scheduling
             return true;
         }
 
-        // De-queue operation.
-        // Take the queue with the most priority.
-        protected ScheduledJob? TakeJob()
+        /// <summary>
+        /// Take a job from the child queue that currently has one,
+        /// and has the highest balance.
+        /// </summary>
+        /// <returns>
+        /// The de-queued job, or null if no child queue can currently 
+        /// supply one.
+        /// </returns>
+        protected TJob? TakeJob()
         {
-            ScheduledJob? job = null;
+            TJob? job = default;
 
             do
             {
@@ -121,17 +122,17 @@ namespace JobBank.Scheduling
                 var (balance, child) = _priorityHeap[0];
                 job = child.TakeJob(out int charge);
 
-                if (job == null)
+                if (job is null)
                     child.IsActive = false;
 
                 balance -= charge;
                 child.Balance = balance;
 
-                if (job != null && balance > 0)
+                if (job is not null && balance > 0)
                     _priorityHeap.ChangeKey(0, balance);
                 else
                     _priorityHeap.TakeMaximum();
-            } while (job == null);
+            } while (job is null);
 
             return job;
         }
@@ -142,7 +143,7 @@ namespace JobBank.Scheduling
         /// <param name="jobSource">
         /// The source of the jobs in the new (abstract) child queue.
         /// </param>
-        protected SchedulingUnit AddChild(IJobSource jobSource)
+        protected SchedulingUnit<TJob> AddChild(IJobSource<TJob> jobSource)
         {
             var allChildren = _allChildren;
             int index = _numChildren++;
@@ -154,7 +155,7 @@ namespace JobBank.Scheduling
                 _allChildren = allChildren = newArray;
             }
 
-            var child = new SchedulingUnit(this, jobSource) { Index = index };
+            var child = new SchedulingUnit<TJob>(this, jobSource) { Index = index };
             allChildren[index] = child;
             return child;
         }
@@ -167,7 +168,7 @@ namespace JobBank.Scheduling
         /// The child queue to remove, which must have been created by this
         /// parent.
         /// </param>
-        private void RemoveChild(SchedulingUnit child)
+        private void RemoveChild(SchedulingUnit<TJob> child)
         {
             var index = child.Index;
             if (index < 0 || child.Parent != this)
@@ -182,7 +183,7 @@ namespace JobBank.Scheduling
             var lastIndex = --_numChildren;
             if (lastIndex > 0)
             {
-                ref SchedulingUnit? lastChild = ref allChildren[lastIndex];
+                ref SchedulingUnit<TJob>? lastChild = ref allChildren[lastIndex];
                 allChildren[index] = lastChild;
                 lastChild!.Index = index;
                 lastChild = null;
@@ -197,7 +198,7 @@ namespace JobBank.Scheduling
         /// The child scheduling unit.  This instance
         /// must be its parent.
         /// </param>
-        internal void ActivateChild(SchedulingUnit child)
+        internal void ActivateChild(SchedulingUnit<TJob> child)
         {
             if (!child.IsActive)
             {
@@ -215,7 +216,7 @@ namespace JobBank.Scheduling
         /// The child scheduling unit.  This instance
         /// must be its parent.
         /// </param>
-        internal void DeactivateChild(SchedulingUnit child)
+        internal void DeactivateChild(SchedulingUnit<TJob> child)
         {
             if (child.IsActive)
             {
@@ -235,7 +236,7 @@ namespace JobBank.Scheduling
         /// <param name="debit">
         /// The amount to add to the child's debit balance.
         /// </param>
-        internal void AdjustChildBalance(SchedulingUnit child, int debit)
+        internal void AdjustChildBalance(SchedulingUnit<TJob> child, int debit)
         {
             int oldBalance = child.Balance;
             int newBalance = oldBalance + debit;
