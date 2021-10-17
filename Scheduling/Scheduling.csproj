@@ -11,6 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="MiscArithmetic.cs" />
     <Compile Include="SchedulingUnit.cs" />
     <Compile Include="IJobSource.cs" />
     <Compile Include="IntPriorityHeap.cs" />

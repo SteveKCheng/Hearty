@@ -59,26 +59,23 @@ namespace JobBank.Scheduling
         /// </returns>
         private bool RefillBalances()
         {
-            // Minimum required number of credits to bring
-            // at least one child to non-negative credit.
-            int minimum = int.MaxValue;
-
             bool hasActiveChild = false;
 
+            // Calculate the highest non-positive balance
+            // among all active child queues
+            int best = int.MinValue;
             for (int i = 0; i < _allChildren.Length; ++i)
             {
                 var child = _allChildren[i];
                 if (child != null && child.IsActive && child.Balance <= 0)
                 {
                     hasActiveChild = true;
-                    minimum = Math.Min(minimum, -child.Balance);
+                    best = Math.Max(best, child.Balance);
                 }
             }
 
             if (!hasActiveChild)
                 return false;
-
-            minimum += 1;
 
             _priorityHeap.Clear();
 
@@ -88,7 +85,18 @@ namespace JobBank.Scheduling
                 if (child != null)
                 {
                     var balance = child.Balance;
-                    balance = Math.Min(balance + minimum, 0) + 9999;
+
+                    // Brings the "best" child queue with previously non-positive
+                    // balance to zero.  If an inactive child queue already had
+                    // positive balance, reset it back to zero.
+                    //
+                    // Same as:
+                    //   balance = Math.Min(0, MiscArithmetic.SaturatingSubtract(balance, best))
+                    balance = balance <= best ? balance - best : 0;
+
+                    // Then add a certain amount of credits to all queues.
+                    balance += 10000;
+
                     child.Balance = balance;
 
                     if (child.IsActive && balance > 0)
@@ -96,6 +104,7 @@ namespace JobBank.Scheduling
                 }
             }
 
+            // There must be at least one queue above that now has positive balance.
             return true;
         }
 
@@ -125,7 +134,7 @@ namespace JobBank.Scheduling
                 if (job is null)
                     child.IsActive = false;
 
-                balance -= charge;
+                balance = MiscArithmetic.SaturatingSubtract(balance, charge);
                 child.Balance = balance;
 
                 if (job is not null && balance > 0)
@@ -244,7 +253,7 @@ namespace JobBank.Scheduling
         internal void AdjustChildBalance(SchedulingUnit<TJob> child, int debit)
         {
             int oldBalance = child.Balance;
-            int newBalance = oldBalance + debit;
+            int newBalance = MiscArithmetic.SaturatingAdd(oldBalance, debit);
 
             if (child.IsActive)
             {
