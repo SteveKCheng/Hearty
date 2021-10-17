@@ -66,57 +66,44 @@ namespace JobBank.Scheduling
         /// Whether there is at least one active child queue
         /// (after re-filling).
         /// </returns>
-        private bool RefillBalances()
+        private bool RefillBalancesAsNeeded()
         {
-            bool willRefill = false;
-
-            var allChildren = _allChildren;
-            int countChildren = _countChildren;
-
-            // Calculate the highest non-positive balance
-            // among all active child queues
-            int best = int.MinValue;
-            for (int i = 0; i < countChildren; ++i)
-            {
-                var child = allChildren[i]!;
-                Debug.Assert(child != null && child.IsActive);
-
-                if (child.Balance <= 0)
-                {
-                    willRefill = true;
-                    best = Math.Max(best, child.Balance);
-                }
-            }
-
-            if (!willRefill)
+            if (_priorityHeap.IsEmpty)
                 return false;
 
-            _priorityHeap.Clear();
+            int best = _priorityHeap.PeekMaximum().Key;
+            if (best > 0)
+                return true;
 
-            for (int i = 0; i < countChildren; ++i)
-            {
-                var child = allChildren[i]!;
+            var self_ = this;
+            _priorityHeap.Initialize(_priorityHeap.Count, ref self_,
+                static (ref SchedulingGroup<TJob> self, 
+                        in Span<int> keys,
+                        in Span<SchedulingUnit<TJob>> values) =>
+                {
+                    int best_ = keys[0];
 
-                int oldBalance = child.Balance;
+                    for (int i = 0; i < keys.Length; ++i)
+                    {
+                        var child = values[i];
+                        int oldBalance = child.Balance;
 
-                // Brings the "best" child queue with previously non-positive
-                // balance to zero.  If an inactive child queue already had
-                // positive balance, reset it back to zero.
-                //
-                // Same as:
-                //   balance = Math.Min(0, MiscArithmetic.SaturatingSubtract(balance, best))
-                int newBalance = oldBalance <= best ? oldBalance - best : 0;
+                        // Brings the "best" child queue to have a zero balance,
+                        // while everything else remains zero or negative.
+                        int newBalance = oldBalance - best_;
 
-                // Then add a certain amount of credits to all queues.
-                newBalance += 10000 * child.Weight;
+                        // Then add credits to the queue depending on its weight.
+                        newBalance += 10000 * child.Weight;
 
-                child.Balance = newBalance;
+                        child.Balance = newBalance;
+                        keys[i] = newBalance;
 
-                _priorityHeap.Insert(newBalance, child);
-                UpdateForAverageBalance(child, oldBalance, newBalance);
-            }
+                        self.UpdateForAverageBalance(child, oldBalance, newBalance);
+                    }
 
-            // There must be at least one queue above that now has positive balance.
+                    return keys.Length;
+                });
+
             return true;
         }
 
@@ -137,12 +124,9 @@ namespace JobBank.Scheduling
                 // If no child queues are eligible for de-queuing,
                 // that means they are all inactive or they have
                 // run out of credits.  Try to re-fill their credits.
-                if (_priorityHeap.IsEmpty || _priorityHeap[0].Key <= 0)
-                {
-                    if (!RefillBalances())
-                        break;
-                }
-                    
+                if (!RefillBalancesAsNeeded())
+                    break;
+
                 var (oldBalance, child) = _priorityHeap[0];
                 Debug.Assert(oldBalance > 0 && child.IsActive);
 
