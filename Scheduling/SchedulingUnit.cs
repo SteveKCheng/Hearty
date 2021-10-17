@@ -61,9 +61,6 @@ namespace JobBank.Scheduling
             get => _weight;
             internal set
             {
-                if (value < 1 || value > 100)
-                    throw new ArgumentOutOfRangeException("The weight on a child queue is not between 1 to 100. ", (Exception?)null);
-
                 _weight = value;
                 _reciprocalWeight = (1 << ReciprocalWeightLogScale) / value;
             }
@@ -78,7 +75,7 @@ namespace JobBank.Scheduling
         /// This quantity is cached only to avoid expensive integer
         /// division when updating averages of unweighted balances.
         /// </remarks>
-        public int ReciprocalWeight => _reciprocalWeight;
+        internal int ReciprocalWeight => _reciprocalWeight;
 
         /// <summary>
         /// Prepare a new child queue.
@@ -86,14 +83,15 @@ namespace JobBank.Scheduling
         /// <param name="jobSource">
         /// Provides the job items when the abstract child queue is "de-queued".
         /// </param>
-        internal SchedulingUnit(SchedulingGroup<TJob> parent, IJobSource<TJob> jobSource)
+        internal SchedulingUnit(SchedulingGroup<TJob> parent, IJobSource<TJob> jobSource, int weight)
         {
+            if (weight < 1 || weight > 100)
+                throw new ArgumentOutOfRangeException("The weight on a child queue is not between 1 to 100. ", (Exception?)null);
+
             Parent = parent;
             JobSource = jobSource;
             PriorityHeapIndex = -1;
-
-            _weight = 1;
-            _reciprocalWeight = (1 << ReciprocalWeightLogScale);
+            Weight = weight;
         }
 
         /// <summary>

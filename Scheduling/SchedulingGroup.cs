@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 
 namespace JobBank.Scheduling
 {
@@ -38,14 +40,17 @@ namespace JobBank.Scheduling
         /// Whether there is at least one active child queue
         /// (after re-filling).
         /// </returns>
-        private bool RefillBalancesAsNeeded()
+        private bool EnsureBalancesRefilled(bool reset)
         {
             if (_priorityHeap.IsEmpty)
                 return false;
 
             int best = _priorityHeap.PeekMaximum().Key;
-            if (best > 0)
+            if (best > 0 && !reset)
                 return true;
+
+            _countPositiveBalances = 0;
+            _sumUnweightedBalances = 0;
 
             var self_ = this;
             _priorityHeap.Initialize(_priorityHeap.Count, ref self_,
@@ -62,7 +67,8 @@ namespace JobBank.Scheduling
 
                         // Brings the "best" child queue to have a zero balance,
                         // while everything else remains zero or negative.
-                        int newBalance = oldBalance - best_;
+                        int newBalance = MiscArithmetic.SaturatingSubtract(child.Balance, 
+                                                                           best_);
 
                         // Then add credits to the queue depending on its weight.
                         newBalance += 10000 * child.Weight;
@@ -70,7 +76,7 @@ namespace JobBank.Scheduling
                         child.Balance = newBalance;
                         keys[i] = newBalance;
 
-                        self.UpdateForAverageBalance(child, oldBalance, newBalance);
+                        self.UpdateForAverageBalance(child, 0, newBalance);
                     }
 
                     return keys.Length;
@@ -89,7 +95,7 @@ namespace JobBank.Scheduling
         /// </returns>
         protected TJob? TakeJob()
         {
-            while (RefillBalancesAsNeeded())
+            while (EnsureBalancesRefilled(reset: false))
             {
                 var (oldBalance, child) = _priorityHeap[0];
                 Debug.Assert(oldBalance > 0 && child.IsActive);
@@ -123,13 +129,27 @@ namespace JobBank.Scheduling
         /// The new abstract child queue, initially considered inactive.
         /// </remarks>
         protected SchedulingUnit<TJob> CreateChild(IJobSource<TJob> jobSource, int weight)
-        {
-            var child = new SchedulingUnit<TJob>(this, jobSource) 
-            { 
-                Weight = weight
-            };
+            => new SchedulingUnit<TJob>(this, jobSource, weight);
 
-            return child;
+        protected void ResetWeights(IEnumerable<KeyValuePair<SchedulingUnit<TJob>, int>> items)
+        {
+            // Defensive copy to avoid the values changing concurrently after
+            // they are validated.
+            var itemsArray = items.ToArray();
+
+            foreach (var (child, weight) in itemsArray)
+            {
+                if (weight < 1 || weight > 100)
+                    throw new ArgumentOutOfRangeException("The weight on a child queue is not between 1 to 100. ", (Exception?)null);
+
+                if (child.Parent != this)
+                    throw new ArgumentOutOfRangeException("The child queue does not belong to this parent. ", (Exception?)null);
+            }
+
+            foreach (var (child, weight) in itemsArray)
+                child.Weight = weight;
+
+            EnsureBalancesRefilled(reset: true);
         }
 
         /// <summary>
