@@ -146,16 +146,21 @@ namespace JobBank.Scheduling
         protected SchedulingUnit<TJob> AddChild(IJobSource<TJob> jobSource)
         {
             var allChildren = _allChildren;
-            int index = _numChildren++;
+            int index = _numChildren;
             if (index == allChildren.Length)
             {
+                if (index >= MaxCapacity)
+                    throw new InvalidOperationException("Cannot add a child queue because there is no more capacity. ");
+
                 // Grow capacity of array by 1/2
-                var newArray = new SchedulingUnit?[index + (index >> 1)];
+                int newCapacity = Math.Min(index + (index >> 1), MaxCapacity);
+                var newArray = new SchedulingUnit<TJob>?[newCapacity];
                 Array.Copy(allChildren, newArray, allChildren.Length);
                 _allChildren = allChildren = newArray;
             }
 
             var child = new SchedulingUnit<TJob>(this, jobSource) { Index = index };
+            _numChildren = index + 1;
             allChildren[index] = child;
             return child;
         }
