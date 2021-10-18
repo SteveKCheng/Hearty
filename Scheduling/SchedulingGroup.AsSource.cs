@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 
 namespace JobBank.Scheduling
 {
@@ -8,7 +9,7 @@ namespace JobBank.Scheduling
         /// Adapts <see cref="SchedulingGroup{TJob}" /> to
         /// <see cref="SchedulingUnit{TJob}" />.
         /// </summary>
-        private class SourceImpl : SchedulingUnit<TJob>
+        private sealed class SourceImpl : SchedulingUnit<TJob>
         {
             /// <summary>
             /// The subgroup of queues where messages will
@@ -26,12 +27,20 @@ namespace JobBank.Scheduling
                 : base(parent, weight)
             {
                 _subgroup = subgroup;
-                subgroup.OnFirstActivated += (sender, e) => Activate();
             }
 
             /// <inheritdoc />
             protected override TJob? TakeJob(out int charge)
                 => _subgroup.TakeJob(out charge);
+
+            /// <summary>
+            /// Called by <see cref="SchedulingGroup{TJob}" />
+            /// when it activates from an empty state.
+            /// </summary>
+            internal void ActivateFromParent() => Activate();
+
+            internal void ChangeToNewParent(SchedulingGroup<TJob>? parent)
+                => ChangeParent(parent);
         }
 
         /// <summary>
@@ -42,17 +51,39 @@ namespace JobBank.Scheduling
         /// The parent scheduling group that this sub-group shall 
         /// be part of.
         /// </param>
-        /// <param name="weight">
-        /// The weight assigned to this sub-group within the
-        /// its new parent scheduling group.
-        /// </param>
         /// <returns>
         /// An instance of <see cref="SchedulingUnit{TJob}" />
         /// that forwards the messages from the child queues
-        /// that this instance manages.
+        /// that this instance manages.  There is only one instance
+        /// even if multiple calls are made to this method, as it
+        /// never makes sense to consume the same scheduling group
+        /// from multiple clients.  The parent from the previous
+        /// call to this method, if any, will be detached from
+        /// the returned instance.
         /// </returns>
-        protected SchedulingUnit<TJob> AsSource(SchedulingGroup<TJob> parent,
-                                                int weight)
-            => new SourceImpl(parent, this, weight);
+        protected SchedulingUnit<TJob> AsSource(SchedulingGroup<TJob> parent)
+        {
+            SourceImpl? sourceAdaptor = _sourceAdaptor;
+
+            if (sourceAdaptor == null)
+            {
+                sourceAdaptor = new SourceImpl(parent, this, weight: 1);
+                sourceAdaptor = Interlocked.CompareExchange(
+                                    ref _sourceAdaptor,
+                                    sourceAdaptor,
+                                    null) ?? sourceAdaptor;
+            }
+
+            if (sourceAdaptor.Parent != parent)
+                sourceAdaptor.ChangeToNewParent(parent);
+                
+            return sourceAdaptor;
+        }
+
+        /// <summary>
+        /// Reference to the adaptor of this instance to be a scheduling
+        /// source, needed to inform it when this instance re-activates.
+        /// </summary>
+        private SourceImpl? _sourceAdaptor;
     }
 }

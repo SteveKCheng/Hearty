@@ -196,13 +196,14 @@ namespace JobBank.Scheduling
         /// <param name="parent">
         /// The scheduling group to assume as this instance's new parent.
         /// </param>
-        protected void ChangeParent(SchedulingGroup<TJob> parent)
+        protected void ChangeParent(SchedulingGroup<TJob>? parent)
         {
             var oldParent = _parent;
             if (oldParent != null)
                 oldParent.DeactivateChildAndDisown(this, ref _parent);
 
-            if (Interlocked.CompareExchange(ref _parent, parent, null) != null)
+            if (parent != null &&
+                Interlocked.CompareExchange(ref _parent, parent, null) != null)
             {
                 throw new InvalidOperationException(
                     "This attempt to change the parent scheduling group failed " +

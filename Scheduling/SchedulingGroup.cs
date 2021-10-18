@@ -211,7 +211,20 @@ namespace JobBank.Scheduling
             }
 
             if (firstActivated)
-                OnFirstActivated?.Invoke(this, EventArgs.Empty);
+            {
+                OnFirstActivatedBase();
+                OnFirstActivated();
+            }
+                
+        }
+
+        /// <summary>
+        /// Called upon activating a child queue when there were
+        /// previously no existing active child queues.
+        /// </summary>
+        private void OnFirstActivatedBase()
+        {
+            _sourceAdaptor?.ActivateFromParent();
         }
 
         /// <summary>
@@ -219,11 +232,13 @@ namespace JobBank.Scheduling
         /// previously no existing active child queues.
         /// </summary>
         /// <remarks>
-        /// This callback method can be used to propagate
-        /// this <see cref="SchedulingGroup{TJob}" /> as a
-        /// <see cref=""/>
+        /// An event handler is not used for this purpose because
+        /// it does not make sense for <see cref="SchedulingGroup{TJob}" />
+        /// to be consumed from multiple clients.
         /// </remarks>
-        protected event EventHandler<EventArgs>? OnFirstActivated;
+        protected virtual void OnFirstActivated()
+        {
+        }
 
         private void DeactivateChildCore(SchedulingUnit<TJob> child)
         {
