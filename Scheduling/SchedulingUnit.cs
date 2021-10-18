@@ -3,36 +3,15 @@
 namespace JobBank.Scheduling
 {
     /// <summary>
-    /// Abstraction for the fair job scheduling system to pull out
-    /// one job to execute.
-    /// </summary>
-    /// <param name="charge">The amount of credit to charge
-    /// to the abstract queue where the job is coming from,
-    /// to effect fair scheduling.
-    /// </param>
-    /// <remarks>
-    /// If this method returns null, the abstract queue will be 
-    /// temporarily de-activated by the caller, so the system
-    /// avoid polling repeatedly for work.  No further
-    /// calls to this method is made until re-activation.
-    /// </remarks>
-    /// <returns>
-    /// The job that the fair job scheduling system should be
-    /// processing next, or null if this source instance
-    /// currently has no job to process.  
-    /// </returns>
-    public delegate TJob? JobSourceDelegate<TJob>(object? state, out int charge);
-
-    /// <summary>
     /// Represents a generic child queue in a parent queue system
     /// for fair job scheduling.
     /// </summary>
-    public sealed class SchedulingUnit<TJob>
+    public abstract class SchedulingUnit<TJob>
     {
         /// <summary>
         /// The queue group that owns this child queue.
         /// </summary>
-        public SchedulingGroup<TJob> Parent { get; }
+        protected internal SchedulingGroup<TJob> Parent { get; }
 
         /// <summary>
         /// The index of this child queue in the parent's priority heap.
@@ -52,13 +31,13 @@ namespace JobBank.Scheduling
         /// as it is de-queued.  The parent will set this property
         /// when the balance needs to be re-filled or adjusted.
         /// </remarks>
-        public int Balance { get; internal set; }
+        protected internal int Balance { get; internal set; }
 
         /// <summary>
         /// Whether this queue is active, i.e. it may have a job available
         /// from the next call to <see cref="TakeJob" />.
         /// </summary>
-        public bool IsActive => PriorityHeapIndex >= 0;
+        protected internal bool IsActive => PriorityHeapIndex >= 0;
 
         /// <summary>
         /// Backing field for <see cref="Weight" />.
@@ -77,7 +56,7 @@ namespace JobBank.Scheduling
         /// <remarks>
         /// This weight is always between 1 and 100 inclusive.
         /// </remarks>
-        public int Weight
+        protected internal int Weight
         {
             get => _weight;
             internal set
@@ -115,10 +94,7 @@ namespace JobBank.Scheduling
         /// <param name="jobSource">
         /// Provides the job items when the abstract child queue is "de-queued".
         /// </param>
-        internal SchedulingUnit(SchedulingGroup<TJob> parent,
-                                JobSourceDelegate<TJob> jobSource,
-                                object? state,
-                                int weight)
+        protected SchedulingUnit(SchedulingGroup<TJob> parent, int weight)
         {
             if (weight < 1 || weight > 100)
                 throw new ArgumentOutOfRangeException("The weight on a child queue is not between 1 to 100. ", (Exception?)null);
@@ -126,17 +102,31 @@ namespace JobBank.Scheduling
             Parent = parent;
             PriorityHeapIndex = -1;
             Weight = weight;
-
-            _jobSource = jobSource;
-            _jobSourceState = state;
         }
 
-        private readonly object? _jobSourceState;
-
-        private readonly JobSourceDelegate<TJob> _jobSource;
+        /// <summary>
+        /// Pull out one job to execute for the fair scheduling system.
+        /// </summary>
+        /// <param name="charge">The amount of credit to charge
+        /// to the abstract queue where the job is coming from,
+        /// to effect fair scheduling.
+        /// </param>
+        /// <remarks>
+        /// If this method returns null, the abstract queue will be 
+        /// temporarily de-activated by the caller, so the system
+        /// avoid polling repeatedly for work.  No further
+        /// calls to this method is made until re-activation.
+        /// </remarks>
+        /// <returns>
+        /// The job that the fair job scheduling system should be
+        /// processing next, or null if this source instance
+        /// currently has no job to process.  
+        /// </returns>
+        protected abstract TJob? TakeJob(out int charge);
 
         /// <summary>
-        /// Calls <see cref="IJobSource.TakeJob" />.
+        /// Invokes <see cref="IJobSource.TakeJob" />
+        /// for <see cref="SchedulingGroup{TJob}"/>.
         /// </summary>
         /// <param name="charge">The amount of credit to charge
         /// to this child queue for the new job.
@@ -146,20 +136,19 @@ namespace JobBank.Scheduling
         /// should be processing next, or null if there is none
         /// from this child queue.
         /// </returns>
-        internal TJob? TakeJob(out int charge)
-            => _jobSource.Invoke(_jobSourceState, out charge);
+        internal TJob? TakeJobToParent(out int charge) => TakeJob(out charge);
 
         /// <summary>
         /// Ensure this scheduling unit is considered active for scheduling
         /// within its parent group.
         /// </summary>
-        public void Activate() => Parent.ActivateChild(this);
+        protected void Activate() => Parent.ActivateChild(this);
 
         /// <summary>
         /// Exclude this scheduling unit from being actively considered 
         /// for scheduling within its parent group.
         /// </summary>
-        public void Deactivate() => Parent.DeactivateChild(this);
+        protected void Deactivate() => Parent.DeactivateChild(this);
 
         /// <summary>
         /// Adjust the debit balance of this scheduling unit to affect
@@ -168,6 +157,6 @@ namespace JobBank.Scheduling
         /// <param name="debit">
         /// The amount to add to <see cref="Balance" />.
         /// </param>
-        public void AdjustBalance(int debit) => Parent.AdjustChildBalance(this, debit);
+        protected void AdjustBalance(int debit) => Parent.AdjustChildBalance(this, debit);
     }
 }

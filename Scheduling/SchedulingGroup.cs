@@ -27,7 +27,7 @@ namespace JobBank.Scheduling
         /// </summary>
         private object SyncObject { get; }
 
-        protected const int MaxCapacity = 1024;
+        protected readonly int MaxCapacity = 1024;
 
         protected SchedulingGroup(int capacity)
         {
@@ -121,7 +121,7 @@ namespace JobBank.Scheduling
                         Monitor.Exit(syncObject);
                         try
                         {
-                            job = child.TakeJob(out charge);
+                            job = child.TakeJobToParent(out charge);
                         }
                         finally
                         {
@@ -150,20 +150,6 @@ namespace JobBank.Scheduling
 
             return default;
         }
-
-        /// <summary>
-        /// Add a new (abstract) child queue to this job queue group.
-        /// </summary>
-        /// <param name="jobSource">
-        /// The source of the jobs in the new (abstract) child queue.
-        /// </param>
-        /// <remarks>
-        /// The new abstract child queue, initially considered inactive.
-        /// </remarks>
-        protected SchedulingUnit<TJob> CreateChild(JobSourceDelegate<TJob> jobSource, 
-                                                   object? state,
-                                                   int weight)
-            => new SchedulingUnit<TJob>(this, jobSource, state, weight);
 
         protected void ResetWeights(IEnumerable<KeyValuePair<SchedulingUnit<TJob>, int>> items)
         {
