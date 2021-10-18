@@ -42,6 +42,12 @@ namespace JobBank.Scheduling
         }
 
         /// <summary>
+        /// Get the number of child queues managed by this instance
+        /// that are currently active.
+        /// </summary>
+        protected int CountActiveSources => _priorityHeap.Count;
+
+        /// <summary>
         /// Re-fill balances on all child queues when none are eligible
         /// to be scheduled.
         /// </summary>
@@ -185,6 +191,8 @@ namespace JobBank.Scheduling
         /// </param>
         internal void ActivateChild(SchedulingUnit<TJob> child)
         {
+            bool firstActivated = false;
+
             lock (SyncObject)
             {
                 child.WasActivated = true;
@@ -194,9 +202,25 @@ namespace JobBank.Scheduling
                     child.Balance = GetAverageBalance(child.Weight);
                     _priorityHeap.Insert(child.Balance, child);
                     UpdateForAverageBalance(child, 0, child.Balance);
+
+                    firstActivated = (CountActiveSources == 1);
                 }
             }
+
+            if (firstActivated)
+                OnFirstActivated?.Invoke(this, EventArgs.Empty);
         }
+
+        /// <summary>
+        /// Called upon activating a child queue when there were
+        /// previously no existing active child queues.
+        /// </summary>
+        /// <remarks>
+        /// This callback method can be used to propagate
+        /// this <see cref="SchedulingGroup{TJob}" /> as a
+        /// <see cref=""/>
+        /// </remarks>
+        protected event EventHandler<EventArgs>? OnFirstActivated;
 
         private void DeactivateChildCore(SchedulingUnit<TJob> child)
         {
