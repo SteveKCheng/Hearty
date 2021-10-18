@@ -3,6 +3,27 @@
 namespace JobBank.Scheduling
 {
     /// <summary>
+    /// Abstraction for the fair job scheduling system to pull out
+    /// one job to execute.
+    /// </summary>
+    /// <param name="charge">The amount of credit to charge
+    /// to the abstract queue where the job is coming from,
+    /// to effect fair scheduling.
+    /// </param>
+    /// <remarks>
+    /// If this method returns null, the abstract queue will be 
+    /// temporarily de-activated by the caller, so the system
+    /// avoid polling repeatedly for work.  No further
+    /// calls to this method is made until re-activation.
+    /// </remarks>
+    /// <returns>
+    /// The job that the fair job scheduling system should be
+    /// processing next, or null if this source instance
+    /// currently has no job to process.  
+    /// </returns>
+    public delegate TJob? JobSourceDelegate<TJob>(object? state, out int charge);
+
+    /// <summary>
     /// Represents a generic child queue in a parent queue system
     /// for fair job scheduling.
     /// </summary>
@@ -94,22 +115,25 @@ namespace JobBank.Scheduling
         /// <param name="jobSource">
         /// Provides the job items when the abstract child queue is "de-queued".
         /// </param>
-        internal SchedulingUnit(SchedulingGroup<TJob> parent, IJobSource<TJob> jobSource, int weight)
+        internal SchedulingUnit(SchedulingGroup<TJob> parent,
+                                JobSourceDelegate<TJob> jobSource,
+                                object? state,
+                                int weight)
         {
             if (weight < 1 || weight > 100)
                 throw new ArgumentOutOfRangeException("The weight on a child queue is not between 1 to 100. ", (Exception?)null);
 
             Parent = parent;
-            JobSource = jobSource;
             PriorityHeapIndex = -1;
             Weight = weight;
+
+            _jobSource = jobSource;
+            _jobSourceState = state;
         }
 
-        /// <summary>
-        /// Pulls out a job to process when requested
-        /// by the parent <see cref="SchedulingGroup" />.
-        /// </summary>
-        public IJobSource<TJob> JobSource { get; }
+        private readonly object? _jobSourceState;
+
+        private readonly JobSourceDelegate<TJob> _jobSource;
 
         /// <summary>
         /// Calls <see cref="IJobSource.TakeJob" />.
@@ -123,7 +147,7 @@ namespace JobBank.Scheduling
         /// from this child queue.
         /// </returns>
         internal TJob? TakeJob(out int charge)
-            => JobSource.TakeJob(out charge);
+            => _jobSource.Invoke(_jobSourceState, out charge);
 
         /// <summary>
         /// Ensure this scheduling unit is considered active for scheduling

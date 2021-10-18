@@ -160,8 +160,10 @@ namespace JobBank.Scheduling
         /// <remarks>
         /// The new abstract child queue, initially considered inactive.
         /// </remarks>
-        protected SchedulingUnit<TJob> CreateChild(IJobSource<TJob> jobSource, int weight)
-            => new SchedulingUnit<TJob>(this, jobSource, weight);
+        protected SchedulingUnit<TJob> CreateChild(JobSourceDelegate<TJob> jobSource, 
+                                                   object? state,
+                                                   int weight)
+            => new SchedulingUnit<TJob>(this, jobSource, state, weight);
 
         protected void ResetWeights(IEnumerable<KeyValuePair<SchedulingUnit<TJob>, int>> items)
         {
