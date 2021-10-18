@@ -15,6 +15,7 @@
     <Compile Include="SchedulingUnit.cs" />
     <Compile Include="IntPriorityHeap.cs" />
     <Compile Include="SchedulingGroup.cs" />
+    <Compile Include="SimpleJobQueue.cs" />
   </ItemGroup>
 
 </Project>
