@@ -163,17 +163,18 @@ namespace JobBank.Scheduling
             // they are validated.
             var itemsArray = items.ToArray();
 
-            foreach (var (child, weight) in itemsArray)
+            foreach (var (_, weight) in itemsArray)
             {
                 if (weight < 1 || weight > 100)
                     throw new ArgumentOutOfRangeException("The weight on a child queue is not between 1 to 100. ", (Exception?)null);
-
-                if (child.Parent != this)
-                    throw new ArgumentOutOfRangeException("The child queue does not belong to this parent. ", (Exception?)null);
             }
 
             lock (SyncObject)
             {
+                // Must check for correct parent only after locking first.
+                foreach (var (child, _) in itemsArray)
+                    CheckCorrectParent(child);
+
                 foreach (var (child, weight) in itemsArray)
                     child.Weight = weight;
 
@@ -195,6 +196,8 @@ namespace JobBank.Scheduling
 
             lock (SyncObject)
             {
+                CheckCorrectParent(child);
+
                 child.WasActivated = true;
 
                 if (!child.IsActive)
@@ -232,8 +235,7 @@ namespace JobBank.Scheduling
         }
 
         /// <summary>
-        /// De-activate a child and take it out of the priority
-        /// heap if it is there.
+        /// De-activate a child queue.
         /// </summary>
         /// <param name="child">
         /// The child scheduling unit.  This instance must be its parent.
@@ -242,7 +244,36 @@ namespace JobBank.Scheduling
         {
             lock (SyncObject)
             {
+                CheckCorrectParent(child);
                 DeactivateChildCore(child);
+            }
+        }
+
+        /// <summary>
+        /// De-activate a child queue, and unset its field pointing to
+        /// this parent.
+        /// </summary>
+        /// <remarks>
+        /// This method is used to change a child queue's parent.
+        /// </remarks>
+        /// <param name="child">
+        /// The child scheduling unit.  This instance must be its parent.
+        /// </param>
+        /// <param name="parentRef">
+        /// Reference to the field <see cref="SchedulingUnit{TJob}._parent" />.
+        /// It is nullified while locking the current (this) parent,
+        /// so that <see cref="CheckCorrectParent" /> can reliably detect
+        /// when the user attempted to change parents while executing
+        /// another operation concurrently.
+        /// </param>
+        internal void DeactivateChildAndDisown(SchedulingUnit<TJob> child, 
+                                               ref SchedulingGroup<TJob>? parentRef)
+        {
+            lock (SyncObject)
+            {
+                CheckCorrectParent(child);
+                DeactivateChildCore(child);
+                parentRef = null;
             }
         }
 
@@ -261,6 +292,8 @@ namespace JobBank.Scheduling
         {
             lock (SyncObject)
             {
+                CheckCorrectParent(child);
+
                 int oldBalance = child.Balance;
                 int newBalance = MiscArithmetic.SaturatingAdd(oldBalance, debit);
 
@@ -271,6 +304,28 @@ namespace JobBank.Scheduling
                 }
 
                 child.Balance = newBalance;
+            }
+        }
+
+        /// <summary>
+        /// Ensure that the child queue still belongs to this parent,
+        /// called as part of double-checked locking.
+        /// </summary>
+        /// <remarks>
+        /// The locking protocol for changing parents on a scheduling
+        /// source ensures that the child queue points to this
+        /// instance for the duration of the lock on <see cref="SyncObject" />,
+        /// once this method checks successfully for that condition 
+        /// initially upon taking the lock.
+        /// </remarks>
+        private void CheckCorrectParent(SchedulingUnit<TJob> child)
+        {
+            if (child.Parent != this)
+            {
+                throw new InvalidOperationException(
+                    "This operation on a scheduling source cannot be " +
+                    "completed because its parent scheduling group was " +
+                    "changed from another thread. ");
             }
         }
 

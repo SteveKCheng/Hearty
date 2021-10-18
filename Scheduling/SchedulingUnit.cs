@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 
 namespace JobBank.Scheduling
 {
@@ -9,9 +10,25 @@ namespace JobBank.Scheduling
     public abstract class SchedulingUnit<TJob>
     {
         /// <summary>
+        /// Backing field for <see cref="Parent" />.
+        /// </summary>
+        /// <remarks>
+        /// That the parent scheduling group can change after 
+        /// construction of this object introduces concurrency hazards.
+        /// To reliably prevent them, a thread may only change this 
+        /// field while it holds the lock for the current 
+        /// parent scheduling group; and that change must be setting
+        /// it to null.  Then, a null parent can be transitioned
+        /// to a non-null parent by atomic compare-and-exchange.
+        /// There cannot be a direct transition from one parent
+        /// to another.
+        /// </remarks>
+        private SchedulingGroup<TJob>? _parent;
+
+        /// <summary>
         /// The queue group that owns this child queue.
         /// </summary>
-        protected internal SchedulingGroup<TJob> Parent { get; }
+        protected internal SchedulingGroup<TJob>? Parent { get; }
 
         /// <summary>
         /// The index of this child queue in the parent's priority heap.
@@ -139,16 +156,25 @@ namespace JobBank.Scheduling
         internal TJob? TakeJobToParent(out int charge) => TakeJob(out charge);
 
         /// <summary>
+        /// Get the current parent scheduling group, requiring that it 
+        /// not be null.
+        /// </summary>
+        private SchedulingGroup<TJob> GetParent()
+            => _parent ?? throw new InvalidOperationException(
+                    "This operation requires the parent scheduling " +
+                    "group to be set first. ");
+
+        /// <summary>
         /// Ensure this scheduling unit is considered active for scheduling
         /// within its parent group.
         /// </summary>
-        protected void Activate() => Parent.ActivateChild(this);
+        protected void Activate() => GetParent().ActivateChild(this);
 
         /// <summary>
         /// Exclude this scheduling unit from being actively considered 
         /// for scheduling within its parent group.
         /// </summary>
-        protected void Deactivate() => Parent.DeactivateChild(this);
+        protected void Deactivate() => Parent?.DeactivateChild(this);
 
         /// <summary>
         /// Adjust the debit balance of this scheduling unit to affect
@@ -157,6 +183,31 @@ namespace JobBank.Scheduling
         /// <param name="debit">
         /// The amount to add to <see cref="Balance" />.
         /// </param>
-        protected void AdjustBalance(int debit) => Parent.AdjustChildBalance(this, debit);
+        protected void AdjustBalance(int debit) => GetParent().AdjustChildBalance(this, debit);
+
+        /// <summary>
+        /// Change the parent scheduling group.
+        /// </summary>
+        /// <remarks>
+        /// This operation implicitly de-activates this instance
+        /// from its current parent scheduling group.  It will not
+        /// be activated immediately in its new parent scheduling group.
+        /// </remarks>
+        /// <param name="parent">
+        /// The scheduling group to assume as this instance's new parent.
+        /// </param>
+        protected void ChangeParent(SchedulingGroup<TJob> parent)
+        {
+            var oldParent = _parent;
+            if (oldParent != null)
+                oldParent.DeactivateChildAndDisown(this, ref _parent);
+
+            if (Interlocked.CompareExchange(ref _parent, parent, null) != null)
+            {
+                throw new InvalidOperationException(
+                    "This attempt to change the parent scheduling group failed " +
+                    "because another thread concurrently did the same. ");
+            }
+        }
     }
 }
