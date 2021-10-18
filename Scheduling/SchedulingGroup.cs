@@ -9,7 +9,7 @@ namespace JobBank.Scheduling
     /// <summary>
     /// Credit-based scheduling from a set of <see cref="SchedulingUnit" />.
     /// </summary>
-    public class SchedulingGroup<TJob>
+    public partial class SchedulingGroup<TJob>
     {
         /// <summary>
         /// Organizes the child queues so that the 
@@ -108,7 +108,7 @@ namespace JobBank.Scheduling
         /// The de-queued job, or null if no child queue can currently 
         /// supply one.
         /// </returns>
-        protected TJob? TakeJob()
+        protected TJob? TakeJob(out int charge)
         {
             var syncObject = SyncObject;
             lock (syncObject)
@@ -118,7 +118,6 @@ namespace JobBank.Scheduling
                     var child = _priorityHeap.PeekMaximum().Value;
 
                     TJob? job;
-                    int charge;
                     do
                     {
                         child.WasActivated = false;
@@ -154,6 +153,7 @@ namespace JobBank.Scheduling
                 }
             }
 
+            charge = 0;
             return default;
         }
 

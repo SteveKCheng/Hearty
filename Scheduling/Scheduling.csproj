@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <Compile Include="MiscArithmetic.cs" />
+    <Compile Include="SchedulingGroup.AsSource.cs" />
     <Compile Include="SchedulingUnit.cs" />
     <Compile Include="IntPriorityHeap.cs" />
     <Compile Include="SchedulingGroup.cs" />
