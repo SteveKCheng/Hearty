@@ -78,6 +78,17 @@ namespace JobBank.Scheduling
         internal int ReciprocalWeight => _reciprocalWeight;
 
         /// <summary>
+        /// Set to true when <see cref="Activate" /> is called.
+        /// </summary>
+        /// <remarks>
+        /// This flag is needed by 
+        /// <see cref="SchedulingGroup{TJob}.TakeJob" />
+        /// to avoid accidentally de-activating this child queue
+        /// if there is a race with the user trying to re-activating it.
+        /// </remarks>
+        internal bool WasActivated { get; set; }
+
+        /// <summary>
         /// Prepare a new child queue.
         /// </summary>
         /// <param name="jobSource">

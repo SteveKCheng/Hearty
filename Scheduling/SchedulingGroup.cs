@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 
 namespace JobBank.Scheduling
 {
@@ -20,6 +21,12 @@ namespace JobBank.Scheduling
         /// </remarks>
         private IntPriorityHeap<SchedulingUnit<TJob>> _priorityHeap;
 
+        /// <summary>
+        /// Dummy object used for locking the state of this instance
+        /// and the child queues it manages.
+        /// </summary>
+        private object SyncObject { get; }
+
         protected const int MaxCapacity = 1024;
 
         protected SchedulingGroup(int capacity)
@@ -30,6 +37,8 @@ namespace JobBank.Scheduling
             _priorityHeap = new IntPriorityHeap<SchedulingUnit<TJob>>(
                 (ref SchedulingUnit<TJob> item, int index) => item.PriorityHeapIndex = index,
                 capacity: capacity);
+
+            SyncObject = new object();
         }
 
         /// <summary>
@@ -95,24 +104,47 @@ namespace JobBank.Scheduling
         /// </returns>
         protected TJob? TakeJob()
         {
-            while (EnsureBalancesRefilled(reset: false))
+            var syncObject = SyncObject;
+            lock (syncObject)
             {
-                var (oldBalance, child) = _priorityHeap[0];
-                Debug.Assert(oldBalance > 0 && child.IsActive);
-
-                TJob? job = child.TakeJob(out int charge);
-
-                if (job is null)
-                    DeactivateChild(child);
-
-                int newBalance = MiscArithmetic.SaturatingSubtract(oldBalance, charge);
-                child.Balance = newBalance;
-
-                if (job is not null)
+                while (EnsureBalancesRefilled(reset: false))
                 {
-                    _priorityHeap.ChangeKey(child.PriorityHeapIndex, newBalance);
-                    UpdateForAverageBalance(child, oldBalance, newBalance);
-                    return job;
+                    var child = _priorityHeap.PeekMaximum().Value;
+
+                    TJob? job;
+                    int charge;
+                    do
+                    {
+                        child.WasActivated = false;
+
+                        // Do not invoke user's function inside the lock
+                        Monitor.Exit(syncObject);
+                        try
+                        {
+                            job = child.TakeJob(out charge);
+                        }
+                        finally
+                        {
+                            Monitor.Enter(syncObject);
+                        }
+                    } while (job is null && child.WasActivated);
+
+                    if (job is not null)
+                    {
+                        int oldBalance = child.Balance;
+                        int newBalance = MiscArithmetic.SaturatingSubtract(oldBalance, charge);
+                        child.Balance = newBalance;
+
+                        if (child.IsActive)
+                        {
+                            _priorityHeap.ChangeKey(child.PriorityHeapIndex, newBalance);
+                            UpdateForAverageBalance(child, oldBalance, newBalance);
+                        }
+
+                        return job;
+                    }
+
+                    DeactivateChildCore(child);
                 }
             }
 
@@ -146,10 +178,13 @@ namespace JobBank.Scheduling
                     throw new ArgumentOutOfRangeException("The child queue does not belong to this parent. ", (Exception?)null);
             }
 
-            foreach (var (child, weight) in itemsArray)
-                child.Weight = weight;
+            lock (SyncObject)
+            {
+                foreach (var (child, weight) in itemsArray)
+                    child.Weight = weight;
 
-            EnsureBalancesRefilled(reset: true);
+                EnsureBalancesRefilled(reset: true);
+            }
         }
 
         /// <summary>
@@ -162,11 +197,25 @@ namespace JobBank.Scheduling
         /// </param>
         internal void ActivateChild(SchedulingUnit<TJob> child)
         {
-            if (!child.IsActive)
+            lock (SyncObject)
             {
-                child.Balance = GetAverageBalance(child.Weight);
-                _priorityHeap.Insert(child.Balance, child);
-                UpdateForAverageBalance(child, 0, child.Balance);
+                child.WasActivated = true;
+
+                if (!child.IsActive)
+                {
+                    child.Balance = GetAverageBalance(child.Weight);
+                    _priorityHeap.Insert(child.Balance, child);
+                    UpdateForAverageBalance(child, 0, child.Balance);
+                }
+            }
+        }
+
+        private void DeactivateChildCore(SchedulingUnit<TJob> child)
+        {
+            if (child.IsActive)
+            {
+                _priorityHeap.Delete(child.PriorityHeapIndex);
+                UpdateForAverageBalance(child, child.Balance, 0);
             }
         }
 
@@ -175,15 +224,13 @@ namespace JobBank.Scheduling
         /// heap if it is there.
         /// </summary>
         /// <param name="child">
-        /// The child scheduling unit.  This instance
-        /// must be its parent.
+        /// The child scheduling unit.  This instance must be its parent.
         /// </param>
         internal void DeactivateChild(SchedulingUnit<TJob> child)
         {
-            if (child.IsActive)
+            lock (SyncObject)
             {
-                _priorityHeap.Delete(child.PriorityHeapIndex);
-                UpdateForAverageBalance(child, child.Balance, 0);
+                DeactivateChildCore(child);
             }
         }
 
@@ -200,16 +247,19 @@ namespace JobBank.Scheduling
         /// </param>
         internal void AdjustChildBalance(SchedulingUnit<TJob> child, int debit)
         {
-            int oldBalance = child.Balance;
-            int newBalance = MiscArithmetic.SaturatingAdd(oldBalance, debit);
-
-            if (child.IsActive)
+            lock (SyncObject)
             {
-                _priorityHeap.ChangeKey(child.PriorityHeapIndex, newBalance);
-                UpdateForAverageBalance(child, oldBalance, newBalance);
-            }
+                int oldBalance = child.Balance;
+                int newBalance = MiscArithmetic.SaturatingAdd(oldBalance, debit);
 
-            child.Balance = newBalance;
+                if (child.IsActive)
+                {
+                    _priorityHeap.ChangeKey(child.PriorityHeapIndex, newBalance);
+                    UpdateForAverageBalance(child, oldBalance, newBalance);
+                }
+
+                child.Balance = newBalance;
+            }
         }
 
         /// <summary>
