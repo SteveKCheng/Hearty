@@ -16,7 +16,7 @@ namespace JobBank.Scheduling
             /// The subgroup of queues where messages will
             /// be forward from to this instance's parent.
             /// </summary>
-            private readonly SchedulingGroup<T> _subgroup;
+            internal SchedulingGroup<T> Subgroup { get; }
 
             /// <summary>
             /// Prepare to forward messages from a sub-group 
@@ -24,13 +24,13 @@ namespace JobBank.Scheduling
             /// </summary>
             public SourceImpl(SchedulingGroup<T> subgroup)
             {
-                _subgroup = subgroup;
+                Subgroup = subgroup;
             }
 
             /// <inheritdoc />
             protected override bool TryTakeItem(
                 [MaybeNullWhen(false)] out T item, out int charge)
-                => _subgroup.TryTakeItem(out item, out charge);
+                => Subgroup.TryTakeItem(out item, out charge);
 
             /// <summary>
             /// Called by <see cref="SchedulingGroup{T}" />

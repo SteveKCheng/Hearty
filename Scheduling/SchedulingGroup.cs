@@ -424,6 +424,12 @@ namespace JobBank.Scheduling
         /// </remarks>
         protected void AdmitChild(SchedulingUnit<T> child)
         {
+            if (child is SourceImpl sourceAdaptor &&
+                object.ReferenceEquals(sourceAdaptor.Subgroup, this))
+            {
+                throw new InvalidOperationException("Cannot add a scheduling subgroup as a child of itself. ");
+            }
+
             child.SetParent(this);
         }
 
