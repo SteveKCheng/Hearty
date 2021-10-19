@@ -379,6 +379,9 @@ namespace JobBank.Scheduling
 
                 child.Balance = newBalance;
             }
+
+            if (_toWakeUp is SourceImpl sourceAdaptor)
+                sourceAdaptor.OnAdjustBalance(debit);
         }
 
         /// <summary>

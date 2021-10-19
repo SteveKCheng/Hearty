@@ -37,6 +37,8 @@ namespace JobBank.Scheduling
             /// when it activates from an empty state.
             /// </summary>
             internal void OnSubgroupActivated() => Activate();
+
+            internal void OnAdjustBalance(int debit) => AdjustBalance(debit);
         }
 
         /// <summary>
