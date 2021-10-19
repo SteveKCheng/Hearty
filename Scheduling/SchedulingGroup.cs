@@ -115,7 +115,7 @@ namespace JobBank.Scheduling
         /// The de-queued job, or null if no child queue can currently 
         /// supply one.
         /// </returns>
-        protected TJob? TakeJob(out int charge)
+        protected bool TryTakeItem(out TJob item, out int charge)
         {
             var syncObject = SyncObject;
             lock (syncObject)
@@ -124,7 +124,7 @@ namespace JobBank.Scheduling
                 {
                     var child = _priorityHeap.PeekMaximum().Value;
 
-                    TJob? job;
+                    bool hasItem;
                     do
                     {
                         child.WasActivated = false;
@@ -133,15 +133,15 @@ namespace JobBank.Scheduling
                         Monitor.Exit(syncObject);
                         try
                         {
-                            job = child.TakeJobToParent(out charge);
+                            hasItem = child.TryTakeItemToParent(out item, out charge);
                         }
                         finally
                         {
                             Monitor.Enter(syncObject);
                         }
-                    } while (job is null && child.WasActivated);
+                    } while (!hasItem && child.WasActivated);
 
-                    if (job is not null)
+                    if (hasItem)
                     {
                         int oldBalance = child.Balance;
                         int newBalance = MiscArithmetic.SaturatingSubtract(oldBalance, charge);
@@ -153,7 +153,7 @@ namespace JobBank.Scheduling
                             UpdateForAverageBalance(child, oldBalance, newBalance);
                         }
 
-                        return job;
+                        return true;
                     }
 
                     DeactivateChildCore(child);
@@ -161,7 +161,8 @@ namespace JobBank.Scheduling
             }
 
             charge = 0;
-            return default;
+            item = default!;
+            return false;
         }
 
         /// <summary>

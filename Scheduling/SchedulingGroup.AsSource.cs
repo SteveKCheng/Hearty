@@ -27,8 +27,8 @@ namespace JobBank.Scheduling
             }
 
             /// <inheritdoc />
-            protected override TJob? TakeJob(out int charge)
-                => _subgroup.TakeJob(out charge);
+            protected override bool TryTakeItem(out TJob item, out int charge)
+                => _subgroup.TryTakeItem(out item, out charge);
 
             /// <summary>
             /// Called by <see cref="SchedulingGroup{TJob}" />

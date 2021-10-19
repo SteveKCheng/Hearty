@@ -152,7 +152,7 @@ namespace JobBank.Scheduling
         /// processing next, or null if this source instance
         /// currently has no job to process.  
         /// </returns>
-        protected abstract TJob? TakeJob(out int charge);
+        protected abstract bool TryTakeItem(out TJob item, out int charge);
 
         /// <summary>
         /// Invokes <see cref="IJobSource.TakeJob" />
@@ -166,7 +166,8 @@ namespace JobBank.Scheduling
         /// should be processing next, or null if there is none
         /// from this child queue.
         /// </returns>
-        internal TJob? TakeJobToParent(out int charge) => TakeJob(out charge);
+        internal bool TryTakeItemToParent(out TJob item, out int charge) 
+            => TryTakeItem(out item, out charge);
 
         /// <summary>
         /// Ensure this scheduling unit is considered active for scheduling

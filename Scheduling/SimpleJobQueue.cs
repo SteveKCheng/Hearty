@@ -17,14 +17,14 @@ namespace JobBank.Scheduling
             _channelReader = channelReader;
         }
 
-        protected override TJob? TakeJob(out int charge)
+        protected override bool TryTakeItem(out TJob item, out int charge)
         {
             charge = 0;
-            if (_channelReader.TryRead(out var job))
-                return job;
+            if (_channelReader.TryRead(out item!))
+                return true;
 
             _ = ActivateWhenReadyAsync();
-            return default;
+            return false;
         }
 
         private async Task ActivateWhenReadyAsync()
