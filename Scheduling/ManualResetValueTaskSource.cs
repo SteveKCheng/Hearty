@@ -27,9 +27,13 @@ namespace JobBank.Scheduling
         public void TrySetResult(T result)
         {
             if (_core.GetStatus(_core.Version) == ValueTaskSourceStatus.Pending)
-            {
                 _core.SetResult(result);
-            }
+        }
+
+        public void TrySetException(Exception exception)
+        {
+            if (_core.GetStatus(_core.Version) == ValueTaskSourceStatus.Pending)
+                _core.SetException(exception);
         }
     }
 }

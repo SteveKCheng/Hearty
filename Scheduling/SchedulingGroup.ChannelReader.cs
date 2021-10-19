@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -24,6 +25,8 @@ namespace JobBank.Scheduling
 
             public override ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken = default)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 if (_subgroup.CountActiveSources > 0)
                     return new ValueTask<bool>(true);
 
@@ -52,6 +55,17 @@ namespace JobBank.Scheduling
                         _acceptsActivation = 0;
                         return new ValueTask<bool>(true);
                     }
+
+                    _cancellationRegistration = cancellationToken.Register(s => {
+                        var self = Unsafe.As<ChannelReader>(s!);
+
+                        // N.B. could be a recursive lock because CancellationToken.Register
+                        //      may invoke this callback synchronously.
+                        lock (self._taskSource) 
+                        {
+                            self._taskSource.TrySetException(new OperationCanceledException());
+                        }
+                    }, this);
                 }
 
                 return new ValueTask<bool>(_taskSource, version);
@@ -63,12 +77,14 @@ namespace JobBank.Scheduling
                 {
                     lock (_taskSource)
                     {
-                        _taskSource.SetResult(true);
+                        _taskSource.TrySetResult(true);
+                        _cancellationRegistration.Dispose();
                     }
                 }
             }
 
             private int _acceptsActivation = 0;
+            private CancellationTokenRegistration _cancellationRegistration;
 
             private readonly ManualResetValueTaskSource<bool> _taskSource
                 = new ManualResetValueTaskSource<bool>();
