@@ -21,10 +21,7 @@ namespace JobBank.Scheduling
             /// Prepare to forward messages from a sub-group 
             /// of queues as if they came from a single queue. 
             /// </summary>
-            public SourceImpl(SchedulingGroup<TJob> parent,
-                              SchedulingGroup<TJob> subgroup,
-                              int weight)
-                : base(parent, weight)
+            public SourceImpl(SchedulingGroup<TJob> subgroup)
             {
                 _subgroup = subgroup;
             }
@@ -37,46 +34,34 @@ namespace JobBank.Scheduling
             /// Called by <see cref="SchedulingGroup{TJob}" />
             /// when it activates from an empty state.
             /// </summary>
-            internal void ActivateFromParent() => Activate();
-
-            internal void ChangeToNewParent(SchedulingGroup<TJob>? parent)
-                => ChangeParent(parent);
+            internal void ActivateFromSubgroup() => Activate();
         }
 
         /// <summary>
         /// Adapt this instance as a <see cref="SchedulingUnit{TJob}" />
         /// so that it can participate in a hierarchy of queues.
         /// </summary>
-        /// <param name="parent">
-        /// The parent scheduling group that this sub-group shall 
-        /// be part of.
-        /// </param>
         /// <returns>
         /// An instance of <see cref="SchedulingUnit{TJob}" />
         /// that forwards the messages from the child queues
         /// that this instance manages.  There is only one instance
         /// even if multiple calls are made to this method, as it
         /// never makes sense to consume the same scheduling group
-        /// from multiple clients.  The parent from the previous
-        /// call to this method, if any, will be detached from
-        /// the returned instance.
+        /// from multiple clients.  
         /// </returns>
-        protected SchedulingUnit<TJob> AsSource(SchedulingGroup<TJob> parent)
+        protected SchedulingUnit<TJob> AsSource()
         {
             SourceImpl? sourceAdaptor = _sourceAdaptor;
 
             if (sourceAdaptor == null)
             {
-                sourceAdaptor = new SourceImpl(parent, this, weight: 1);
+                sourceAdaptor = new SourceImpl(this);
                 sourceAdaptor = Interlocked.CompareExchange(
                                     ref _sourceAdaptor,
                                     sourceAdaptor,
                                     null) ?? sourceAdaptor;
             }
 
-            if (sourceAdaptor.Parent != parent)
-                sourceAdaptor.ChangeToNewParent(parent);
-                
             return sourceAdaptor;
         }
 

@@ -4,9 +4,29 @@ using System.Threading;
 namespace JobBank.Scheduling
 {
     /// <summary>
-    /// Represents a generic child queue in a parent queue system
+    /// Represents a generic child queue in a parent scheduling group,
     /// for fair job scheduling.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Most of the data members in this class can be considered to
+    /// be controlled by the parent scheduling group.  They need to
+    /// be manipulated while the parent scheduling group is locked
+    /// to ensure consistency between all children of the scheduling
+    /// group.  
+    /// </para>
+    /// <para>
+    /// Thus only a few protected methods exist, solely for the child
+    /// queue to notify the parent scheduling group in response to
+    /// an external (asynchronous) event.
+    /// </para>
+    /// <para>
+    /// Admitting a queue to be managed in a parent scheduling group,
+    /// or changing its weight there, requires the "permission" of
+    /// the parent, and so there are no protected or public methods
+    /// to do that here.
+    /// </para>
+    /// </remarks>
     public abstract class SchedulingUnit<TJob>
     {
         /// <summary>
@@ -108,17 +128,10 @@ namespace JobBank.Scheduling
         /// <summary>
         /// Prepare a new child queue.
         /// </summary>
-        /// <param name="jobSource">
-        /// Provides the job items when the abstract child queue is "de-queued".
-        /// </param>
-        protected SchedulingUnit(SchedulingGroup<TJob> parent, int weight)
+        protected SchedulingUnit()
         {
-            if (weight < 1 || weight > 100)
-                throw new ArgumentOutOfRangeException("The weight on a child queue is not between 1 to 100. ", (Exception?)null);
-
-            Parent = parent;
             PriorityHeapIndex = -1;
-            Weight = weight;
+            Weight = 1;
         }
 
         /// <summary>
@@ -168,12 +181,20 @@ namespace JobBank.Scheduling
         /// Ensure this scheduling unit is considered active for scheduling
         /// within its parent group.
         /// </summary>
-        protected void Activate() => GetParent().ActivateChild(this);
+        /// <remarks>
+        /// If this instance currently has no parent scheduling group, 
+        /// this method does nothing.
+        /// </remarks>
+        protected void Activate() => Parent?.ActivateChild(this);
 
         /// <summary>
         /// Exclude this scheduling unit from being actively considered 
         /// for scheduling within its parent group.
         /// </summary>
+        /// <remarks>
+        /// If this instance currently has no parent scheduling group, 
+        /// this method does nothing.
+        /// </remarks>
         protected void Deactivate() => Parent?.DeactivateChild(this);
 
         /// <summary>
@@ -186,24 +207,32 @@ namespace JobBank.Scheduling
         protected void AdjustBalance(int debit) => GetParent().AdjustChildBalance(this, debit);
 
         /// <summary>
+        /// Stop becoming activated as a child queue of a parent scheduling group.
+        /// </summary>
+        protected internal void LeaveParent()
+        {
+            var oldParent = _parent;
+            if (oldParent != null)
+                oldParent.DeactivateChildAndDisown(this, ref _parent);
+        }
+
+        /// <summary>
         /// Change the parent scheduling group.
         /// </summary>
         /// <remarks>
         /// This operation implicitly de-activates this instance
         /// from its current parent scheduling group.  It will not
         /// be activated immediately in its new parent scheduling group.
+        /// Its weight will be reset to one.
         /// </remarks>
         /// <param name="parent">
         /// The scheduling group to assume as this instance's new parent.
         /// </param>
-        protected void ChangeParent(SchedulingGroup<TJob>? parent)
+        internal void ChangeParent(SchedulingGroup<TJob> parent)
         {
-            var oldParent = _parent;
-            if (oldParent != null)
-                oldParent.DeactivateChildAndDisown(this, ref _parent);
+            LeaveParent();
 
-            if (parent != null &&
-                Interlocked.CompareExchange(ref _parent, parent, null) != null)
+            if (Interlocked.CompareExchange(ref _parent, parent, null) != null)
             {
                 throw new InvalidOperationException(
                     "This attempt to change the parent scheduling group failed " +

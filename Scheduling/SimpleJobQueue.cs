@@ -12,10 +12,7 @@ namespace JobBank.Scheduling
     {
         private readonly ChannelReader<TJob> _channelReader;
 
-        public SimpleJobQueue(SchedulingGroup<TJob> parent, 
-                              ChannelReader<TJob> channelReader,
-                              int weight = 1)
-            : base(parent, weight)
+        public SimpleJobQueue(ChannelReader<TJob> channelReader)
         {
             _channelReader = channelReader;
         }

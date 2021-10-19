@@ -9,6 +9,13 @@ namespace JobBank.Scheduling
     /// <summary>
     /// Credit-based scheduling from a set of <see cref="SchedulingUnit" />.
     /// </summary>
+    /// <remarks>
+    /// The functionality of this class is available as protected,
+    /// not public methods, so that a derived class can restrict
+    /// some functionality depending on the application.  For instance,
+    /// some scheduling groups might not allow non-equal weights
+    /// on the child queues.
+    /// </remarks>
     public partial class SchedulingGroup<TJob>
     {
         /// <summary>
@@ -157,6 +164,35 @@ namespace JobBank.Scheduling
             return default;
         }
 
+        /// <summary>
+        /// Reset the weight on one child queue.
+        /// </summary>
+        protected void ResetWeight(SchedulingUnit<TJob> child, int weight)
+        {
+            if (weight < 1 || weight > 100)
+                throw new ArgumentOutOfRangeException("The weight on a child queue is not between 1 to 100. ", (Exception?)null);
+
+            lock (SyncObject)
+            {
+                CheckCorrectParent(child);
+
+                if (child.Weight == weight)
+                    return;
+
+                child.Weight = weight;
+
+                EnsureBalancesRefilled(reset: true);
+            }
+        }
+
+        /// <summary>
+        /// Reset weights on many child queues at the same time.
+        /// </summary>
+        /// <remarks>
+        /// Resetting weights requires re-calculation of internally
+        /// cached data, so when many child queues need to have their
+        /// weights reset, the changes should be batched together.
+        /// </remarks>
         protected void ResetWeights(IEnumerable<KeyValuePair<SchedulingUnit<TJob>, int>> items)
         {
             // Defensive copy to avoid the values changing concurrently after
@@ -224,7 +260,7 @@ namespace JobBank.Scheduling
         /// </summary>
         private void OnFirstActivatedBase()
         {
-            _sourceAdaptor?.ActivateFromParent();
+            _sourceAdaptor?.ActivateFromSubgroup();
         }
 
         /// <summary>
@@ -288,6 +324,12 @@ namespace JobBank.Scheduling
             {
                 CheckCorrectParent(child);
                 DeactivateChildCore(child);
+
+                // Reset weight and statistics while holding the lock
+                child.Weight = 1;
+                child.Balance = 0;
+                child.WasActivated = false;
+
                 parentRef = null;
             }
         }
@@ -342,6 +384,14 @@ namespace JobBank.Scheduling
                     "completed because its parent scheduling group was " +
                     "changed from another thread. ");
             }
+        }
+
+        /// <summary>
+        /// Admit a child queue to be managed by this scheduling group.
+        /// </summary>
+        protected void AdmitChild(SchedulingUnit<TJob> child)
+        {
+            child.ChangeParent(this);
         }
 
         /// <summary>
