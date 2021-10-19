@@ -27,24 +27,48 @@ namespace JobBank.Scheduling
                 if (_subgroup.CountActiveSources > 0)
                     return new ValueTask<bool>(true);
 
-                _taskSource.Reset();
-                short version = _taskSource.Version;
-                Volatile.Write(ref _acceptActivation, 1);
-                Interlocked.MemoryBarrier();
+                short version;
 
-                if (_subgroup.CountActiveSources > 0)
-                    return new ValueTask<bool>(true);
+                lock (_taskSource)
+                {
+                    if (_acceptsActivation != 0)
+                        throw new InvalidOperationException("Cannot call WaitToReadAsync while another asynchronous request is active. ");
+
+                    _taskSource.Reset();
+                    version = _taskSource.Version;
+
+                    // Acquire+Release in C++11 memory model.
+                    //
+                    // Release ordering is to make sure _taskSource is committed.
+                    // Acquire ordering is to make sure that _acceptsActivation = 1
+                    // is visible to the thread calling OnSubgroupActivated()
+                    // before we go on to double-check CountActiveSources > 0 below.
+                    Interlocked.Exchange(ref _acceptsActivation, 1);
+
+                    // Something might have been enqueued after the first check
+                    // but before _acceptsActivation was set to 1.
+                    if (_subgroup.CountActiveSources > 0)
+                    {
+                        _acceptsActivation = 0;
+                        return new ValueTask<bool>(true);
+                    }
+                }
 
                 return new ValueTask<bool>(_taskSource, version);
             }
 
             internal void OnSubgroupActivated()
             {
-                if (Interlocked.Exchange(ref _acceptActivation, 0) == 1)
-                    _taskSource.SetResult(true);
+                if (Interlocked.Exchange(ref _acceptsActivation, 0) == 1)
+                {
+                    lock (_taskSource)
+                    {
+                        _taskSource.SetResult(true);
+                    }
+                }
             }
 
-            private int _acceptActivation = 0;
+            private int _acceptsActivation = 0;
 
             private readonly ManualResetValueTaskSource<bool> _taskSource
                 = new ManualResetValueTaskSource<bool>();
