@@ -73,12 +73,13 @@ namespace JobBank.Scheduling
 
             internal void OnSubgroupActivated()
             {
-                if (Interlocked.Exchange(ref _acceptsActivation, 0) == 1)
+                if (Interlocked.CompareExchange(ref _acceptsActivation, -1, 1) == 1)
                 {
                     lock (_taskSource)
                     {
                         _taskSource.TrySetResult(true);
                         _cancellationRegistration.Dispose();
+                        _acceptsActivation = 0;
                     }
                 }
             }
