@@ -169,15 +169,6 @@ namespace JobBank.Scheduling
         internal TJob? TakeJobToParent(out int charge) => TakeJob(out charge);
 
         /// <summary>
-        /// Get the current parent scheduling group, requiring that it 
-        /// not be null.
-        /// </summary>
-        private SchedulingGroup<TJob> GetParent()
-            => _parent ?? throw new InvalidOperationException(
-                    "This operation requires the parent scheduling " +
-                    "group to be set first. ");
-
-        /// <summary>
         /// Ensure this scheduling unit is considered active for scheduling
         /// within its parent group.
         /// </summary>
@@ -204,7 +195,11 @@ namespace JobBank.Scheduling
         /// <param name="debit">
         /// The amount to add to <see cref="Balance" />.
         /// </param>
-        protected void AdjustBalance(int debit) => GetParent().AdjustChildBalance(this, debit);
+        /// <remarks>
+        /// If this method has no effect if there is currently no
+        /// parent scheduling group.
+        /// </remarks>
+        protected void AdjustBalance(int debit) => Parent?.AdjustChildBalance(this, debit);
 
         /// <summary>
         /// Stop becoming activated as a child queue of a parent scheduling group.
@@ -212,27 +207,24 @@ namespace JobBank.Scheduling
         protected internal void LeaveParent()
         {
             var oldParent = _parent;
-            if (oldParent != null)
+            if (oldParent is not null)
                 oldParent.DeactivateChildAndDisown(this, ref _parent);
         }
 
         /// <summary>
-        /// Change the parent scheduling group.
+        /// Set the parent scheduling group.
         /// </summary>
         /// <remarks>
-        /// This operation implicitly de-activates this instance
-        /// from its current parent scheduling group.  It will not
-        /// be activated immediately in its new parent scheduling group.
-        /// Its weight will be reset to one.
+        /// This instance must not have any other parent currently.
+        /// It will not be activated immediately in its new parent 
+        /// scheduling group.
         /// </remarks>
         /// <param name="parent">
         /// The scheduling group to assume as this instance's new parent.
         /// </param>
-        internal void ChangeParent(SchedulingGroup<TJob> parent)
+        internal void SetParent(SchedulingGroup<TJob> parent)
         {
-            LeaveParent();
-
-            if (Interlocked.CompareExchange(ref _parent, parent, null) != null)
+            if (Interlocked.CompareExchange(ref _parent, parent, null) is not null)
             {
                 throw new InvalidOperationException(
                     "This attempt to change the parent scheduling group failed " +

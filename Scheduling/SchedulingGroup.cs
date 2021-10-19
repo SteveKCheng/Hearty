@@ -174,7 +174,7 @@ namespace JobBank.Scheduling
 
             lock (SyncObject)
             {
-                CheckCorrectParent(child);
+                CheckCorrectParent(child, optional: false);
 
                 if (child.Weight == weight)
                     return;
@@ -209,7 +209,7 @@ namespace JobBank.Scheduling
             {
                 // Must check for correct parent only after locking first.
                 foreach (var (child, _) in itemsArray)
-                    CheckCorrectParent(child);
+                    CheckCorrectParent(child, optional: false);
 
                 foreach (var (child, weight) in itemsArray)
                     child.Weight = weight;
@@ -232,7 +232,8 @@ namespace JobBank.Scheduling
 
             lock (SyncObject)
             {
-                CheckCorrectParent(child);
+                if (CheckCorrectParent(child, optional: true))
+                    return;
 
                 child.WasActivated = true;
 
@@ -251,7 +252,6 @@ namespace JobBank.Scheduling
                 OnFirstActivatedBase();
                 OnFirstActivated();
             }
-                
         }
 
         /// <summary>
@@ -295,7 +295,9 @@ namespace JobBank.Scheduling
         {
             lock (SyncObject)
             {
-                CheckCorrectParent(child);
+                if (CheckCorrectParent(child, optional: true))
+                    return;
+
                 DeactivateChildCore(child);
             }
         }
@@ -322,7 +324,9 @@ namespace JobBank.Scheduling
         {
             lock (SyncObject)
             {
-                CheckCorrectParent(child);
+                if (CheckCorrectParent(child, optional: true))
+                    return;
+
                 DeactivateChildCore(child);
 
                 // Reset weight and statistics while holding the lock
@@ -349,7 +353,8 @@ namespace JobBank.Scheduling
         {
             lock (SyncObject)
             {
-                CheckCorrectParent(child);
+                if (CheckCorrectParent(child, optional: true))
+                    return;
 
                 int oldBalance = child.Balance;
                 int newBalance = MiscArithmetic.SaturatingAdd(oldBalance, debit);
@@ -375,23 +380,36 @@ namespace JobBank.Scheduling
         /// once this method checks successfully for that condition 
         /// initially upon taking the lock.
         /// </remarks>
-        private void CheckCorrectParent(SchedulingUnit<TJob> child)
+        private bool CheckCorrectParent(SchedulingUnit<TJob> child, bool optional)
         {
-            if (child.Parent != this)
+            var parent = child.Parent;
+            if (!object.ReferenceEquals(parent, this))
             {
+                if (parent is null && optional)
+                    return false;
+
                 throw new InvalidOperationException(
                     "This operation on a scheduling source cannot be " +
                     "completed because its parent scheduling group was " +
                     "changed from another thread. ");
             }
+
+            return true;
         }
 
         /// <summary>
         /// Admit a child queue to be managed by this scheduling group.
         /// </summary>
+        /// <param name="child">
+        /// The child queue to admit.  It must not have any other parent currently.
+        /// </param>
+        /// <remarks>
+        /// The child queue will start off as inactive for this
+        /// scheduling group.
+        /// </remarks>
         protected void AdmitChild(SchedulingUnit<TJob> child)
         {
-            child.ChangeParent(this);
+            child.SetParent(this);
         }
 
         /// <summary>
