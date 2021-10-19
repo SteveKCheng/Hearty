@@ -38,6 +38,8 @@ namespace JobBank.Scheduling
                         throw new InvalidOperationException("Cannot call WaitToReadAsync while another asynchronous request is active. ");
 
                     _taskSource.Reset();
+                    _taskSource.RunContinuationsAsynchronously = true;
+
                     version = _taskSource.Version;
 
                     // Acquire+Release in C++11 memory model.
@@ -77,9 +79,15 @@ namespace JobBank.Scheduling
                 {
                     lock (_taskSource)
                     {
-                        _taskSource.TrySetResult(true);
+                        // Because we are holding locks, we do not run continuations
+                        // synchronously.  But if we do, these variables better be set
+                        // first.  We could consider using our ValueTaskContinuation 
+                        // struct which separates the setting of the result from
+                        // invoking the continuation.
                         _cancellationRegistration.Dispose();
                         _acceptsActivation = 0;
+
+                        _taskSource.TrySetResult(true);
                     }
                 }
             }
