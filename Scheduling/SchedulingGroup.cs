@@ -268,7 +268,11 @@ namespace JobBank.Scheduling
         /// </summary>
         private void OnFirstActivatedBase()
         {
-            _sourceAdaptor?.ActivateFromSubgroup();
+            var toWakeUp = _toWakeUp;
+            if (toWakeUp is SourceImpl sourceAdaptor)
+                sourceAdaptor.OnSubgroupActivated();
+            else if (toWakeUp is ChannelReader channelReader)
+                channelReader.OnSubgroupActivated();
         }
 
         /// <summary>

@@ -36,7 +36,7 @@ namespace JobBank.Scheduling
             /// Called by <see cref="SchedulingGroup{T}" />
             /// when it activates from an empty state.
             /// </summary>
-            internal void ActivateFromSubgroup() => Activate();
+            internal void OnSubgroupActivated() => Activate();
         }
 
         /// <summary>
@@ -53,24 +53,28 @@ namespace JobBank.Scheduling
         /// </returns>
         protected SchedulingUnit<T> AsSource()
         {
-            SourceImpl? sourceAdaptor = _sourceAdaptor;
-
-            if (sourceAdaptor == null)
+            var toWakeUp = _toWakeUp;
+            if (toWakeUp == null)
             {
-                sourceAdaptor = new SourceImpl(this);
-                sourceAdaptor = Interlocked.CompareExchange(
-                                    ref _sourceAdaptor,
-                                    sourceAdaptor,
-                                    null) ?? sourceAdaptor;
+                var newSourceAdaptor = new SourceImpl(this);
+                toWakeUp = Interlocked.CompareExchange(ref _toWakeUp,
+                                                       newSourceAdaptor,
+                                                       null);
+                if (toWakeUp == null)
+                    return newSourceAdaptor;
             }
 
-            return sourceAdaptor;
+            if (toWakeUp is SourceImpl sourceAdaptor)
+                return sourceAdaptor;
+
+            throw new InvalidOperationException(
+                "Cannot call AsSource when AsChannelReader had already been called. ");
         }
 
         /// <summary>
         /// Reference to the adaptor of this instance to be a scheduling
         /// source, needed to inform it when this instance re-activates.
         /// </summary>
-        private SourceImpl? _sourceAdaptor;
+        private object? _toWakeUp;
     }
 }
