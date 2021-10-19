@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 
 namespace JobBank.Scheduling
@@ -27,7 +28,8 @@ namespace JobBank.Scheduling
             }
 
             /// <inheritdoc />
-            protected override bool TryTakeItem(out T item, out int charge)
+            protected override bool TryTakeItem(
+                [MaybeNullWhen(false)] out T item, out int charge)
                 => _subgroup.TryTakeItem(out item, out charge);
 
             /// <summary>

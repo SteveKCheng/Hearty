@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 
@@ -115,7 +116,8 @@ namespace JobBank.Scheduling
         /// The de-queued job, or null if no child queue can currently 
         /// supply one.
         /// </returns>
-        protected bool TryTakeItem(out T item, out int charge)
+        protected bool TryTakeItem([MaybeNullWhen(false)] out T item, 
+                                   out int charge)
         {
             var syncObject = SyncObject;
             lock (syncObject)
@@ -153,7 +155,12 @@ namespace JobBank.Scheduling
                             UpdateForAverageBalance(child, oldBalance, newBalance);
                         }
 
+                        // CS8762: Parameter must have a non-null value when exiting in some condition.
+                        // The C# compiler is not smart enough to deduce that hasItem == true
+                        // means that item must have been set by TryTakeItemToParent above.
+#pragma warning disable CS8762 
                         return true;
+#pragma warning restore CS8762
                     }
 
                     DeactivateChildCore(child);
@@ -161,7 +168,7 @@ namespace JobBank.Scheduling
             }
 
             charge = 0;
-            item = default!;
+            item = default;
             return false;
         }
 

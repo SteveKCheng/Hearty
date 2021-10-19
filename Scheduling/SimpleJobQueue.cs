@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
@@ -17,10 +18,11 @@ namespace JobBank.Scheduling
             _channelReader = channelReader;
         }
 
-        protected override bool TryTakeItem(out T item, out int charge)
+        protected override bool TryTakeItem(
+            [MaybeNullWhen(false)] out T item, out int charge)
         {
             charge = 0;
-            if (_channelReader.TryRead(out item!))
+            if (_channelReader.TryRead(out item))
                 return true;
 
             _ = ActivateWhenReadyAsync();

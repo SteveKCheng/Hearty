@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 
 namespace JobBank.Scheduling
@@ -152,7 +153,8 @@ namespace JobBank.Scheduling
         /// processing next, or null if this source instance
         /// currently has no job to process.  
         /// </returns>
-        protected abstract bool TryTakeItem(out T item, out int charge);
+        protected abstract bool TryTakeItem(
+            [MaybeNullWhen(false)] out T item, out int charge);
 
         /// <summary>
         /// Invokes <see cref="IJobSource.TakeJob" />
@@ -166,7 +168,8 @@ namespace JobBank.Scheduling
         /// should be processing next, or null if there is none
         /// from this child queue.
         /// </returns>
-        internal bool TryTakeItemToParent(out T item, out int charge) 
+        internal bool TryTakeItemToParent(
+            [MaybeNullWhen(false)] out T item, out int charge) 
             => TryTakeItem(out item, out charge);
 
         /// <summary>
