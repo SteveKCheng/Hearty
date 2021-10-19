@@ -27,7 +27,7 @@ namespace JobBank.Scheduling
     /// to do that here.
     /// </para>
     /// </remarks>
-    public abstract class SchedulingUnit<TJob>
+    public abstract class SchedulingUnit<T>
     {
         /// <summary>
         /// Backing field for <see cref="Parent" />.
@@ -43,12 +43,12 @@ namespace JobBank.Scheduling
         /// There cannot be a direct transition from one parent
         /// to another.
         /// </remarks>
-        private SchedulingGroup<TJob>? _parent;
+        private SchedulingGroup<T>? _parent;
 
         /// <summary>
         /// The queue group that owns this child queue.
         /// </summary>
-        protected internal SchedulingGroup<TJob>? Parent { get; }
+        protected internal SchedulingGroup<T>? Parent { get; }
 
         /// <summary>
         /// The index of this child queue in the parent's priority heap.
@@ -119,7 +119,7 @@ namespace JobBank.Scheduling
         /// </summary>
         /// <remarks>
         /// This flag is needed by 
-        /// <see cref="SchedulingGroup{TJob}.TakeJob" />
+        /// <see cref="SchedulingGroup{T}.TakeJob" />
         /// to avoid accidentally de-activating this child queue
         /// if there is a race with the user trying to re-activating it.
         /// </remarks>
@@ -152,11 +152,11 @@ namespace JobBank.Scheduling
         /// processing next, or null if this source instance
         /// currently has no job to process.  
         /// </returns>
-        protected abstract bool TryTakeItem(out TJob item, out int charge);
+        protected abstract bool TryTakeItem(out T item, out int charge);
 
         /// <summary>
         /// Invokes <see cref="IJobSource.TakeJob" />
-        /// for <see cref="SchedulingGroup{TJob}"/>.
+        /// for <see cref="SchedulingGroup{T}"/>.
         /// </summary>
         /// <param name="charge">The amount of credit to charge
         /// to this child queue for the new job.
@@ -166,7 +166,7 @@ namespace JobBank.Scheduling
         /// should be processing next, or null if there is none
         /// from this child queue.
         /// </returns>
-        internal bool TryTakeItemToParent(out TJob item, out int charge) 
+        internal bool TryTakeItemToParent(out T item, out int charge) 
             => TryTakeItem(out item, out charge);
 
         /// <summary>
@@ -223,7 +223,7 @@ namespace JobBank.Scheduling
         /// <param name="parent">
         /// The scheduling group to assume as this instance's new parent.
         /// </param>
-        internal void SetParent(SchedulingGroup<TJob> parent)
+        internal void SetParent(SchedulingGroup<T> parent)
         {
             if (Interlocked.CompareExchange(ref _parent, parent, null) is not null)
             {

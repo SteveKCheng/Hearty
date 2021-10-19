@@ -8,16 +8,16 @@ namespace JobBank.Scheduling
     /// A job queue, for the fair scheduling system, backed by 
     /// <see cref="ChannelReader{T}" />.
     /// </summary>
-    public class SimpleJobQueue<TJob> : SchedulingUnit<TJob>
+    public class SimpleJobQueue<T> : SchedulingUnit<T>
     {
-        private readonly ChannelReader<TJob> _channelReader;
+        private readonly ChannelReader<T> _channelReader;
 
-        public SimpleJobQueue(ChannelReader<TJob> channelReader)
+        public SimpleJobQueue(ChannelReader<T> channelReader)
         {
             _channelReader = channelReader;
         }
 
-        protected override bool TryTakeItem(out TJob item, out int charge)
+        protected override bool TryTakeItem(out T item, out int charge)
         {
             charge = 0;
             if (_channelReader.TryRead(out item!))

@@ -3,53 +3,53 @@ using System.Threading;
 
 namespace JobBank.Scheduling
 {
-    public partial class SchedulingGroup<TJob>
+    public partial class SchedulingGroup<T>
     {
         /// <summary>
-        /// Adapts <see cref="SchedulingGroup{TJob}" /> to
-        /// <see cref="SchedulingUnit{TJob}" />.
+        /// Adapts <see cref="SchedulingGroup{T}" /> to
+        /// <see cref="SchedulingUnit{T}" />.
         /// </summary>
-        private sealed class SourceImpl : SchedulingUnit<TJob>
+        private sealed class SourceImpl : SchedulingUnit<T>
         {
             /// <summary>
             /// The subgroup of queues where messages will
             /// be forward from to this instance's parent.
             /// </summary>
-            private readonly SchedulingGroup<TJob> _subgroup;
+            private readonly SchedulingGroup<T> _subgroup;
 
             /// <summary>
             /// Prepare to forward messages from a sub-group 
             /// of queues as if they came from a single queue. 
             /// </summary>
-            public SourceImpl(SchedulingGroup<TJob> subgroup)
+            public SourceImpl(SchedulingGroup<T> subgroup)
             {
                 _subgroup = subgroup;
             }
 
             /// <inheritdoc />
-            protected override bool TryTakeItem(out TJob item, out int charge)
+            protected override bool TryTakeItem(out T item, out int charge)
                 => _subgroup.TryTakeItem(out item, out charge);
 
             /// <summary>
-            /// Called by <see cref="SchedulingGroup{TJob}" />
+            /// Called by <see cref="SchedulingGroup{T}" />
             /// when it activates from an empty state.
             /// </summary>
             internal void ActivateFromSubgroup() => Activate();
         }
 
         /// <summary>
-        /// Adapt this instance as a <see cref="SchedulingUnit{TJob}" />
+        /// Adapt this instance as a <see cref="SchedulingUnit{T}" />
         /// so that it can participate in a hierarchy of queues.
         /// </summary>
         /// <returns>
-        /// An instance of <see cref="SchedulingUnit{TJob}" />
+        /// An instance of <see cref="SchedulingUnit{T}" />
         /// that forwards the messages from the child queues
         /// that this instance manages.  There is only one instance
         /// even if multiple calls are made to this method, as it
         /// never makes sense to consume the same scheduling group
         /// from multiple clients.  
         /// </returns>
-        protected SchedulingUnit<TJob> AsSource()
+        protected SchedulingUnit<T> AsSource()
         {
             SourceImpl? sourceAdaptor = _sourceAdaptor;
 
