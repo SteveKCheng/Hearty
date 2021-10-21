@@ -13,8 +13,11 @@
   <ItemGroup>
     <Compile Include="ISchedulingAccount.cs" />
     <Compile Include="ISchedulingExpense.cs" />
+    <Compile Include="JobScheduling.cs" />
+    <Compile Include="JobVacancy.cs" />
     <Compile Include="ManualResetValueTaskSource.cs" />
     <Compile Include="MiscArithmetic.cs" />
+    <Compile Include="ScheduledJob.cs" />
     <Compile Include="SharedFuture.cs" />
     <Compile Include="SchedulingGroup.AsSource.cs" />
     <Compile Include="SchedulingGroup.ChannelReader.cs" />
