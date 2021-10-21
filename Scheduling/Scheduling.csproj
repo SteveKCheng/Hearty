@@ -11,6 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="ISchedulingExpense.cs" />
     <Compile Include="ManualResetValueTaskSource.cs" />
     <Compile Include="MiscArithmetic.cs" />
     <Compile Include="SchedulingGroup.AsSource.cs" />
