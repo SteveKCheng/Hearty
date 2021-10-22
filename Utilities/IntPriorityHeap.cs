@@ -700,8 +700,8 @@ namespace JobBank.Utilities
 
             // Set indices on elements in deepest layer
             var values = _values;
-            for (int j = 0; j < countAtLevel; ++j)
-                InvokeIndexUpdateCallback(ref values[startIndex + j], startIndex + j);
+            for (int j = startIndex; j < count; ++j)
+                InvokeIndexUpdateCallback(ref values[j], j);
 
             // Bubble down elements, in order from the second-deepest layer
             // to the top-most layer.
@@ -713,10 +713,10 @@ namespace JobBank.Utilities
                 countAtLevel >>= Log2OfWays;
                 startIndex -= countAtLevel;
 
-                for (int j = 0; j < countAtLevel; ++j)
+                for (int j = startIndex; j < startIndex + countAtLevel; ++j)
                 {
-                    InvokeIndexUpdateCallback(ref values[startIndex + j], startIndex + j);
-                    BubbleDown(startIndex + j);
+                    InvokeIndexUpdateCallback(ref values[j], j);
+                    BubbleDown(j);
                 }
                     
             } while (level > 0);
