@@ -226,7 +226,7 @@ namespace JobBank.Scheduling
         /// <param name="parent">
         /// The scheduling group to assume as this instance's new parent.
         /// </param>
-        internal void SetParent(SchedulingGroup<T> parent)
+        internal void SetParent(SchedulingGroup<T> parent, bool activate)
         {
             if (Interlocked.CompareExchange(ref _parent, parent, null) is not null)
             {
@@ -234,6 +234,9 @@ namespace JobBank.Scheduling
                     "This attempt to change the parent scheduling group failed " +
                     "because another thread concurrently did the same. ");
             }
+
+            if (activate)
+                Activate();
         }
     }
 }

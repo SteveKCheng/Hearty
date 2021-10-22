@@ -418,11 +418,14 @@ namespace JobBank.Scheduling
         /// <param name="child">
         /// The child queue to admit.  It must not have any other parent currently.
         /// </param>
+        /// <param name="activate">
+        /// Whether to activate the child queue immediately.
+        /// </param>
         /// <remarks>
         /// The child queue will start off as inactive for this
         /// scheduling group.
         /// </remarks>
-        protected void AdmitChild(SchedulingUnit<T> child)
+        protected void AdmitChild(SchedulingUnit<T> child, bool activate)
         {
             if (child is SourceImpl sourceAdaptor &&
                 object.ReferenceEquals(sourceAdaptor.Subgroup, this))
@@ -430,7 +433,7 @@ namespace JobBank.Scheduling
                 throw new InvalidOperationException("Cannot add a scheduling subgroup as a child of itself. ");
             }
 
-            child.SetParent(this);
+            child.SetParent(this, activate);
         }
 
         /// <summary>
