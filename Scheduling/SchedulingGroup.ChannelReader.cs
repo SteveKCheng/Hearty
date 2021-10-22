@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -20,6 +19,12 @@ namespace JobBank.Scheduling
 
             public override bool TryRead([MaybeNullWhen(false)] out T item)
             {
+                if (_isTerminated)
+                {
+                    item = default;
+                    return false;
+                }
+                    
                 return _subgroup.TryTakeItem(out item, out _);
             }
 
@@ -27,76 +32,34 @@ namespace JobBank.Scheduling
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (_subgroup.CountActiveSources > 0)
-                    return new ValueTask<bool>(true);
+                bool isTerminated = false;
+                if (_subgroup.CountActiveSources > 0 || (isTerminated = _isTerminated))
+                    return new ValueTask<bool>(!isTerminated);
 
-                short version;
+                var task = _taskSource.Reset(cancellationToken);
 
-                lock (_taskSource)
+                // Something might have been enqueued after the first check
+                // but before the state on _taskSource was transitioned.
+                isTerminated = false;
+                if (_subgroup.CountActiveSources > 0 || (isTerminated = _isTerminated))
                 {
-                    if (_acceptsActivation != 0)
-                        throw new InvalidOperationException("Cannot call WaitToReadAsync while another asynchronous request is active. ");
-
-                    _taskSource.Reset();
-                    _taskSource.RunContinuationsAsynchronously = true;
-
-                    version = _taskSource.Version;
-
-                    // Acquire+Release in C++11 memory model.
-                    //
-                    // Release ordering is to make sure _taskSource is committed.
-                    // Acquire ordering is to make sure that _acceptsActivation = 1
-                    // is visible to the thread calling OnSubgroupActivated()
-                    // before we go on to double-check CountActiveSources > 0 below.
-                    Interlocked.Exchange(ref _acceptsActivation, 1);
-
-                    // Something might have been enqueued after the first check
-                    // but before _acceptsActivation was set to 1.
-                    if (_subgroup.CountActiveSources > 0)
-                    {
-                        _acceptsActivation = 0;
-                        return new ValueTask<bool>(true);
-                    }
-
-                    _cancellationRegistration = cancellationToken.Register(s => {
-                        var self = Unsafe.As<ChannelReader>(s!);
-
-                        // N.B. could be a recursive lock because CancellationToken.Register
-                        //      may invoke this callback synchronously.
-                        lock (self._taskSource) 
-                        {
-                            self._taskSource.TrySetException(new OperationCanceledException());
-                        }
-                    }, this);
+                    _taskSource.TrySetResult(!isTerminated);
+                    return new ValueTask<bool>(!isTerminated);
                 }
 
-                return new ValueTask<bool>(_taskSource, version);
+                return task;
             }
 
-            internal void OnSubgroupActivated()
+            internal void OnSubgroupActivated() => _taskSource.TrySetResult(true);
+
+            internal void Terminate()
             {
-                if (Interlocked.CompareExchange(ref _acceptsActivation, -1, 1) == 1)
-                {
-                    lock (_taskSource)
-                    {
-                        // Because we are holding locks, we do not run continuations
-                        // synchronously.  But if we do, these variables better be set
-                        // first.  We could consider using our ValueTaskContinuation 
-                        // struct which separates the setting of the result from
-                        // invoking the continuation.
-                        _cancellationRegistration.Dispose();
-                        _acceptsActivation = 0;
-
-                        _taskSource.TrySetResult(true);
-                    }
-                }
+                _isTerminated = true;
+                _taskSource.TrySetResult(false);
             }
 
-            private int _acceptsActivation = 0;
-            private CancellationTokenRegistration _cancellationRegistration;
-
-            private readonly ManualResetValueTaskSource<bool> _taskSource
-                = new ManualResetValueTaskSource<bool>();
+            private bool _isTerminated;
+            private readonly ResettableConcurrentTaskSource<bool> _taskSource = new();
         }
 
         protected ChannelReader AsChannelReader()
@@ -112,11 +75,28 @@ namespace JobBank.Scheduling
                     return newChannelReader;
             }
 
-            if (toWakeUp is ChannelReader channelReader)
-                return channelReader;
+            if (toWakeUp is not ChannelReader channelReader)
+            {
+                throw new InvalidOperationException(
+                    "Cannot call AsChannelReader when AsSource had already been called. ");
+            }
 
-            throw new InvalidOperationException(
-                "Cannot call AsChannelReader when AsSource had already been called. ");
+            return channelReader;
+        }
+
+        /// <summary>
+        /// Mark the <see cref="ChannelReader{T}" /> returned by
+        /// <see cref="AsChannelReader" /> as complete.
+        /// </summary>
+        protected void TerminateChannelReader()
+        {
+            if (_toWakeUp is not ChannelReader channelReader)
+            {
+                throw new InvalidOperationException(
+                    "Cannot call TerminateChannelReader since no channel reader had been requested earlier. ");
+            }
+
+            channelReader.Terminate();
         }
     }
 }

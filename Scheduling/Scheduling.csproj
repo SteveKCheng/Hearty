@@ -15,7 +15,6 @@
     <Compile Include="ISchedulingExpense.cs" />
     <Compile Include="JobScheduling.cs" />
     <Compile Include="JobVacancy.cs" />
-    <Compile Include="ManualResetValueTaskSource.cs" />
     <Compile Include="MiscArithmetic.cs" />
     <Compile Include="ScheduledJob.cs" />
     <Compile Include="SharedFuture.cs" />
