@@ -49,7 +49,7 @@ namespace JobBank.Scheduling
         /// <summary>
         /// The queue group that owns this child queue.
         /// </summary>
-        protected internal SchedulingGroup<T>? Parent { get; }
+        protected internal SchedulingGroup<T>? Parent => _parent;
 
         /// <summary>
         /// The index of this child queue in the parent's priority heap.
