@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -8,8 +9,15 @@ namespace JobBank.Scheduling
 {
     public partial class SchedulingGroup<T>
     {
+        /// <summary>
+        /// Allows items from <see cref="SchedulingGroup{T}" /> 
+        /// to be read through the standard "channels" interface.
+        /// </summary>
         public sealed class ChannelReader : ChannelReader<T>
         {
+            /// <summary>
+            /// The scheduling group that is being adapted to be a channel.
+            /// </summary>
             private readonly SchedulingGroup<T> _subgroup;
 
             internal ChannelReader(SchedulingGroup<T> subgroup)
@@ -17,6 +25,7 @@ namespace JobBank.Scheduling
                 _subgroup = subgroup;
             }
 
+            /// <inheritdoc />
             public override bool TryRead([MaybeNullWhen(false)] out T item)
             {
                 if (_isTerminated)
@@ -28,6 +37,7 @@ namespace JobBank.Scheduling
                 return _subgroup.TryTakeItem(out item, out _);
             }
 
+            /// <inheritdoc />
             public override ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken = default)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -43,22 +53,80 @@ namespace JobBank.Scheduling
                 isTerminated = false;
                 if (_subgroup.CountActiveSources > 0 || (isTerminated = _isTerminated))
                 {
+                    // We need to transition the task source so it can be reset later.
                     _taskSource.TrySetResult(!isTerminated);
+
+                    // But return the result directly as an optimization.
                     return new ValueTask<bool>(!isTerminated);
                 }
 
                 return task;
             }
 
+            /// <summary>
+            /// Called by the scheduling group that this channel represents
+            /// when it may have items available, so that <see cref="WaitToReadAsync" />
+            /// may return asynchronously.
+            /// </summary>
             internal void OnSubgroupActivated() => _taskSource.TrySetResult(true);
 
+            /// <summary>
+            /// Mark the channel as having completed.
+            /// </summary>
+            /// <remarks>
+            /// If there are still items from the scheduling group, they 
+            /// will not ever be returned through this <see cref="ChannelReader" />.
+            /// </remarks>
             internal void Terminate()
             {
-                _isTerminated = true;
+                AsyncTaskMethodBuilder completionTaskBuilder = default;
+                lock (_taskSource)
+                {
+                    if (!_isTerminated)
+                    {
+                        completionTaskBuilder = _completionTaskBuilder;
+                        _completionTaskBuilder = default;
+                    }
+
+                    _isTerminated = true;
+                }
+
+                // Sets Task.CompletedTask trivially if its Task property
+                // has not been accessed before.
+                completionTaskBuilder.SetResult();
+
                 _taskSource.TrySetResult(false);
             }
 
+            /// <inheritdoc />
+            public override Task Completion
+            {
+                get
+                {
+                    lock (_taskSource)
+                    {
+                        if (_isTerminated)
+                            return Task.CompletedTask;
+
+                        return _completionTaskBuilder.Task;
+                    }
+                }
+            }
+
+            /// <summary>
+            /// Roundabout way to create and set the <see cref="Task" /> object
+            /// to implement <see cref="Completion" />.
+            /// </summary>
+            private AsyncTaskMethodBuilder _completionTaskBuilder;
+
+            /// <summary>
+            /// Set to true when the channel has been marked complete.
+            /// </summary>
             private bool _isTerminated;
+
+            /// <summary>
+            /// Task source to implement <see cref="WaitToReadAsync" />.
+            /// </summary>
             private readonly ResettableConcurrentTaskSource<bool> _taskSource = new();
         }
 
