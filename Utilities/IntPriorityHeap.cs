@@ -236,7 +236,7 @@ namespace JobBank.Utilities
         {
             int count = _count;
             int childrenIndex = GetLeftmostChildIndex(index);
-            if (childrenIndex < count)
+            if (childrenIndex >= count)
                 return;
 
             int[] keys = _keys;
