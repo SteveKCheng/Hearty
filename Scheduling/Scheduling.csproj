@@ -25,6 +25,11 @@
     <Compile Include="IntPriorityHeap.cs" />
     <Compile Include="SchedulingGroup.cs" />
     <Compile Include="SimpleJobQueue.cs" />
+    <Compile Include="ResettableConcurrentTaskSource.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utilities\Utilities.csproj" />
   </ItemGroup>
 
 </Project>
