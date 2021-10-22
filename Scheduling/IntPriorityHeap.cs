@@ -570,8 +570,8 @@ namespace JobBank.Scheduling
         private static int GetLayerFromIndex(int index)
         {
             var c = (uint)index * WaysMinusOne + 1;
-            var level = BitOperations.Log2(c) >> Log2OfWays;
-            return level;
+            var level = (uint)BitOperations.Log2(c) / (uint)Log2OfWays;
+            return (int)level;
         }
 
         /// <summary>
@@ -594,7 +594,7 @@ namespace JobBank.Scheduling
         private static (int Index, int Count) GetLayerRange(int level)
         {
             int count = 1 << (Log2OfWays * level);
-            int index = (int)((uint)(count - 1) / WaysMinusOne);
+            int index = (int)((uint)(count - 1) / (uint)WaysMinusOne);
             return (index, count);
         }
 
