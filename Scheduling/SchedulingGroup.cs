@@ -240,9 +240,9 @@ namespace JobBank.Scheduling
 
             lock (SyncObject)
             {
-                if (CheckCorrectParent(child, optional: true))
+                if (!CheckCorrectParent(child, optional: true))
                     return;
-
+                
                 child.WasActivated = true;
 
                 if (!child.IsActive)
@@ -307,7 +307,7 @@ namespace JobBank.Scheduling
         {
             lock (SyncObject)
             {
-                if (CheckCorrectParent(child, optional: true))
+                if (!CheckCorrectParent(child, optional: true))
                     return;
 
                 DeactivateChildCore(child);
@@ -336,7 +336,7 @@ namespace JobBank.Scheduling
         {
             lock (SyncObject)
             {
-                if (CheckCorrectParent(child, optional: true))
+                if (!CheckCorrectParent(child, optional: true))
                     return;
 
                 DeactivateChildCore(child);
@@ -365,7 +365,7 @@ namespace JobBank.Scheduling
         {
             lock (SyncObject)
             {
-                if (CheckCorrectParent(child, optional: true))
+                if (!CheckCorrectParent(child, optional: true))
                     return;
 
                 int oldBalance = child.Balance;
