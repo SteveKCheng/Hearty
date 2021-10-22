@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 
-namespace JobBank.Scheduling
+namespace JobBank.Utilities
 {
     /// <summary>
     /// A priority queue specialized for integer keys.
@@ -31,7 +31,7 @@ namespace JobBank.Scheduling
     /// </remarks>
     /// <typeparam name="TValue">The type of value to store
     /// in the heap, associated to the integer priority key. </typeparam>
-    internal struct IntPriorityHeap<TValue>
+    public struct IntPriorityHeap<TValue>
     {
         /// <summary>
         /// Called whenever indices must be updated in the heap.

@@ -7,7 +7,6 @@
     <DisableImplicitNamespaceImports>true</DisableImplicitNamespaceImports>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,7 +20,6 @@
     <Compile Include="SchedulingGroup.AsSource.cs" />
     <Compile Include="SchedulingGroup.ChannelReader.cs" />
     <Compile Include="SchedulingUnit.cs" />
-    <Compile Include="IntPriorityHeap.cs" />
     <Compile Include="SchedulingGroup.cs" />
     <Compile Include="SimpleJobQueue.cs" />
     <Compile Include="ResettableConcurrentTaskSource.cs" />
