@@ -44,7 +44,10 @@
     <Compile Include="SubscribedResult.cs" />
     <Compile Include="PromiseOutput.cs" />
     <Compile Include="Subscription.cs" />
-    <Compile Include="ValueTaskContinuation.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utilities\Utilities.csproj" />
   </ItemGroup>
 
 </Project>

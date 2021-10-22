@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Sources;
 
-namespace JobBank.Server
+namespace JobBank.Utilities
 {
     /// <summary>
     /// Invokes continuations for an implementation of <see cref="IValueTaskSource"/>.
@@ -17,7 +17,7 @@ namespace JobBank.Server
     /// location.  This structure provides a replacement that has all unnecessary code
     /// stripped out.
     /// </remarks>
-    internal struct ValueTaskContinuation
+    public struct ValueTaskContinuation
     {
         /// <summary>
         /// The delegate for the continuation passed to <see cref="IValueTaskSource.OnCompleted" />.

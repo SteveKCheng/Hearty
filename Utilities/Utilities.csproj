@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net5.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <RootNamespace>JobBank.Utilities</RootNamespace>
+    <DisableImplicitNamespaceImports>true</DisableImplicitNamespaceImports>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultContentItems>false</EnableDefaultContentItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="ValueTaskContinuation.cs" />
+  </ItemGroup>
+  
+</Project>
