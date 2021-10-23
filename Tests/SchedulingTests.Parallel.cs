@@ -6,19 +6,22 @@ using System.Threading.Channels;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading;
+using System.Diagnostics;
 
 namespace JobBank.Tests
 {
+    [DebuggerDisplay("Id: {Id} Child: {ChildIndex} Charge: {InitialCharge} Arrival: {ArrivalTime} Exit: {ExitTime}")]
     internal class DummyJob : ISchedulingExpense
     {
-        public int InitialCharge => 0;
+        public int InitialCharge { get; init; }
 
-        public int Id { get; }
+        public int Id { get; init; }
 
-        public DummyJob(int id)
-        {
-            Id = id;
-        }
+        public int ArrivalTime { get; init; }
+
+        public int ExitTime { get; set; }
+
+        public int ChildIndex { get; init; }
     }
 
     internal class BasicSchedulingGroup : SchedulingGroup<DummyJob>
@@ -38,10 +41,10 @@ namespace JobBank.Tests
             => base.TerminateChannelReader();
     }
 
-    public class UnitTest1
+    public partial class SchedulingTests
     {
         [Fact]
-        public async Task Test1()
+        public async Task WriteToChildQueuesInParallel()
         {
             var cancellationSource = new CancellationTokenSource();
             var cancellationToken = cancellationSource.Token;
@@ -82,7 +85,10 @@ namespace JobBank.Tests
                     while (!cancellationToken.IsCancellationRequested)
                     {
                         int newJobId = Interlocked.Increment(ref jobId);
-                        await writer.WriteAsync(new DummyJob(newJobId));
+                        await writer.WriteAsync(new DummyJob { 
+                            Id = jobId,
+                            ChildIndex = i
+                        });
                         await Task.Delay(random.Next(minValue: 5, maxValue: 250));
                     }
                 }, cancellationToken);

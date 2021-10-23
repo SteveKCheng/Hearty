@@ -24,7 +24,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="UnitTest1.cs" />
+    <Compile Include="SchedulingTests.Exact.cs" />
+    <Compile Include="SchedulingTests.Parallel.cs" />
   </ItemGroup>
 
   <ItemGroup>
