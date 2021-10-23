@@ -133,30 +133,25 @@ namespace JobBank.Utilities
                 if (Avx2.IsSupported)
                 {
                     Vector256<int> comparands = Avx2.LoadVector256(p);
+                    var targets = Vector256.Create(target);
 
                     int argMax = -1;
                     while (true)
                     {
-                        var targets = Vector256.Create(target);
                         var results = Avx2.CompareGreaterThan(comparands, targets);
-
-                        // Get the index, plus one, of the last element that is greater
                         var mask = (uint)Avx2.MoveMask(results.AsByte());
-                        uint k = (32 - Lzcnt.LeadingZeroCount(mask)) / sizeof(int);
 
                         // Quit loop when there is no greater comparand
-                        if (k == 0)
+                        if (mask == 0)
                             return argMax;
 
-                        // Quit loop when the greater comparand is unique
-                        int j = (int)k - 1;
-                        if (mask == (uint)(1 << j))
-                            return j;
+                        // Get the index of the last element that is greater
+                        int j = (int)((28 - Lzcnt.LeadingZeroCount(mask)) / sizeof(int));
 
                         // This may not be the maximum among all comparands, so we
                         // have to loop to re-compare.  If the key in the priority heap
                         // is not changing much, we should only loop around once or twice.
-                        target = p[j];
+                        targets = Avx2.BroadcastScalarToVector256(&p[j]);
                         argMax = j;
                     }
                 }
