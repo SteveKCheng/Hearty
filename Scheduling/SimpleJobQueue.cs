@@ -9,7 +9,7 @@ namespace JobBank.Scheduling
     /// A job queue, for the fair scheduling system, backed by 
     /// <see cref="ChannelReader{T}" />.
     /// </summary>
-    public class SimpleJobQueue<T> : SchedulingUnit<T> where T: ISchedulingExpense
+    public class SimpleJobQueue<T> : SchedulingFlow<T> where T: ISchedulingExpense
     {
         private readonly ChannelReader<T> _channelReader;
 

@@ -8,9 +8,9 @@ namespace JobBank.Scheduling
     {
         /// <summary>
         /// Adapts <see cref="SchedulingGroup{T}" /> to
-        /// <see cref="SchedulingUnit{T}" />.
+        /// <see cref="SchedulingFlow{T}" />.
         /// </summary>
-        private sealed class SourceImpl : SchedulingUnit<T>
+        private sealed class SourceImpl : SchedulingFlow<T>
         {
             /// <summary>
             /// The subgroup of queues where messages will
@@ -42,18 +42,18 @@ namespace JobBank.Scheduling
         }
 
         /// <summary>
-        /// Adapt this instance as a <see cref="SchedulingUnit{T}" />
+        /// Adapt this instance as a <see cref="SchedulingFlow{T}" />
         /// so that it can participate in a hierarchy of queues.
         /// </summary>
         /// <returns>
-        /// An instance of <see cref="SchedulingUnit{T}" />
+        /// An instance of <see cref="SchedulingFlow{T}" />
         /// that forwards the messages from the child queues
         /// that this instance manages.  There is only one instance
         /// even if multiple calls are made to this method, as it
         /// never makes sense to consume the same scheduling group
         /// from multiple clients.  
         /// </returns>
-        protected SchedulingUnit<T> AsSource()
+        protected SchedulingFlow<T> AsSource()
         {
             var toWakeUp = _toWakeUp;
             if (toWakeUp == null)

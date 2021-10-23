@@ -28,7 +28,7 @@ namespace JobBank.Scheduling
     /// to do that here.
     /// </para>
     /// </remarks>
-    public abstract class SchedulingUnit<T>
+    public abstract class SchedulingFlow<T>
     {
         /// <summary>
         /// Backing field for <see cref="Parent" />.
@@ -129,7 +129,7 @@ namespace JobBank.Scheduling
         /// <summary>
         /// Prepare a new child queue.
         /// </summary>
-        protected SchedulingUnit()
+        protected SchedulingFlow()
         {
             PriorityHeapIndex = -1;
             Weight = 1;

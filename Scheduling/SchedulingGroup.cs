@@ -28,7 +28,7 @@ namespace JobBank.Scheduling
         /// <remarks>
         /// Child queues that are inactive are not put into the priority queue.
         /// </remarks>
-        private IntPriorityHeap<SchedulingUnit<T>> _priorityHeap;
+        private IntPriorityHeap<SchedulingFlow<T>> _priorityHeap;
 
         /// <summary>
         /// Dummy object used for locking the state of this instance
@@ -43,8 +43,8 @@ namespace JobBank.Scheduling
             if (capacity < 0 || capacity > MaxCapacity)
                 throw new ArgumentOutOfRangeException(nameof(capacity));
 
-            _priorityHeap = new IntPriorityHeap<SchedulingUnit<T>>(
-                (ref SchedulingUnit<T> item, int index) => item.PriorityHeapIndex = index,
+            _priorityHeap = new IntPriorityHeap<SchedulingFlow<T>>(
+                (ref SchedulingFlow<T> item, int index) => item.PriorityHeapIndex = index,
                 capacity: capacity);
 
             SyncObject = new object();
@@ -80,7 +80,7 @@ namespace JobBank.Scheduling
             _priorityHeap.Initialize(_priorityHeap.Count, ref self_,
                 static (ref SchedulingGroup<T> self, 
                         in Span<int> keys,
-                        in Span<SchedulingUnit<T>> values) =>
+                        in Span<SchedulingFlow<T>> values) =>
                 {
                     int best_ = keys[0];
 
@@ -176,7 +176,7 @@ namespace JobBank.Scheduling
         /// <summary>
         /// Reset the weight on one child queue.
         /// </summary>
-        protected void ResetWeight(SchedulingUnit<T> child, int weight)
+        protected void ResetWeight(SchedulingFlow<T> child, int weight)
         {
             if (weight < 1 || weight > 100)
                 throw new ArgumentOutOfRangeException("The weight on a child queue is not between 1 to 100. ", (Exception?)null);
@@ -202,7 +202,7 @@ namespace JobBank.Scheduling
         /// cached data, so when many child queues need to have their
         /// weights reset, the changes should be batched together.
         /// </remarks>
-        protected void ResetWeights(IEnumerable<KeyValuePair<SchedulingUnit<T>, int>> items)
+        protected void ResetWeights(IEnumerable<KeyValuePair<SchedulingFlow<T>, int>> items)
         {
             // Defensive copy to avoid the values changing concurrently after
             // they are validated.
@@ -235,7 +235,7 @@ namespace JobBank.Scheduling
         /// The child scheduling unit.  This instance
         /// must be its parent.
         /// </param>
-        internal void ActivateChild(SchedulingUnit<T> child)
+        internal void ActivateChild(SchedulingFlow<T> child)
         {
             bool firstActivated = false;
 
@@ -289,7 +289,7 @@ namespace JobBank.Scheduling
         {
         }
 
-        private void DeactivateChildCore(SchedulingUnit<T> child)
+        private void DeactivateChildCore(SchedulingFlow<T> child)
         {
             if (child.IsActive)
             {
@@ -304,7 +304,7 @@ namespace JobBank.Scheduling
         /// <param name="child">
         /// The child scheduling unit.  This instance must be its parent.
         /// </param>
-        internal void DeactivateChild(SchedulingUnit<T> child)
+        internal void DeactivateChild(SchedulingFlow<T> child)
         {
             lock (SyncObject)
             {
@@ -326,13 +326,13 @@ namespace JobBank.Scheduling
         /// The child scheduling unit.  This instance must be its parent.
         /// </param>
         /// <param name="parentRef">
-        /// Reference to the field <see cref="SchedulingUnit{T}._parent" />.
+        /// Reference to the field <see cref="SchedulingFlow{T}._parent" />.
         /// It is nullified while locking the current (this) parent,
         /// so that <see cref="CheckCorrectParent" /> can reliably detect
         /// when the user attempted to change parents while executing
         /// another operation concurrently.
         /// </param>
-        internal void DeactivateChildAndDisown(SchedulingUnit<T> child, 
+        internal void DeactivateChildAndDisown(SchedulingFlow<T> child, 
                                                ref SchedulingGroup<T>? parentRef)
         {
             lock (SyncObject)
@@ -362,7 +362,7 @@ namespace JobBank.Scheduling
         /// <param name="debit">
         /// The amount to add to the child's debit balance.
         /// </param>
-        internal void AdjustChildBalance(SchedulingUnit<T> child, int debit)
+        internal void AdjustChildBalance(SchedulingFlow<T> child, int debit)
         {
             lock (SyncObject)
             {
@@ -396,7 +396,7 @@ namespace JobBank.Scheduling
         /// once this method checks successfully for that condition 
         /// initially upon taking the lock.
         /// </remarks>
-        private bool CheckCorrectParent(SchedulingUnit<T> child, bool optional)
+        private bool CheckCorrectParent(SchedulingFlow<T> child, bool optional)
         {
             var parent = child.Parent;
             if (!object.ReferenceEquals(parent, this))
@@ -426,7 +426,7 @@ namespace JobBank.Scheduling
         /// The child queue will start off as inactive for this
         /// scheduling group.
         /// </remarks>
-        protected void AdmitChild(SchedulingUnit<T> child, bool activate)
+        protected void AdmitChild(SchedulingFlow<T> child, bool activate)
         {
             if (child is SourceImpl sourceAdaptor &&
                 object.ReferenceEquals(sourceAdaptor.Subgroup, this))
@@ -468,13 +468,13 @@ namespace JobBank.Scheduling
         /// <param name="child">The child queue that the balances to update
         /// apply to.
         /// </param>
-        private void UpdateForAverageBalance(SchedulingUnit<T> child, 
+        private void UpdateForAverageBalance(SchedulingFlow<T> child, 
                                              int oldBalance, 
                                              int newBalance)
         {
-            static long GetUnweightedBalance(SchedulingUnit<T> child, int balance)
+            static long GetUnweightedBalance(SchedulingFlow<T> child, int balance)
                 => ((long)balance * child.ReciprocalWeight) 
-                    >> SchedulingUnit<T>.ReciprocalWeightLogScale;
+                    >> SchedulingFlow<T>.ReciprocalWeightLogScale;
 
             long sum = _sumUnweightedBalances;
             sum -= oldBalance > 0 ? GetUnweightedBalance(child, oldBalance) : 0;
@@ -491,7 +491,7 @@ namespace JobBank.Scheduling
         /// </summary>
         /// <param name="weight">
         /// The weight to apply to the returned balance,
-        /// same as <see cref="SchedulingUnit{T}.Weight" />
+        /// same as <see cref="SchedulingFlow{T}.Weight" />
         /// for the new child queue.
         /// </param>
         /// <returns>

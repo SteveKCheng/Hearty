@@ -31,7 +31,7 @@ namespace JobBank.Tests
         {
         }
 
-        public void AdmitChild(SchedulingUnit<DummyJob> child)
+        public void AdmitChild(SchedulingFlow<DummyJob> child)
             => base.AdmitChild(child, activate: true);
 
         public new ChannelReader<DummyJob> AsChannelReader()
