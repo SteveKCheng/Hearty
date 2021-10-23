@@ -85,6 +85,12 @@ namespace JobBank.Tests
             for (int i = 0; i < allJobs.Length; ++i)
                 allJobs[i] = new List<DummyJob>(capacity: jobCount / allJobs.Length);
 
+            // There will be no more items added to child queues
+            parent.TerminateChannelReader();
+
+            // ... but we can still de-queue already added items
+            Assert.False(parentReader.Completion.IsCompleted);
+
             // Dequeue jobs from parent and keep track of time
             {
                 int currentTime = -1;
@@ -92,6 +98,9 @@ namespace JobBank.Tests
 
                 for (int jobIndex = 0; jobIndex < jobCount; ++jobIndex)
                 {
+                    Assert.True(await parentReader.WaitToReadAsync());
+
+                    // Ensure all the jobs we put in are there
                     bool hasJob = parentReader.TryRead(out var job);
                     Assert.True(hasJob);
 
@@ -105,7 +114,14 @@ namespace JobBank.Tests
                     allJobs[job.ChildIndex].Add(job);
                 }
 
+                // Ensure there are no stray items (due to bugs in de-queuing)
                 Assert.False(parentReader.TryRead(out _));
+
+                // Channel should be signaling completion immediately
+                var waitReadTask = parentReader.WaitToReadAsync();
+                Assert.True(waitReadTask.IsCompletedSuccessfully &&
+                            waitReadTask.Result == false);
+                Assert.True(parentReader.Completion.IsCompletedSuccessfully);
             }
 
             for (int childIndex = 0; childIndex < allJobs.Length; ++childIndex)
