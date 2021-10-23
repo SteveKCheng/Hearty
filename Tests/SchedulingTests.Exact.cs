@@ -43,6 +43,8 @@ namespace JobBank.Tests
 
             double theoWaitMean = 200.0;
 
+            var allJobsTogether = new List<DummyJob>(capacity: jobCount);
+
             // Generate jobs to queue into children
             {
                 var randomGenerators = new Func<double>[childWriters.Length];
@@ -70,20 +72,25 @@ namespace JobBank.Tests
                     var waitTime = (int)Math.Round(randomGenerators[childIndex]());
                     priorityHeap.Insert(time - waitTime, childIndex);
 
-                    await childWriters[childIndex].WriteAsync(
-                        new DummyJob { 
-                            Id = jobIndex,
-                            ChildIndex = childIndex,
-                            ArrivalTime = -time,
-                            InitialCharge = waitTime
-                        });
+                    var job = new DummyJob
+                    {
+                        Id = jobIndex,
+                        ChildIndex = childIndex,
+                        ArrivalTime = -time,
+                        InitialCharge = waitTime
+                    };
+
+                    // Keep jobs in one big sorted list for debugging
+                    allJobsTogether.Add(job);
+
+                    await childWriters[childIndex].WriteAsync(job);
                 }
             }
 
             var parentReader = parent.AsChannelReader();
-            var allJobs = new List<DummyJob>[childWriters.Length];
-            for (int i = 0; i < allJobs.Length; ++i)
-                allJobs[i] = new List<DummyJob>(capacity: jobCount / allJobs.Length);
+            var jobsByChild = new List<DummyJob>[childWriters.Length];
+            for (int i = 0; i < jobsByChild.Length; ++i)
+                jobsByChild[i] = new List<DummyJob>(capacity: jobCount / jobsByChild.Length);
 
             // There will be no more items added to child queues
             parent.TerminateChannelReader();
@@ -111,7 +118,7 @@ namespace JobBank.Tests
                     currentTime += job.InitialCharge;
                     job.ExitTime = currentTime;
 
-                    allJobs[job.ChildIndex].Add(job);
+                    jobsByChild[job.ChildIndex].Add(job);
                 }
 
                 // Ensure there are no stray items (due to bugs in de-queuing)
@@ -124,9 +131,9 @@ namespace JobBank.Tests
                 Assert.True(parentReader.Completion.IsCompletedSuccessfully);
             }
 
-            for (int childIndex = 0; childIndex < allJobs.Length; ++childIndex)
+            for (int childIndex = 0; childIndex < jobsByChild.Length; ++childIndex)
             {
-                var jobs = allJobs[childIndex];
+                var jobs = jobsByChild[childIndex];
                 var arrivalWaitTimes = GetSuccessiveDifferences(jobs.Select(item => (double)item.ArrivalTime)).ToList();
                 var exitWaitTimes = GetSuccessiveDifferences(jobs.Select(item => (double)item.ExitTime)).ToList();
 
@@ -152,8 +159,9 @@ namespace JobBank.Tests
                 Assert.InRange(arrivalWaitMean, low, high);
 
                 // Expected range of sample mean of exit wait times
-                // should be allJobs.Length× because the jobs are all "executed" in serial.
-                Assert.InRange(exitWaitMean, low * allJobs.Length, high * allJobs.Length);
+                // should be allJobs.Length × because the jobs are all "executed" in serial.
+                // This is a weak test that all child flows are being de-queued fairly.
+                Assert.InRange(exitWaitMean, low * jobsByChild.Length, high * jobsByChild.Length);
             }
         }
 
