@@ -118,39 +118,62 @@ namespace JobBank.Utilities
         /// or equal than <paramref name="target" />.
         /// </returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int CompareForKeysGreaterThan(int target, int[] keys, int startIndex)
+        private static unsafe int CompareForKeysGreaterThan(int target, int[] keys, int startIndex)
         {
-            if (Avx2.IsSupported)
+            // Check the index manually in case the data is inconsistent 
+            // because of (abusive) struct tearing from the user, as the
+            // check is not implied from the unsafe code below.
+            if (startIndex + Ways > keys.Length)
+                throw new ArgumentOutOfRangeException(nameof(startIndex), "Index is not valid for the keys array. ");
+
+            fixed (int* p0 = keys)
             {
-                // Check the index manually in case the data is inconsistent 
-                // because of (abusive) struct tearing from the user, as the
-                // check is not implied from the unsafe code below.
-                if (startIndex + Ways > keys.Length)
-                    throw new ArgumentOutOfRangeException(nameof(startIndex), "Index is not valid for the keys array. ");
+                int* p = p0 + startIndex;
 
-                Vector256<int> comparands;
-                unsafe
+                if (Avx2.IsSupported)
                 {
-                    fixed (int* p = keys)
-                        comparands = Avx2.LoadVector256(p + startIndex);
+                    Vector256<int> comparands = Avx2.LoadVector256(p);
+
+                    int argMax = -1;
+                    while (true)
+                    {
+                        var targets = Vector256.Create(target);
+                        var results = Avx2.CompareGreaterThan(comparands, targets);
+
+                        // Get the index, plus one, of the last element that is greater
+                        var mask = (uint)Avx2.MoveMask(results.AsByte());
+                        uint k = (32 - Lzcnt.LeadingZeroCount(mask)) / sizeof(int);
+
+                        // Quit loop when there is no greater comparand
+                        if (k == 0)
+                            return argMax;
+
+                        // Quit loop when the greater comparand is unique
+                        int j = (int)k - 1;
+                        if (mask == (uint)(1 << j))
+                            return j;
+
+                        // This may not be the maximum among all comparands, so we
+                        // have to loop to re-compare.  If the key in the priority heap
+                        // is not changing much, we should only loop around once or twice.
+                        target = p[j];
+                        argMax = j;
+                    }
                 }
-
-                var targets = Vector256.Create(target);
-                var results = Avx2.CompareGreaterThan(comparands, targets);
-
-                var mask = (uint)Avx2.MoveMask(results.AsByte());
-                uint j = (32 - Lzcnt.LeadingZeroCount(mask)) / sizeof(int);
-                return (int)j - 1;
-            }
-            else
-            {
-                for (int j = 0; j < Ways; ++j)
+                else
                 {
-                    if (keys[startIndex + j] > target)
-                        return j;
-                }
+                    int max = p[0];
+                    int argMax = 0;
+                    for (int j = 1; j < Ways; ++j)
+                    {
+                        int comparand = p[j];
+                        bool isGreater = (comparand > max);
+                        max = isGreater ? comparand : max;
+                        argMax = isGreater ? j : argMax;
+                    }
 
-                return -1;
+                    return argMax;
+                }
             }
         }
 
