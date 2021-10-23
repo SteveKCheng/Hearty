@@ -83,9 +83,13 @@ namespace JobBank.Scheduling
         private int _weight;
 
         /// <summary>
-        /// Backing field for <see cref="ReciprocalWeight" />.
+        /// The reciprocal of the weight multiplied by 2^20.
         /// </summary>
-        private int _reciprocalWeight;
+        /// <remarks>
+        /// This quantity is cached only to avoid expensive integer
+        /// division when updating averages of unweighted balances.
+        /// </remarks>
+        private int _inverseWeight;
 
         /// <summary>
         /// A weight that is multiplies the amount of credits this child queue
@@ -100,20 +104,27 @@ namespace JobBank.Scheduling
             internal set
             {
                 _weight = value;
-                _reciprocalWeight = (1 << ReciprocalWeightLogScale) / value;
+                _inverseWeight = (1 << InverseWeightLogScale) / value;
             }
         }
 
-        internal const int ReciprocalWeightLogScale = 20;
+        /// <summary>
+        /// Log to the base 2 of the scaling factor applied to
+        /// <see cref="_inverseWeight" />.
+        /// </summary>
+        private const int InverseWeightLogScale = 20;
 
         /// <summary>
-        /// The reciprocal of the weight multiplied by 2^20.
+        /// Compute a charge to this queue's balance 
+        /// adjusted for "inflation" or "deflation",
+        /// depending on the weight.
         /// </summary>
         /// <remarks>
-        /// This quantity is cached only to avoid expensive integer
-        /// division when updating averages of unweighted balances.
+        /// This arithmetic is done in "half 64-bit", which has
+        /// has essentially no penalty in modern CPUs.
         /// </remarks>
-        internal int ReciprocalWeight => _reciprocalWeight;
+        internal long ComputeDeflatedCharge(int charge)
+            => ((long)charge * _inverseWeight) >> InverseWeightLogScale;
 
         /// <summary>
         /// Set to true when <see cref="Activate" /> is called.

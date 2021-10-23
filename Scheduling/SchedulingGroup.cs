@@ -74,7 +74,7 @@ namespace JobBank.Scheduling
                 return true;
 
             _countPositiveBalances = 0;
-            _sumUnweightedBalances = 0;
+            _sumBalances = 0;
 
             var self_ = this;
             _priorityHeap.Initialize(_priorityHeap.Count, ref self_,
@@ -91,16 +91,14 @@ namespace JobBank.Scheduling
 
                         // Brings the "best" child queue to have a zero balance,
                         // while everything else remains zero or negative.
-                        int newBalance = MiscArithmetic.SaturatingSubtract(child.Balance, 
-                                                                           best_);
-
-                        // Then add credits to the queue depending on its weight.
-                        newBalance += 10000 * child.Weight;
+                        // Then add an set amount of credits for the "time slice".
+                        int newBalance = MiscArithmetic.SaturateToInt(
+                                            (long)child.Balance - best_ + 10000);
 
                         child.Balance = newBalance;
                         keys[i] = newBalance;
 
-                        self.UpdateForAverageBalance(child, 0, newBalance);
+                        self.UpdateForAverageBalance(0, newBalance);
                     }
 
                     return keys.Length;
@@ -147,13 +145,15 @@ namespace JobBank.Scheduling
                     if (hasItem)
                     {
                         int oldBalance = child.Balance;
-                        int newBalance = MiscArithmetic.SaturatingSubtract(oldBalance, charge);
+
+                        long deflatedCharge = child.ComputeDeflatedCharge(charge);
+                        int newBalance = MiscArithmetic.SaturateToInt(oldBalance - deflatedCharge);
                         child.Balance = newBalance;
 
                         if (child.IsActive)
                         {
                             _priorityHeap.ChangeKey(child.PriorityHeapIndex, newBalance);
-                            UpdateForAverageBalance(child, oldBalance, newBalance);
+                            UpdateForAverageBalance(oldBalance, newBalance);
                         }
 
                         // CS8762: Parameter must have a non-null value when exiting in some condition.
@@ -248,9 +248,9 @@ namespace JobBank.Scheduling
 
                 if (!child.IsActive)
                 {
-                    child.Balance = GetAverageBalance(child.Weight);
+                    child.Balance = GetAverageBalance();
                     _priorityHeap.Insert(child.Balance, child);
-                    UpdateForAverageBalance(child, 0, child.Balance);
+                    UpdateForAverageBalance(0, child.Balance);
 
                     firstActivated = (CountActiveSources == 1);
                 }
@@ -294,7 +294,7 @@ namespace JobBank.Scheduling
             if (child.IsActive)
             {
                 _priorityHeap.Delete(child.PriorityHeapIndex);
-                UpdateForAverageBalance(child, child.Balance, 0);
+                UpdateForAverageBalance(child.Balance, 0);
             }
         }
 
@@ -370,15 +370,16 @@ namespace JobBank.Scheduling
                     return;
 
                 int oldBalance = child.Balance;
-                int newBalance = MiscArithmetic.SaturatingAdd(oldBalance, debit);
+                long deflatedDebit = child.ComputeDeflatedCharge(debit);
+                int newBalance = MiscArithmetic.SaturateToInt(
+                                    (long)oldBalance + deflatedDebit);
+                child.Balance = newBalance;
 
                 if (child.IsActive)
                 {
                     _priorityHeap.ChangeKey(child.PriorityHeapIndex, newBalance);
-                    UpdateForAverageBalance(child, oldBalance, newBalance);
+                    UpdateForAverageBalance(oldBalance, newBalance);
                 }
-
-                child.Balance = newBalance;
             }
 
             if (_toWakeUp is SourceImpl sourceAdaptor)
@@ -438,7 +439,7 @@ namespace JobBank.Scheduling
         }
 
         /// <summary>
-        /// The sum of unweighted balances that are positive
+        /// The sum of balances that are positive
         /// from active child queues.
         /// </summary>
         /// <remarks>
@@ -446,10 +447,10 @@ namespace JobBank.Scheduling
         /// so that the average can be computed in O(1) time
         /// when new child queues are added.
         /// </remarks>
-        private long _sumUnweightedBalances;
+        private long _sumBalances;
 
         /// <summary>
-        /// The number of positive balances summed inside <see cref="_sumUnweightedBalances" />.
+        /// The number of positive balances summed inside <see cref="_sumBalances" />.
         /// </summary>
         /// <remarks>
         /// This is the denominator used to calculate the average balance.
@@ -465,21 +466,12 @@ namespace JobBank.Scheduling
         /// <param name="newBalance">The new balance to add to the running
         /// average.
         /// </param>
-        /// <param name="child">The child queue that the balances to update
-        /// apply to.
-        /// </param>
-        private void UpdateForAverageBalance(SchedulingFlow<T> child, 
-                                             int oldBalance, 
-                                             int newBalance)
+        private void UpdateForAverageBalance(int oldBalance, int newBalance)
         {
-            static long GetUnweightedBalance(SchedulingFlow<T> child, int balance)
-                => ((long)balance * child.ReciprocalWeight) 
-                    >> SchedulingFlow<T>.ReciprocalWeightLogScale;
-
-            long sum = _sumUnweightedBalances;
-            sum -= oldBalance > 0 ? GetUnweightedBalance(child, oldBalance) : 0;
-            sum += newBalance > 0 ? GetUnweightedBalance(child, newBalance) : 0;
-            _sumUnweightedBalances = sum;
+            long sum = _sumBalances;
+            sum -= oldBalance > 0 ? oldBalance : 0;
+            sum += newBalance > 0 ? newBalance : 0;
+            _sumBalances = sum;
 
             _countPositiveBalances += (newBalance > 0 ? 1 : 0) 
                                     - (oldBalance > 0 ? 1 : 0);
@@ -489,23 +481,17 @@ namespace JobBank.Scheduling
         /// Return the running average of positive balances among
         /// all active child queues.
         /// </summary>
-        /// <param name="weight">
-        /// The weight to apply to the returned balance,
-        /// same as <see cref="SchedulingFlow{T}.Weight" />
-        /// for the new child queue.
-        /// </param>
         /// <returns>
         /// The suggested balance to set on a new child queue, based
         /// on the running average.
         /// </returns>
-        private int GetAverageBalance(int weight)
+        private int GetAverageBalance()
         {
             if (_countPositiveBalances <= 0)
-                return 10000 * weight;
+                return 10000;
 
-            long unweightedBalance = _sumUnweightedBalances / _countPositiveBalances;
-            long balance = unweightedBalance * weight;
-            return balance <= int.MaxValue ? (int)balance : int.MaxValue;
+            long averageBalance = _sumBalances / _countPositiveBalances;
+            return (int)averageBalance;
         }
     }
 }

@@ -69,5 +69,38 @@ namespace JobBank.Scheduling
             return (int)((ux ^ uy) & (ux ^ uz)) >= 0 ? (int)uz
                                                      : (int)uw;
         }
+
+        /// <summary>
+        /// Cap the magnitude of a 64-bit signed integer so that
+        /// it can be stored as a 32-bit signed integer.
+        /// </summary>
+        /// <param name="number">
+        /// The 64-bit signed integer as input.
+        /// </param>
+        /// <returns>
+        /// <paramref name="number"/> casted as 32-bit if its
+        /// value remains unchanged; otherwise the result is
+        /// <see cref="int.MaxValue"/> or <see cref="int.MinValue"/>
+        /// depending on the value being positive or negative,
+        /// respectively.
+        /// </returns>
+        public static int SaturateToInt(long number)
+        {
+            // High 32-bit word of number
+            uint uh = (uint)((ulong)number >> 32);
+
+            // Low 32-bit word of number
+            uint ul = (uint)((ulong)number & 0xFFFFFFFF);
+
+            // Calculate the result if there is overflow:
+            //   number >= 0 ? int.MaxValue : int.MinValue
+            uint uo = (uh >> 31) + (uint)int.MaxValue;
+
+            // number is not overflowing the capacity of Int32
+            // if and only if: 
+            //   Ⓐ when it is >= 0, then uh is 0; or
+            //   Ⓑ when it is < 0, then uh is -1.
+            return uh == unchecked(0 - (ul >> 31)) ? (int)ul : (int)uo;
+        }
     }
 }
