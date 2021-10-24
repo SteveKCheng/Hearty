@@ -201,13 +201,28 @@ namespace JobBank.Server
             _currentExpiredTargets = new T[10];
 
             // Create striped locks
-            uint countLockObjects = BitOperations.RoundUpToPowerOf2((uint)Environment.ProcessorCount);
+            uint countLockObjects = RoundUpToPowerOf2((uint)Environment.ProcessorCount);
             countLockObjects = Math.Min(countLockObjects, 1024);
             var targetLockObjects = new object[countLockObjects];
             targetLockObjects[0] = targetLockObjects;
             for (uint i = 1; i < countLockObjects; ++i)
                 targetLockObjects[i] = new object();
             _targetLockObjects = targetLockObjects;
+        }
+
+        private static uint RoundUpToPowerOf2(uint value)
+        {
+#if NET6_0
+            return BitOperations.RoundUpToPowerOf2(value);
+#else
+            --value;
+            value |= value >> 1;
+            value |= value >> 2;
+            value |= value >> 4;
+            value |= value >> 8;
+            value |= value >> 16;
+            return value + 1;
+#endif
         }
 
         /// <summary>
