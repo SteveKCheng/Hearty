@@ -128,7 +128,7 @@ namespace JobBank.Server
             httpResponse.StatusCode = StatusCodes.Status303SeeOther;
             httpResponse.Headers.Add("x-promise-id", promiseId.ToString());
 
-            httpResponse.Headers.Location = $"/jobs/v1/id/{promiseId.ServiceId:X8}/{promiseId.SequenceNumber}";
+            httpResponse.Headers.Add("location", $"/jobs/v1/id/{promiseId.ServiceId:X8}/{promiseId.SequenceNumber}");
         }
 
         /// <summary>
