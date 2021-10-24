@@ -26,7 +26,6 @@
     <Compile Include="JobsHttpExtensions.cs" />
     <Compile Include="PayloadTooLargeException.cs" />
     <Compile Include="Program.cs" />
-    <Compile Include="SegmentedArrayBufferWriter.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -7,6 +7,7 @@ using System.Text;
 using System.IO;
 using System.Threading;
 using System.Buffers;
+using JobBank.Utilities;
 
 namespace JobBank.Server
 {

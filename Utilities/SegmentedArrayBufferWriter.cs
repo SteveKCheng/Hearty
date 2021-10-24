@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Buffers;
 
-namespace JobBank.Server
+namespace JobBank.Utilities
 {
     /// <summary>
     /// Manages a linked list of managed arrays to sequentially store data of 

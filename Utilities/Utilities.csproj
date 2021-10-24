@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <Compile Include="IntPriorityHeap.cs" />
+    <Compile Include="SegmentedArrayBufferWriter.cs" />
     <Compile Include="ValueTaskContinuation.cs" />
   </ItemGroup>
   
