@@ -52,14 +52,14 @@ namespace JobBank.Server
         {
             var newId = new PromiseId(Interlocked.Increment(ref _currentId));
 
-            InvokeOnStorageEvent(new EventArgs { Type = OperationType.Create, PromiseId = newId });
-
             var currentTime = DateTime.UtcNow;
             var promise = new Promise(currentTime, newId);
             var expiryTime = GetDefaultPromiseExpiryTime(currentTime);
 
             if (!_promisesById.TryAdd(newId, promise))
                 throw new InvalidOperationException("The promise with the newly generated ID already exists.  This should not happen. ");
+
+            InvokeOnStorageEvent(new EventArgs { Type = OperationType.Create, PromiseId = newId });
 
             _expiryQueue.ChangeExpiry(promise, expiryTime, SetPromiseExpiryDelegate);
             return promise;
