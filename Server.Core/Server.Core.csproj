@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <RootNamespace>JobBank.Server</RootNamespace>
+    <DisableImplicitNamespaceImports>true</DisableImplicitNamespaceImports>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultContentItems>false</EnableDefaultContentItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="BasicPromiseStorage.cs" />
+    <Compile Include="CancellationPool.cs" />
+    <Compile Include="CircularListNode.cs" />
+    <Compile Include="ExpiryQueue.cs" />
+    <Compile Include="InMemoryPathsDirectory.cs" />
+    <Compile Include="IPromiseClientInfo.cs" />
+    <Compile Include="PathsDirectory.cs" />
+    <Compile Include="Payload.cs" />
+    <Compile Include="Promise.cs" />
+    <Compile Include="Promise.Subscription.cs" />
+    <Compile Include="PromiseException.cs" />
+    <Compile Include="PromiseId.cs" />
+    <Compile Include="PromiseOutput.cs" />
+    <Compile Include="PromisePath.cs" />
+    <Compile Include="PromiseStorage.cs" />
+    <Compile Include="SubscribedResult.cs" />
+    <Compile Include="Subscription.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="GoldSaucer.BTree" Version="0.2.1" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="5.0.0" />
+    <PackageReference Include="System.IO.Pipelines" Version="6.0.0-rc.2.21480.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utilities\Utilities.csproj" />
+  </ItemGroup>
+
+</Project>

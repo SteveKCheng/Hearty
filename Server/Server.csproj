@@ -20,33 +20,17 @@
     </Content>
     <None Include="Properties\launchSettings.json" />
     <Compile Include="BasicPromiseClientInfo.cs" />
-    <Compile Include="BasicPromiseStorage.cs" />
-    <Compile Include="CancellationPool.cs" />
-    <Compile Include="CircularListNode.cs" />
-    <Compile Include="ExpiryQueue.cs" />
     <Compile Include="ExpiryTimeSpan.cs" />
-    <Compile Include="InMemoryPathsDirectory.cs" />
-    <Compile Include="IPromiseClientInfo.cs" />
     <Compile Include="JobsServerConfiguration.cs" />
     <Compile Include="JobExecutor.cs" />
     <Compile Include="JobsHttpExtensions.cs" />
-    <Compile Include="PathsDirectory.cs" />
-    <Compile Include="Payload.cs" />
     <Compile Include="PayloadTooLargeException.cs" />
     <Compile Include="Program.cs" />
-    <Compile Include="Promise.cs" />
-    <Compile Include="Promise.Subscription.cs" />
-    <Compile Include="PromiseException.cs" />
-    <Compile Include="PromiseId.cs" />
-    <Compile Include="PromisePath.cs" />
-    <Compile Include="PromiseStorage.cs" />
     <Compile Include="SegmentedArrayBufferWriter.cs" />
-    <Compile Include="SubscribedResult.cs" />
-    <Compile Include="PromiseOutput.cs" />
-    <Compile Include="Subscription.cs" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Server.Core\Server.Core.csproj" />
     <ProjectReference Include="..\Utilities\Utilities.csproj" />
   </ItemGroup>
 

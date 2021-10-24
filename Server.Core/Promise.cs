@@ -93,8 +93,9 @@ namespace JobBank.Server
         /// Awaits, in the background, for a job's result object to be published,
         /// and then forwards notifications to waiting subscribers.
         /// </summary>
-        internal void AwaitAndPostResult(in ValueTask<PromiseOutput> task)
+        public void AwaitAndPostResult(in ValueTask<PromiseOutput> task)
         {
+            // FIXME Should this method be internal?
             _ = PostResultAsync(task);
         }
 
