@@ -86,21 +86,29 @@ namespace JobBank.Scheduling
         /// </returns>
         public static int SaturateToInt(long number)
         {
-            // High 32-bit word of number
-            uint uh = (uint)((ulong)number >> 32);
+            unchecked
+            {
+                // High 32-bit word of number
+                uint uh = (uint)((ulong)number >> 32);
 
-            // Low 32-bit word of number
-            uint ul = (uint)((ulong)number & 0xFFFFFFFF);
+                // Low 32-bit word of number
+                uint ul = (uint)(ulong)number;
 
-            // Calculate the result if there is overflow:
-            //   number >= 0 ? int.MaxValue : int.MinValue
-            uint uo = (uh >> 31) + (uint)int.MaxValue;
+                // Calculate the result if there is overflow:
+                //   number >= 0 ? int.MaxValue : int.MinValue
+                uint uo = (uh >> 31) + (uint)int.MaxValue;
 
-            // number is not overflowing the capacity of Int32
-            // if and only if: 
-            //   Ⓐ when it is >= 0, then uh is 0; or
-            //   Ⓑ when it is < 0, then uh is -1.
-            return uh == unchecked(0 - (ul >> 31)) ? (int)ul : (int)uo;
+                // number is not overflowing the capacity of Int32
+                // if and only if: 
+                //   Ⓐ when it is >= 0, then uh is 0; or
+                //   Ⓑ when it is < 0, then uh is -1.
+                //
+                // Unfortunately, while the GNU C/C++ compiler and
+                // Clang do translate the following statement to
+                // a conditional move instruction, RyuJit translates
+                // to a conditional branch.
+                return uh + (ul >> 31) == 0 ? (int)ul : (int)uo;
+            }
         }
     }
 }
