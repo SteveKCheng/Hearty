@@ -46,8 +46,19 @@ namespace JobBank.Server
         }
 
         /// <inheritdoc />
-        public override IEnumerable<KeyValuePair<PromisePath, PromiseId>> ListSubpaths(PromisePath folder)
+        public override IReadOnlyList<KeyValuePair<PromisePath, PromiseId>>
+            ListSubpaths(PromisePath startPath, int suggestedCount)
         {
+            /*
+            _btreeLock.EnterReadLock();
+            try
+            {
+                // _btree.GetEnumerator()
+            }
+            finally
+            {
+                _btreeLock.ExitReadLock();
+            }*/
             throw new NotImplementedException();
         }
 

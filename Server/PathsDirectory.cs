@@ -41,7 +41,7 @@ namespace JobBank.Server
         /// <summary>
         /// List all the sub-paths registered under a folder path.
         /// </summary>
-        public abstract IEnumerable<KeyValuePair<PromisePath, PromiseId>> 
-            ListSubpaths(PromisePath folder);
+        public abstract IReadOnlyList<KeyValuePair<PromisePath, PromiseId>>
+            ListSubpaths(PromisePath startPath, int suggestedCount);
     }
 }
