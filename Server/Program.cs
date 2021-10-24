@@ -43,7 +43,6 @@ namespace JobBank.Server
             app.UseRouting();
             app.UseEndpoints(endpoints =>
             {
-                endpoints.MapGet("/", () => "Hello World!");
                 endpoints.MapPostJob(jobsServerConfig, "pricing", async (JobInput input, PromiseId promiseId) => 
                 {
                     using var stream = input.PipeReader.AsStream();
