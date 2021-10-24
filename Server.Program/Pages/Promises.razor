@@ -1,0 +1,46 @@
+﻿@page "/promises"
+
+@using JobBank.Server.Program.Data 
+@inject PromiseStorage _promiseStorage
+
+<h1>Promises</h1>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Creation Time</th>
+        </tr>
+    </thead>
+
+    <tbody>
+        @lock (_promiseIds)
+        {
+            foreach (var promiseId in _promiseIds)
+            {
+                var promise = _promiseStorage.GetPromiseById(promiseId);
+                <tr>
+                    <td>@promiseId</td>
+                    <td>@promise.CreationTime</td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>
+
+@code {
+    private List<PromiseId> _promiseIds = new();
+
+    protected override void OnInitialized()
+    {
+        _promiseStorage.OnStorageEvent += (sender, args) =>
+        {
+            lock (_promiseIds)
+            {
+                _promiseIds.Add(args.PromiseId);
+            }
+
+            InvokeAsync(() => StateHasChanged());
+        };
+    }
+}
