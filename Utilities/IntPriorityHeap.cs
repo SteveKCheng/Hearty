@@ -133,27 +133,28 @@ namespace JobBank.Utilities
                 if (Avx2.IsSupported)
                 {
                     Vector256<int> comparands = Avx2.LoadVector256(p);
-                    var targets = Vector256.Create(target);
 
-                    int argMax = -1;
-                    while (true)
-                    {
-                        var results = Avx2.CompareGreaterThan(comparands, targets);
-                        var mask = (uint)Avx2.MoveMask(results.AsByte());
+                    // Find the maximum of the 8 elements in the SIMD packet
+                    // in log_2(8) = 3 steps:
+                    //
+                    // ❶ Take maximum against adjacent element, in each of 4 pairs
+                    // ❷ Take maximum against adjacent pair, inside the low and high
+                    //   128-bit sub-packets
+                    // ❸ Take maximum of the low and high 128-bit sub-packets
+                    Vector256<int> v = comparands;
+                    v = Avx2.Max(v, Avx2.Shuffle(v, 0xB1));
+                    v = Avx2.Max(v, Avx2.Shuffle(v, 0x4E));
+                    v = Avx2.Max(v, Avx2.Permute2x128(v, v, 0x01));
 
-                        // Quit loop when there is no greater comparand
-                        if (mask == 0)
-                            return argMax;
+                    // Further take the maximum against the target key
+                    v = Avx2.Max(v, Vector256.Create(target));
 
-                        // Get the index of the last element that is greater
-                        int j = (int)((28 - Lzcnt.LeadingZeroCount(mask)) / sizeof(int));
-
-                        // This may not be the maximum among all comparands, so we
-                        // have to loop to re-compare.  If the key in the priority heap
-                        // is not changing much, we should only loop around once or twice.
-                        targets = Avx2.BroadcastScalarToVector256(&p[j]);
-                        argMax = j;
-                    }
+                    // Get the index of the element that is equal to the maximum, or
+                    // -1 if the maximum is target and it is greater than all 8 elements.
+                    var comparison = Avx2.CompareEqual(v, comparands);
+                    var mask = (uint)Avx2.MoveMask(comparison.AsByte());
+                    int j = (28 - (int)Lzcnt.LeadingZeroCount(mask)) >> 2;
+                    return j;
                 }
                 else
                 {
