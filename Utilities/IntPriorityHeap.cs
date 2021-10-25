@@ -157,14 +157,18 @@ namespace JobBank.Utilities
                 }
                 else
                 {
-                    int max = p[0];
-                    int argMax = 0;
-                    for (int j = 1; j < Ways; ++j)
+                    int max = target;
+                    int argMax = -1;
+                    for (int j = 0; j < Ways; ++j)
                     {
                         int comparand = p[j];
-                        bool isGreater = (comparand > max);
-                        max = isGreater ? comparand : max;
-                        argMax = isGreater ? j : argMax;
+
+                        // Include equality so that argMax is consistent
+                        // with the AVX2 implementation
+                        bool isMax = (comparand >= max);
+
+                        max = isMax ? comparand : max;
+                        argMax = isMax ? j : argMax;
                     }
 
                     return argMax;
