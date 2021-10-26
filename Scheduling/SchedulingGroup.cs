@@ -209,7 +209,7 @@ namespace JobBank.Scheduling
         /// <summary>
         /// Reset the weight on one child queue.
         /// </summary>
-        protected void ResetWeight(SchedulingFlow<T> child, int weight)
+        protected void ResetWeight(SchedulingFlow<T> child, int weight, bool reset)
         {
             if (weight < 1 || weight > 128)
                 throw new ArgumentOutOfRangeException("The weight on a child queue is not between 1 to 100. ", (Exception?)null);
@@ -223,7 +223,8 @@ namespace JobBank.Scheduling
 
                 child.Weight = weight;
 
-                EnsureBalancesRefilled(reset: true);
+                if (reset)
+                    EnsureBalancesRefilled(reset: true);
             }
         }
 
@@ -235,7 +236,8 @@ namespace JobBank.Scheduling
         /// cached data, so when many child queues need to have their
         /// weights reset, the changes should be batched together.
         /// </remarks>
-        protected void ResetWeights(IEnumerable<KeyValuePair<SchedulingFlow<T>, int>> items)
+        protected void ResetWeights(IEnumerable<KeyValuePair<SchedulingFlow<T>, int>> items,
+                                    bool reset)
         {
             // Defensive copy to avoid the values changing concurrently after
             // they are validated.
@@ -256,7 +258,8 @@ namespace JobBank.Scheduling
                 foreach (var (child, weight) in itemsArray)
                     child.Weight = weight;
 
-                EnsureBalancesRefilled(reset: true);
+                if (reset)
+                    EnsureBalancesRefilled(reset: true);
             }
         }
 
