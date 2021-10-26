@@ -228,9 +228,13 @@ namespace JobBank.Scheduling
         /// </param>
         /// <remarks>
         /// If this method has no effect if there is currently no
-        /// parent scheduling group.
+        /// parent scheduling group.  However, it does have an effect
+        /// even if this scheduling flow is inactive: the adjusted
+        /// balance will affect how it is prioritized against sibling
+        /// scheduling flows when it becomes active again.
         /// </remarks>
-        protected void AdjustBalance(int debit) => Parent?.AdjustChildBalance(this, debit);
+        protected void AdjustBalance(int debit) 
+            => Parent?.AdjustChildBalance(this, debit);
 
         /// <summary>
         /// Stop becoming activated as a child queue of a parent scheduling group.

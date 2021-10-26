@@ -112,9 +112,6 @@ namespace JobBank.Scheduling
             if (best > 0 && !reset)
                 return true;
 
-            _countPositiveBalances = 0;
-            _sumBalances = 0;
-
             var self_ = this;
             _priorityHeap.Initialize(_priorityHeap.Count, ref self_,
                 static (ref SchedulingGroup<T> self, 
@@ -133,12 +130,11 @@ namespace JobBank.Scheduling
                         // Brings the "best" child queue to have a zero balance,
                         // while everything else remains zero or negative.
                         int newBalance = MiscArithmetic.SaturateToInt(
-                                            (long)child.Balance - best_ + balanceRefillAmount);
+                                            (long)child.Balance - best_ 
+                                            + balanceRefillAmount);
 
                         child.Balance = newBalance;
                         keys[i] = newBalance;
-
-                        self.UpdateForAverageBalance(0, newBalance);
                     }
 
                     return keys.Length;
@@ -191,10 +187,7 @@ namespace JobBank.Scheduling
                         child.Balance = newBalance;
 
                         if (child.IsActive)
-                        {
                             _priorityHeap.ChangeKey(child.PriorityHeapIndex, newBalance);
-                            UpdateForAverageBalance(oldBalance, newBalance);
-                        }
 
                         // CS8762: Parameter must have a non-null value when exiting in some condition.
                         // The C# compiler is not smart enough to deduce that hasItem == true
@@ -288,9 +281,21 @@ namespace JobBank.Scheduling
 
                 if (!child.IsActive)
                 {
-                    child.Balance = GetAverageBalance();
-                    _priorityHeap.Insert(child.Balance, child);
-                    UpdateForAverageBalance(0, child.Balance);
+                    int newBalance = child.Balance;
+
+                    // Do not allow the child queue to "save" up balances
+                    // when it is idle: it essentially "loses its spot"
+                    // if it de-activates with an over-balance remaining.
+                    //
+                    // However, if the child has been "busy" working on
+                    // already de-queued jobs, the charges from those jobs
+                    // will stay.  Note that SchedulingFlow<T>.AdjustBalance
+                    // will still have an effect when the child is inactive.
+                    if (_priorityHeap.IsNonEmpty)
+                        newBalance = Math.Min(newBalance, _priorityHeap[0].Key);
+
+                    child.Balance = newBalance;
+                    _priorityHeap.Insert(newBalance, child);
 
                     firstActivated = (CountActiveSources == 1);
                 }
@@ -332,10 +337,7 @@ namespace JobBank.Scheduling
         private void DeactivateChildCore(SchedulingFlow<T> child)
         {
             if (child.IsActive)
-            {
                 _priorityHeap.Delete(child.PriorityHeapIndex);
-                UpdateForAverageBalance(child.Balance, 0);
-            }
         }
 
         /// <summary>
@@ -416,10 +418,7 @@ namespace JobBank.Scheduling
                 child.Balance = newBalance;
 
                 if (child.IsActive)
-                {
                     _priorityHeap.ChangeKey(child.PriorityHeapIndex, newBalance);
-                    UpdateForAverageBalance(oldBalance, newBalance);
-                }
             }
 
             if (_toWakeUp is SourceImpl sourceAdaptor)
@@ -476,62 +475,6 @@ namespace JobBank.Scheduling
             }
 
             child.SetParent(this, activate);
-        }
-
-        /// <summary>
-        /// The sum of balances that are positive
-        /// from active child queues.
-        /// </summary>
-        /// <remarks>
-        /// This quantity is updated after every change in balance,
-        /// so that the average can be computed in O(1) time
-        /// when new child queues are added.
-        /// </remarks>
-        private long _sumBalances;
-
-        /// <summary>
-        /// The number of positive balances summed inside <see cref="_sumBalances" />.
-        /// </summary>
-        /// <remarks>
-        /// This is the denominator used to calculate the average balance.
-        /// </remarks>
-        private int _countPositiveBalances;
-
-        /// <summary>
-        /// Update the running sum/average of positive, active balances.
-        /// </summary>
-        /// <param name="oldBalance">The old balance to remove from the
-        /// running average.
-        /// </param>
-        /// <param name="newBalance">The new balance to add to the running
-        /// average.
-        /// </param>
-        private void UpdateForAverageBalance(int oldBalance, int newBalance)
-        {
-            long sum = _sumBalances;
-            sum -= oldBalance > 0 ? oldBalance : 0;
-            sum += newBalance > 0 ? newBalance : 0;
-            _sumBalances = sum;
-
-            _countPositiveBalances += (newBalance > 0 ? 1 : 0) 
-                                    - (oldBalance > 0 ? 1 : 0);
-        }
-
-        /// <summary>
-        /// Return the running average of positive balances among
-        /// all active child queues.
-        /// </summary>
-        /// <returns>
-        /// The suggested balance to set on a new child queue, based
-        /// on the running average.
-        /// </returns>
-        private int GetAverageBalance()
-        {
-            if (_countPositiveBalances <= 0)
-                return _balanceRefillAmount;
-
-            long averageBalance = _sumBalances / _countPositiveBalances;
-            return (int)averageBalance;
         }
     }
 }
