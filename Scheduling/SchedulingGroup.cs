@@ -57,6 +57,45 @@ namespace JobBank.Scheduling
         protected int CountActiveSources => _priorityHeap.Count;
 
         /// <summary>
+        /// Backing field for <see cref="BalanceRefillAmount" />.
+        /// </summary>
+        private int _balanceRefillAmount = (1 << 30);
+
+        /// <summary>
+        /// The amount that queue balances get refilled by when they all
+        /// become negative.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// In theory, this quantity does not affect scheduling behavior:
+        /// the queue debit balances could just decrease without bound. 
+        /// Practically however, the queue balances must be prevented
+        /// from overflowing the capacity of the (32-bit) integer.
+        /// And so when all queue balances become negative, all the balances
+        /// must increase by some positive amount to keep them within
+        /// range.  This quantity sets the amount to add on top of
+        /// bringing at least one queue's balance to zero.
+        /// </para>
+        /// <para>
+        /// For normal use, this quantity should be set very high:
+        /// the default is 2^30, which is also the maximum.  
+        /// To aid in debugging, it may be set lower.  The minimum 
+        /// allowed value is 2^7.
+        /// </para>
+        /// </remarks>
+        protected int BalanceRefillAmount
+        {
+            get => _balanceRefillAmount;
+            set
+            {
+                if (value < 128 || value > (1 << 30))
+                    throw new ArgumentOutOfRangeException(nameof(value), "BalanceRefillAmount must be between 2^7 and 2^30 (inclusive). ");
+
+                _balanceRefillAmount = value;
+            }
+        }
+
+        /// <summary>
         /// Re-fill balances on all child queues when none are eligible
         /// to be scheduled.
         /// </summary>
@@ -82,6 +121,8 @@ namespace JobBank.Scheduling
                         in Span<int> keys,
                         in Span<SchedulingFlow<T>> values) =>
                 {
+                    var balanceRefillAmount = self._balanceRefillAmount;
+
                     int best_ = keys[0];
 
                     for (int i = 0; i < keys.Length; ++i)
@@ -91,9 +132,8 @@ namespace JobBank.Scheduling
 
                         // Brings the "best" child queue to have a zero balance,
                         // while everything else remains zero or negative.
-                        // Then add an set amount of credits for the "time slice".
                         int newBalance = MiscArithmetic.SaturateToInt(
-                                            (long)child.Balance - best_ + 10000);
+                                            (long)child.Balance - best_ + balanceRefillAmount);
 
                         child.Balance = newBalance;
                         keys[i] = newBalance;
@@ -488,7 +528,7 @@ namespace JobBank.Scheduling
         private int GetAverageBalance()
         {
             if (_countPositiveBalances <= 0)
-                return 10000;
+                return _balanceRefillAmount;
 
             long averageBalance = _sumBalances / _countPositiveBalances;
             return (int)averageBalance;

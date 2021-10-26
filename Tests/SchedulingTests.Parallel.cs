@@ -29,6 +29,8 @@ namespace JobBank.Tests
         public BasicSchedulingGroup()
             : base(100)
         {
+            // Get easier to read numbers when debugging
+            BalanceRefillAmount = 10000;
         }
 
         public void AdmitChild(SchedulingFlow<DummyJob> child)
