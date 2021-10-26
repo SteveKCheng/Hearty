@@ -178,7 +178,7 @@ namespace JobBank.Scheduling
         /// </summary>
         protected void ResetWeight(SchedulingFlow<T> child, int weight)
         {
-            if (weight < 1 || weight > 100)
+            if (weight < 1 || weight > 128)
                 throw new ArgumentOutOfRangeException("The weight on a child queue is not between 1 to 100. ", (Exception?)null);
 
             lock (SyncObject)
@@ -210,7 +210,7 @@ namespace JobBank.Scheduling
 
             foreach (var (_, weight) in itemsArray)
             {
-                if (weight < 1 || weight > 100)
+                if (weight < 1 || weight > 128)
                     throw new ArgumentOutOfRangeException("The weight on a child queue is not between 1 to 100. ", (Exception?)null);
             }
 

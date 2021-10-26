@@ -83,20 +83,34 @@ namespace JobBank.Scheduling
         private int _weight;
 
         /// <summary>
-        /// The reciprocal of the weight multiplied by 2^20.
+        /// The reciprocal of the weight multiplied by 2^20 * 2^7.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// This quantity is cached only to avoid expensive integer
-        /// division when updating averages of unweighted balances.
+        /// division when adjusting balances (after each job charge).
+        /// </para>
+        /// <para>
+        /// 2^7 is the maximum weight, and 2^20 is a scaling factor
+        /// for implementing division in fixed-point arithmetic.
+        /// </para>
         /// </remarks>
         private int _inverseWeight;
 
         /// <summary>
-        /// A weight that is multiplies the amount of credits this child queue
-        /// receives on each time slice.
+        /// A weight that effectively multiplies the amount of credits 
+        /// this child queue receives on each time slice.
         /// </summary>
         /// <remarks>
-        /// This weight is always between 1 and 100 inclusive.
+        /// <para>
+        /// This weight is always between 1 and 128 inclusive.
+        /// The default weight is 32.
+        /// </para>
+        /// <para>
+        /// For important theoretical and practical reasons, this weight
+        /// is applied through division not multiplication: see
+        /// <see cref="_inverseWeight" />.
+        /// </para>
         /// </remarks>
         protected internal int Weight
         {
@@ -104,7 +118,7 @@ namespace JobBank.Scheduling
             internal set
             {
                 _weight = value;
-                _inverseWeight = (1 << InverseWeightLogScale) / value;
+                _inverseWeight = (1 << (7 + InverseWeightLogScale)) / value;
             }
         }
 
@@ -143,7 +157,9 @@ namespace JobBank.Scheduling
         protected SchedulingFlow()
         {
             PriorityHeapIndex = -1;
-            Weight = 1;
+
+            _weight = 1 << 5;
+            _inverseWeight = 1 << (7 + InverseWeightLogScale - 5);
         }
 
         /// <summary>
