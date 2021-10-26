@@ -12,7 +12,8 @@ namespace JobBank.Tests
 {
     public partial class SchedulingTests
     {
-        private Func<double> CreateExponentialWaitingTimeGenerator(int seed, double mean, double cap)
+        private static Func<double> 
+            CreateExponentialWaitingTimeGenerator(int seed, double mean, double cap)
         {
             var uniformGenerator = new Random(seed);
             return () =>
@@ -116,11 +117,7 @@ namespace JobBank.Tests
             return jobsByChild;
         }
 
-        /// <summary>
-        /// Verify that one (child) queue is working as expected
-        /// by checking statistics on arrival and exit wait times.
-        /// </summary>
-        private void CheckWaitTimesStats(List<DummyJob> jobs, double theoWaitMean, double weight)
+        private static SchedulingStats CalculateSchedulingStats(List<DummyJob> jobs)
         {
             var arrivalWaitTimes = GetSuccessiveDifferences(jobs.Select(item => (double)item.ArrivalTime)).ToList();
             var exitWaitTimes = GetSuccessiveDifferences(jobs.Select(item => (double)item.ExitTime)).ToList();
@@ -140,24 +137,38 @@ namespace JobBank.Tests
             var arrivalWaitMeanError = arrivalWaitStDev / Math.Sqrt((double)arrivalWaitTimes.Count);
             var exitWaitMeanError = exitWaitStDev / Math.Sqrt((double)exitWaitTimes.Count);
 
-            // Check sample mean of arrival wait times is consistent with
-            // the mean of the theoretical random distribution
-            double low = theoWaitMean - 3.0 * arrivalWaitMeanError;
-            double high = theoWaitMean + 3.0 * arrivalWaitMeanError;
-            Assert.InRange(arrivalWaitMean, low, high);
-
-            // Expected range of sample mean of exit wait times.
-            //
-            // This should be around weight × mean arrival time, where weight is
-            // the proportion of time assigned to this queue multipled by the total
-            // number of queues, because the jobs are all "executed" in serial.
-            //
-            // This is a weak test that all child flows are being de-queued fairly.
-            Assert.InRange(exitWaitMean, low * weight, high * weight);
+            return new SchedulingStats
+            {
+                ArrivalWaitMean = arrivalWaitMean,
+                ExitWaitMean = exitWaitMean,
+                ArrivalWaitStdev = arrivalWaitStDev,
+                ExitWaitStdev = exitWaitStDev,
+                ArrivalWaitMeanError = arrivalWaitMeanError,
+                ExitWaitMeanError = exitWaitMeanError
+            };
         }
 
+        private static int GetChildQueueWeight(int i)
+            => i switch
+            {
+                0 => 1,
+                1 => 2,
+                2 => 3,
+                3 => 4,  // sum: 10
+                4 => 5,
+                5 => 5,  // sum: 20
+                6 => 10,
+                7 => 10, // sum: 40
+                8 => 20, // sum: 60
+                9 => 40, // sum: 100
+                _ => 10
+            };
+
         [Fact]
-        public async Task SimulateExactly()
+        public Task SimulateExactlyEqualWeight()
+            => SimulateExactly(unequalWeight: false);
+
+        public async Task SimulateExactly(bool unequalWeight)
         {
             var parent = new BasicSchedulingGroup();
 
@@ -166,7 +177,9 @@ namespace JobBank.Tests
             {
                 var channel = Channel.CreateUnbounded<DummyJob>();
                 var child = new SimpleJobQueue<DummyJob>(channel.Reader);
-                parent.AdmitChild(child);
+
+                int weight = unequalWeight ? GetChildQueueWeight(i) : 20;
+                parent.AdmitChild(child, weight);
                 childWriters[i] = channel.Writer;
             }
 
@@ -196,8 +209,26 @@ namespace JobBank.Tests
                                                                         childWriters.Length, 
                                                                         parentReader);
 
-            for (int childIndex = 0; childIndex < jobsByChild.Length; ++childIndex)
-                CheckWaitTimesStats(jobsByChild[childIndex], theoWaitMean, weight: 10.0);
+            // Get all statistics first to aid debugging
+            var statsByChild = jobsByChild.Select(CalculateSchedulingStats).ToArray();
+
+            foreach (var stats in statsByChild)
+            {
+                // Check sample mean of arrival wait times is consistent with
+                // the mean of the theoretical random distribution
+                double low = theoWaitMean - 3.0 * stats.ArrivalWaitMeanError;
+                double high = theoWaitMean + 3.0 * stats.ArrivalWaitMeanError;
+                Assert.InRange(stats.ArrivalWaitMean, low, high);
+
+                // Expected range of sample mean of exit wait times.
+                //
+                // This should be around childWriters.Length × mean arrival time,
+                // because the jobs are all "executed" in serial.
+                //
+                // This is a weak test that all child flows are being de-queued fairly.
+                int N = childWriters.Length;
+                Assert.InRange(stats.ExitWaitMean, low * N, high * N);
+            }
         }
 
         private static IEnumerable<double> GetSuccessiveDifferences(IEnumerable<double> numbers)

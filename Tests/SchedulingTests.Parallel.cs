@@ -36,11 +36,32 @@ namespace JobBank.Tests
         public void AdmitChild(SchedulingFlow<DummyJob> child)
             => base.AdmitChild(child, activate: true);
 
+        public void AdmitChild(SchedulingFlow<DummyJob> child, int weight)
+        {
+            base.AdmitChild(child, activate: true);
+            base.ResetWeight(child, weight, reset: false);
+        }
+
         public new ChannelReader<DummyJob> AsChannelReader()
             => base.AsChannelReader();
 
         public new void TerminateChannelReader()
             => base.TerminateChannelReader();
+    }
+
+    internal class SchedulingStats
+    {
+        public double ArrivalWaitMean { get; init; }
+
+        public double ExitWaitMean { get; init; }
+
+        public double ArrivalWaitStdev { get; init; }
+
+        public double ExitWaitStdev { get; init; }
+
+        public double ArrivalWaitMeanError { get; init; }
+
+        public double ExitWaitMeanError { get; init; }
     }
 
     public partial class SchedulingTests
