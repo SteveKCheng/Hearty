@@ -47,6 +47,8 @@ namespace JobBank.Scheduling
                 (ref SchedulingFlow<T> item, int index) => item.PriorityHeapIndex = index,
                 capacity: capacity);
 
+            _lastExtractedBalance = -1;
+
             SyncObject = new object();
         }
 
@@ -60,6 +62,37 @@ namespace JobBank.Scheduling
         /// Backing field for <see cref="BalanceRefillAmount" />.
         /// </summary>
         private int _balanceRefillAmount = (1 << 30);
+
+        /// <summary>
+        /// Count of number of balance refills performed.
+        /// </summary>
+        /// <remarks>
+        /// This statistic needs to be maintained so that inactive
+        /// queues that are re-activated after re-fills can 
+        /// "catch up".
+        /// </remarks>
+        private uint _countRefills = 0;
+
+        /// <summary>
+        /// The balance of the last queue that was extracted
+        /// as the maximum of the priority heap.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This statistic needs to maintained only for resetting
+        /// the balance of a new child queue that is admitted
+        /// when there are no other active queues.  This value
+        /// should be reasonable in that the new queue should not
+        /// jump far ahead of its sibling queues should they 
+        /// be activated again. 
+        /// </para>
+        /// <para>
+        /// This member takes on positive values, or the special
+        /// value -1 meaning that it should be substituted with
+        /// the current value of <see cref="_balanceRefillAmount" />.
+        /// </para>
+        /// </remarks>
+        private int _lastExtractedBalance;
 
         /// <summary>
         /// The amount that queue balances get refilled by when they all
@@ -112,15 +145,17 @@ namespace JobBank.Scheduling
             if (best > 0 && !reset)
                 return true;
 
-            var self_ = this;
-            _priorityHeap.Initialize(_priorityHeap.Count, ref self_,
-                static (ref SchedulingGroup<T> self, 
+            uint refillAmount = (uint)_balanceRefillAmount;
+            uint refillTimes = ((uint)-best) / refillAmount + 1;
+            long refillTotal = (int)refillTimes * (long)refillAmount;
+
+            var arg = (this, refillTotal);
+            _priorityHeap.Initialize(_priorityHeap.Count, ref arg,
+                static (ref (SchedulingGroup<T> self, long refillTotal) passedArg, 
                         in Span<int> keys,
                         in Span<SchedulingFlow<T>> values) =>
                 {
-                    var balanceRefillAmount = self._balanceRefillAmount;
-
-                    int best_ = keys[0];
+                    var (self, refillTotal) = passedArg;
 
                     for (int i = 0; i < keys.Length; ++i)
                     {
@@ -130,8 +165,7 @@ namespace JobBank.Scheduling
                         // Brings the "best" child queue to have a zero balance,
                         // while everything else remains zero or negative.
                         int newBalance = MiscArithmetic.SaturateToInt(
-                                            (long)child.Balance - best_ 
-                                            + balanceRefillAmount);
+                                            (long)child.Balance + refillTotal);
 
                         child.Balance = newBalance;
                         keys[i] = newBalance;
@@ -139,6 +173,9 @@ namespace JobBank.Scheduling
 
                     return keys.Length;
                 });
+
+            _lastExtractedBalance = MiscArithmetic.SaturateToInt(best + refillTotal);
+            unchecked { _countRefills += refillTimes; }
 
             return true;
         }
@@ -159,7 +196,9 @@ namespace JobBank.Scheduling
             {
                 while (EnsureBalancesRefilled(reset: false))
                 {
-                    var child = _priorityHeap.PeekMaximum().Value;
+                    var entry = _priorityHeap.PeekMaximum();
+                    var child = entry.Value;
+                    _lastExtractedBalance = entry.Key;
 
                     bool hasItem;
                     do
@@ -284,7 +323,13 @@ namespace JobBank.Scheduling
 
                 if (!child.IsActive)
                 {
-                    int newBalance = child.Balance;
+                    // Calculate how much refill was missed, capping to prevent overflow
+                    long refillTotal = unchecked((long)(_countRefills - child.RefillEpoch)
+                                                    * _balanceRefillAmount);
+                    refillTotal = (ulong)refillTotal <= (ulong)int.MaxValue 
+                                    ? refillTotal : int.MaxValue;
+
+                    int newBalance = MiscArithmetic.SaturateToInt(child.Balance + refillTotal);
 
                     // Do not allow the child queue to "save" up balances
                     // when it is idle: it essentially "loses its spot"
@@ -294,8 +339,10 @@ namespace JobBank.Scheduling
                     // already de-queued jobs, the charges from those jobs
                     // will stay.  Note that SchedulingFlow<T>.AdjustBalance
                     // will still have an effect when the child is inactive.
-                    if (_priorityHeap.IsNonEmpty)
-                        newBalance = Math.Min(newBalance, _priorityHeap[0].Key);
+                    int maxBalance = _priorityHeap.IsNonEmpty ? _priorityHeap[0].Key :
+                                     _lastExtractedBalance > 0 ? _lastExtractedBalance
+                                                               : _balanceRefillAmount;
+                    newBalance = Math.Min(newBalance, maxBalance);
 
                     child.Balance = newBalance;
                     _priorityHeap.Insert(newBalance, child);
@@ -340,7 +387,10 @@ namespace JobBank.Scheduling
         private void DeactivateChildCore(SchedulingFlow<T> child)
         {
             if (child.IsActive)
+            {
                 _priorityHeap.Delete(child.PriorityHeapIndex);
+                child.RefillEpoch = _countRefills;
+            }
         }
 
         /// <summary>
@@ -388,8 +438,8 @@ namespace JobBank.Scheduling
                 DeactivateChildCore(child);
 
                 // Reset weight and statistics while holding the lock
-                child.Weight = 1;
-                child.Balance = 0;
+                child.RefillEpoch = 0;
+                child.Balance = int.MaxValue;
                 child.WasActivated = false;
 
                 parentRef = null;

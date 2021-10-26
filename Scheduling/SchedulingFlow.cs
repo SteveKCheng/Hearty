@@ -98,6 +98,17 @@ namespace JobBank.Scheduling
         private int _inverseWeight;
 
         /// <summary>
+        /// The snapshot of <see cref="SchedulingGroup{T}._countRefills"/>
+        /// when this child queue is de-activated.
+        /// </summary>
+        /// <remarks>
+        /// This member determines when <see cref="Balance" />
+        /// has to be re-filled if this child queue re-activates
+        /// after balances on sibling queues have been refilled earlier.
+        /// </remarks>
+        internal uint RefillEpoch { get; set; }
+
+        /// <summary>
         /// A weight that effectively multiplies the amount of credits 
         /// this child queue receives on each time slice.
         /// </summary>
@@ -157,6 +168,10 @@ namespace JobBank.Scheduling
         protected SchedulingFlow()
         {
             PriorityHeapIndex = -1;
+
+            // This value will be capped when this instance is admitted
+            // to a scheduling group.
+            Balance = int.MaxValue;
 
             _weight = 1 << 5;
             _inverseWeight = 1 << (7 + InverseWeightLogScale - 5);
