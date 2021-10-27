@@ -29,9 +29,10 @@ namespace JobBank.Tests
         /// Generate jobs according to some random number distributions,
         /// and queue them into the channels.
         /// </summary>
-        private async Task<List<DummyJob>> QueueJobsIntoChannels(int jobCount,
-                                                                 ChannelWriter<DummyJob>[] childWriters, 
-                                                                 Func<double>[] randomGenerators)
+        private static async Task<List<DummyJob>> 
+            QueueJobsIntoChannels(int jobCount,
+                                  ChannelWriter<DummyJob>[] childWriters, 
+                                  Func<double>[] randomGenerators)
         {
             var allJobsTogether = new List<DummyJob>(capacity: jobCount);
             var priorityHeap = new IntPriorityHeap<int>(null, capacity: 10);
@@ -76,9 +77,9 @@ namespace JobBank.Tests
         /// Dequeue jobs from parent scheduling group and separate 
         /// them back into the child queues they came from.
         /// </summary>
-        private async Task<List<DummyJob>[]> DequeueJobsFromChannel(int jobCount, 
-                                                                    int childrenCount,
-                                                                    ChannelReader<DummyJob> parentReader)
+        private static async Task<List<DummyJob>[]> DequeueJobsFromChannel(int jobCount, 
+                                                                           int childrenCount,
+                                                                           ChannelReader<DummyJob> parentReader)
         {
             var jobsByChild = new List<DummyJob>[childrenCount];
             for (int i = 0; i < jobsByChild.Length; ++i)
@@ -168,6 +169,10 @@ namespace JobBank.Tests
         public Task SimulateExactlyEqualWeight()
             => SimulateExactly(unequalWeight: false);
 
+        [Fact]
+        public Task SimulateExactlyUnequalWeight()
+            => SimulateExactly(unequalWeight: true);
+
         public async Task SimulateExactly(bool unequalWeight)
         {
             var parent = new BasicSchedulingGroup();
@@ -219,6 +224,114 @@ namespace JobBank.Tests
                 double low = theoWaitMean - 3.0 * stats.ArrivalWaitMeanError;
                 double high = theoWaitMean + 3.0 * stats.ArrivalWaitMeanError;
                 Assert.InRange(stats.ArrivalWaitMean, low, high);
+            
+                if (!unequalWeight)
+                {
+                    // Expected range of sample mean of exit wait times.
+                    //
+                    // This should be around N × mean arrival time,
+                    // because the jobs are all "executed" in serial.
+                    //
+                    // This is a weak test that all child flows are being de-queued fairly.
+                    int N = childWriters.Length;
+                    Assert.InRange(stats.ExitWaitMean, low * N, high * N);
+                }
+            }
+
+            // When there are unequal weights, certain queues will complete
+            // before others, because we do not continually inject items
+            // at a certain rate.  That is, other queues will start to drain
+            // faster as the heavier-weighted queues complete.
+            //
+            // So, the expected exit wait times for each queue is not simply
+            // N × mean arrival time × its weight proportion.  We need a
+            // iterative formula to compute the expected exit wait times.
+            if (unequalWeight)
+            {
+                var multipliers = ComputeRelativeFinishTimes(childWriters.Length,
+                                                             GetChildQueueWeight);
+                Assert.All(statsByChild.Zip(multipliers),
+                           arg =>
+                           {
+                               var (stats, multiplier) = arg;
+                               double low = theoWaitMean - 3.0 * stats.ArrivalWaitMeanError;
+                               double high = theoWaitMean + 3.0 * stats.ArrivalWaitMeanError;
+
+                               Assert.InRange(stats.ExitWaitMean,
+                                              multiplier * low,
+                                              multiplier * high);
+                           });
+            }
+        }
+        
+        /// <summary>
+        /// Compute the times that queues finish draining assuming
+        /// they start with the same amount of work but de-queue
+        /// at different rates implied by their weights.
+        /// </summary>
+        /// <returns>
+        /// Array of finish times, scaled relative to the time
+        /// needed to drain a queue if it were to be assigned
+        /// full use of the available resources.
+        /// </returns>
+        private static double[] ComputeRelativeFinishTimes(int numWeights,
+                                                           Func<int, int> weightsFunc)
+        {
+            double[] waitTimes = new double[numWeights];
+
+            (int Index, double Weight)[] weightsSorted = 
+                Enumerable.Range(0, numWeights)
+                          .Select(i => (i, (double)weightsFunc(i)))
+                          .OrderByDescending(item => item.Item2)
+                          .ToArray();
+
+            double[] workRemaining = new double[numWeights];
+            for (int i = 0; i < workRemaining.Length; ++i)
+                workRemaining[i] = 1.0;
+
+            double weightsSum = weightsSorted.Select(item => item.Weight).Sum();
+
+            // Iterate through the queues in reverse order of their weights,
+            // i.e. the order in which they should completely drain
+            for (int i = 0; i < weightsSorted.Length; )
+            {
+                var (index, weight) = weightsSorted[i];
+
+                // The amount of time that this child queue must have
+                // taken to finish its remaining work given the fraction
+                // of resources it has been allocated
+                double time = workRemaining[index] * (weightsSum / weight);
+
+                double newWeightsSum = weightsSum;
+
+                // Update running wait times for all queues that have
+                // not yet finished
+                for (int j = i; j < weightsSorted.Length; ++j)
+                {
+                    var (otherIndex, otherWeight) = weightsSorted[j];
+
+                    // Accumulate wait time for this time step
+                    waitTimes[otherIndex] += time;
+
+                    // Calculate the work remaining for the other queue
+                    // given it has worked for this time step at a 
+                    // (different) speed implied by otherWeight
+                    workRemaining[otherIndex] -= time * (otherWeight / weightsSum);
+
+                    // Queues with the same (highest) weight should finish
+                    if (otherWeight == weight)
+                    {
+                        newWeightsSum -= weight;
+                        ++i;
+                    }
+                }
+
+                weightsSum = newWeightsSum;
+            }
+
+            return waitTimes;
+        }
+
 
                 // Expected range of sample mean of exit wait times.
                 //
