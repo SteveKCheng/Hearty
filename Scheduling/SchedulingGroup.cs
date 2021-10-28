@@ -136,13 +136,13 @@ namespace JobBank.Scheduling
         /// Whether there is at least one active child queue
         /// (after re-filling).
         /// </returns>
-        private bool EnsureBalancesRefilled(bool reset)
+        private bool EnsureBalancesRefilled()
         {
             if (_priorityHeap.IsEmpty)
                 return false;
 
             int best = _priorityHeap.PeekMaximum().Key;
-            if (best > 0 && !reset)
+            if (best > 0)
                 return true;
 
             uint refillAmount = (uint)_balanceRefillAmount;
@@ -194,7 +194,7 @@ namespace JobBank.Scheduling
             var syncObject = SyncObject;
             lock (syncObject)
             {
-                while (EnsureBalancesRefilled(reset: false))
+                while (EnsureBalancesRefilled())
                 {
                     var entry = _priorityHeap.PeekMaximum();
                     var child = entry.Value;
@@ -248,6 +248,13 @@ namespace JobBank.Scheduling
         /// <summary>
         /// Reset the weight on one child queue.
         /// </summary>
+        /// <param name="child">The child queue to change weights for. </param>
+        /// <param name="weight">The new desired weight; must be between
+        /// 1 and 128, inclusive. </param>
+        /// <param name="reset">If true, the existing balance on the child
+        /// queue is ignored, and reset so that the queue becomes available
+        /// for de-queuing soon.
+        /// </param>
         protected void ResetWeight(SchedulingFlow<T> child, int weight, bool reset)
         {
             if (weight < 1 || weight > 128)
@@ -263,43 +270,36 @@ namespace JobBank.Scheduling
                 child.Weight = weight;
 
                 if (reset)
-                    EnsureBalancesRefilled(reset: true);
+                {
+                    if (child.IsActive)
+                    {
+                        int newBalance = GetUpperBoundBalance();
+                        child.Balance = newBalance;
+                        _priorityHeap.ChangeKey(child.PriorityHeapIndex, newBalance);
+                    }
+                    else
+                    {
+                        child.RefillEpoch = 0;
+                        child.Balance = int.MaxValue;
+                    }
+                }
             }
         }
 
         /// <summary>
-        /// Reset weights on many child queues at the same time.
+        /// Get the maximum balance that a newly inserted 
+        /// child queue is allowed to attain.
         /// </summary>
         /// <remarks>
-        /// Resetting weights requires re-calculation of internally
-        /// cached data, so when many child queues need to have their
-        /// weights reset, the changes should be batched together.
+        /// This cap on balances prevents a child queue from 
+        /// "saving" up credits that it fails to take advantage
+        /// of in the past.  
         /// </remarks>
-        protected void ResetWeights(IEnumerable<KeyValuePair<SchedulingFlow<T>, int>> items,
-                                    bool reset)
+        private int GetUpperBoundBalance()
         {
-            // Defensive copy to avoid the values changing concurrently after
-            // they are validated.
-            var itemsArray = items.ToArray();
-
-            foreach (var (_, weight) in itemsArray)
-            {
-                if (weight < 1 || weight > 128)
-                    throw new ArgumentOutOfRangeException("The weight on a child queue is not between 1 to 100. ", (Exception?)null);
-            }
-
-            lock (SyncObject)
-            {
-                // Must check for correct parent only after locking first.
-                foreach (var (child, _) in itemsArray)
-                    CheckCorrectParent(child, optional: false);
-
-                foreach (var (child, weight) in itemsArray)
-                    child.Weight = weight;
-
-                if (reset)
-                    EnsureBalancesRefilled(reset: true);
-            }
+            return _priorityHeap.IsNonEmpty ? _priorityHeap[0].Key :
+                   _lastExtractedBalance > 0 ? _lastExtractedBalance
+                                             : _balanceRefillAmount;
         }
 
         /// <summary>
@@ -339,9 +339,7 @@ namespace JobBank.Scheduling
                     // already de-queued jobs, the charges from those jobs
                     // will stay.  Note that SchedulingFlow<T>.AdjustBalance
                     // will still have an effect when the child is inactive.
-                    int maxBalance = _priorityHeap.IsNonEmpty ? _priorityHeap[0].Key :
-                                     _lastExtractedBalance > 0 ? _lastExtractedBalance
-                                                               : _balanceRefillAmount;
+                    int maxBalance = GetUpperBoundBalance();
                     newBalance = Math.Min(newBalance, maxBalance);
 
                     child.Balance = newBalance;
