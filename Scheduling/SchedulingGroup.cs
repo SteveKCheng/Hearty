@@ -406,7 +406,9 @@ namespace JobBank.Scheduling
                     _priorityHeap.Insert(newBalance, child);
 
                     firstActivated = (CountActiveSources == 1);
-                    eventArgs = _eventHandler != null ? new(true, _eventCounter++, child.Attachment) 
+                    eventArgs = _eventHandler != null ? new(true, 
+                                                            unchecked(++_eventCounter), 
+                                                            child.Attachment) 
                                                       : null;
                 }
             }
@@ -438,7 +440,9 @@ namespace JobBank.Scheduling
             {
                 _priorityHeap.Delete(child.PriorityHeapIndex);
                 child.RefillEpoch = _countRefills;
-                return _eventHandler != null ? new(false, _eventCounter++, child.Attachment) 
+                return _eventHandler != null ? new(false, 
+                                                   unchecked(++_eventCounter), 
+                                                   child.Attachment) 
                                              : null;
             }
 

@@ -15,13 +15,19 @@ namespace JobBank.Scheduling
 
         /// <summary>
         /// Counts how many activation or de-activation
-        /// events have occurred so far.
+        /// events have occurred so far including this one.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// This number is a version counter that orders the activation
         /// and de-activation events.  In a concurrent setting, the
         /// event handler is not guaranteed to be invoked in sequence
         /// in the same order that the events occur.
+        /// </para>
+        /// <para>
+        /// This number will silently wrap around when the
+        /// count exceeds <see cref="uint.MaxValue" />.
+        /// </para>
         /// </remarks>
         public uint Counter { get; }
 
