@@ -16,6 +16,7 @@
     <Compile Include="JobScheduling.cs" />
     <Compile Include="JobVacancy.cs" />
     <Compile Include="MiscArithmetic.cs" />
+    <Compile Include="PrioritizedQueueSystem.cs" />
     <Compile Include="ScheduledJob.cs" />
     <Compile Include="SchedulingActivationEventArgs.cs" />
     <Compile Include="SharedFuture.cs" />
