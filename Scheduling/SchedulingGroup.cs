@@ -513,11 +513,16 @@ namespace JobBank.Scheduling
         /// <param name="activate">
         /// Whether to activate the child queue immediately.
         /// </param>
+        /// <param name="attachment">
+        /// Reference to an arbitrary object that can be attached
+        /// to <paramref name="child" />, which gets reported in
+        /// callbacks for activation and de-activation.
+        /// </param>
         /// <remarks>
         /// The child queue will start off as inactive for this
         /// scheduling group.
         /// </remarks>
-        protected void AdmitChild(SchedulingFlow<T> child, bool activate)
+        protected void AdmitChild(SchedulingFlow<T> child, bool activate, object? attachment = null)
         {
             if (child is SourceImpl sourceAdaptor &&
                 object.ReferenceEquals(sourceAdaptor.Subgroup, this))
@@ -525,7 +530,12 @@ namespace JobBank.Scheduling
                 throw new InvalidOperationException("Cannot add a scheduling subgroup as a child of itself. ");
             }
 
-            child.SetParent(this, activate);
+            child.SetParent(this);
+
+            child.Attachment = attachment;
+
+            if (activate)
+                ActivateChild(child);
         }
     }
 }
