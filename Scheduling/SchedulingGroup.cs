@@ -414,8 +414,8 @@ namespace JobBank.Scheduling
             if (firstActivated)
             {
                 var toWakeUp = _toWakeUp;
-                if (toWakeUp is SourceImpl sourceAdaptor)
-                    sourceAdaptor.OnSubgroupActivated();
+                if (toWakeUp is FlowImpl flowAdaptor)
+                    flowAdaptor.OnSubgroupActivated();
                 else if (toWakeUp is ChannelReader channelReader)
                     channelReader.OnSubgroupActivated();
             }
@@ -545,8 +545,8 @@ namespace JobBank.Scheduling
                     _priorityHeap.ChangeKey(child.PriorityHeapIndex, newBalance);
             }
 
-            if (_toWakeUp is SourceImpl sourceAdaptor)
-                sourceAdaptor.OnAdjustBalance(debit);
+            if (_toWakeUp is FlowImpl flowAdaptor)
+                flowAdaptor.OnAdjustBalance(debit);
         }
 
         /// <summary>
@@ -597,8 +597,8 @@ namespace JobBank.Scheduling
         /// </remarks>
         public void AdmitChild(SchedulingFlow<T> child, bool activate, object? attachment = null)
         {
-            if (child is SourceImpl sourceAdaptor &&
-                object.ReferenceEquals(sourceAdaptor.Subgroup, this))
+            if (child is FlowImpl flowAdaptor &&
+                object.ReferenceEquals(flowAdaptor.Subgroup, this))
             {
                 throw new InvalidOperationException("Cannot add a scheduling subgroup as a child of itself. ");
             }

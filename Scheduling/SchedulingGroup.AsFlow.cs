@@ -10,7 +10,7 @@ namespace JobBank.Scheduling
         /// Adapts <see cref="SchedulingGroup{T}" /> to
         /// <see cref="SchedulingFlow{T}" />.
         /// </summary>
-        private sealed class SourceImpl : SchedulingFlow<T>
+        private sealed class FlowImpl : SchedulingFlow<T>
         {
             /// <summary>
             /// The subgroup of queues where messages will
@@ -22,7 +22,7 @@ namespace JobBank.Scheduling
             /// Prepare to forward messages from a sub-group 
             /// of queues as if they came from a single queue. 
             /// </summary>
-            public SourceImpl(SchedulingGroup<T> subgroup)
+            public FlowImpl(SchedulingGroup<T> subgroup)
             {
                 Subgroup = subgroup;
             }
@@ -53,24 +53,26 @@ namespace JobBank.Scheduling
         /// never makes sense to consume the same scheduling group
         /// from multiple clients.  
         /// </returns>
-        public SchedulingFlow<T> AsSource()
+        public SchedulingFlow<T> AsFlow()
         {
             var toWakeUp = _toWakeUp;
             if (toWakeUp == null)
             {
-                var newSourceAdaptor = new SourceImpl(this);
+                var newFlowAdaptor = new FlowImpl(this);
                 toWakeUp = Interlocked.CompareExchange(ref _toWakeUp,
-                                                       newSourceAdaptor,
+                                                       newFlowAdaptor,
                                                        null);
                 if (toWakeUp == null)
-                    return newSourceAdaptor;
+                    return newFlowAdaptor;
             }
 
-            if (toWakeUp is SourceImpl sourceAdaptor)
-                return sourceAdaptor;
+            if (toWakeUp is not FlowImpl flowAdaptor)
+            {
+                throw new InvalidOperationException(
+                    "Cannot call AsFlow when AsChannelReader had already been called. ");
+            }
 
-            throw new InvalidOperationException(
-                "Cannot call AsSource when AsChannelReader had already been called. ");
+            return flowAdaptor;
         }
 
         /// <summary>

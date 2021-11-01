@@ -18,7 +18,7 @@
     <Compile Include="ScheduledJob.cs" />
     <Compile Include="SchedulingActivationEventArgs.cs" />
     <Compile Include="SharedFuture.cs" />
-    <Compile Include="SchedulingGroup.AsSource.cs" />
+    <Compile Include="SchedulingGroup.AsFlow.cs" />
     <Compile Include="SchedulingGroup.ChannelReader.cs" />
     <Compile Include="SchedulingFlow.cs" />
     <Compile Include="SchedulingGroup.cs" />
