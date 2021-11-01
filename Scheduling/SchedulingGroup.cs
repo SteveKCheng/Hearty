@@ -1,8 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Threading;
 using JobBank.Utilities;
 
@@ -264,10 +261,8 @@ namespace JobBank.Scheduling
             {
                 CheckCorrectParent(child, optional: false);
 
-                if (child.Weight == weight)
-                    return;
-
-                child.Weight = weight;
+                if (child.Weight != weight)
+                    child.Weight = weight;
 
                 if (reset)
                 {
