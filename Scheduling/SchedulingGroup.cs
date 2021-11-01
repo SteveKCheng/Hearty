@@ -8,13 +8,6 @@ namespace JobBank.Scheduling
     /// <summary>
     /// Credit-based scheduling from a set of <see cref="SchedulingUnit" />.
     /// </summary>
-    /// <remarks>
-    /// The functionality of this class is available as protected,
-    /// not public methods, so that a derived class can restrict
-    /// some functionality depending on the application.  For instance,
-    /// some scheduling groups might not allow non-equal weights
-    /// on the child queues.
-    /// </remarks>
     public partial class SchedulingGroup<T>
     {
         /// <summary>
@@ -61,7 +54,7 @@ namespace JobBank.Scheduling
         /// The number of child queues to allocate for initially in 
         /// internal data structures.
         /// </param>
-        protected SchedulingGroup(int capacity)
+        public SchedulingGroup(int capacity)
             : this(capacity, null, null)
         {
         }
@@ -83,7 +76,7 @@ namespace JobBank.Scheduling
         /// If null, the "sender" argument will refer to the new instance
         /// of this class being constructed.
         /// </param>
-        protected SchedulingGroup(int capacity, EventHandler<SchedulingActivationEventArgs>? eventHandler, object? eventSender)
+        public SchedulingGroup(int capacity, EventHandler<SchedulingActivationEventArgs>? eventHandler, object? eventSender)
         {
             if (capacity < 0 || capacity > MaxCapacity)
                 throw new ArgumentOutOfRangeException(nameof(capacity));
@@ -170,7 +163,7 @@ namespace JobBank.Scheduling
         /// allowed value is 2^7.
         /// </para>
         /// </remarks>
-        protected int BalanceRefillAmount
+        public int BalanceRefillAmount
         {
             get => _balanceRefillAmount;
             set
@@ -242,8 +235,8 @@ namespace JobBank.Scheduling
         /// The de-queued job, or null if no child queue can currently 
         /// supply one.
         /// </returns>
-        protected bool TryTakeItem([MaybeNullWhen(false)] out T item, 
-                                   out int charge)
+        private bool TryTakeItem([MaybeNullWhen(false)] out T item, 
+                                 out int charge)
         {
             var syncObject = SyncObject;
             lock (syncObject)
@@ -323,7 +316,7 @@ namespace JobBank.Scheduling
         /// queue is ignored, and reset so that the queue becomes available
         /// for de-queuing soon.
         /// </param>
-        protected void ResetWeight(SchedulingFlow<T> child, int weight, bool reset)
+        public void ResetWeight(SchedulingFlow<T> child, int weight, bool reset)
         {
             if (weight < 1 || weight > 128)
                 throw new ArgumentOutOfRangeException("The weight on a child queue is not between 1 to 100. ", (Exception?)null);
@@ -602,7 +595,7 @@ namespace JobBank.Scheduling
         /// The child queue will start off as inactive for this
         /// scheduling group.
         /// </remarks>
-        protected void AdmitChild(SchedulingFlow<T> child, bool activate, object? attachment = null)
+        public void AdmitChild(SchedulingFlow<T> child, bool activate, object? attachment = null)
         {
             if (child is SourceImpl sourceAdaptor &&
                 object.ReferenceEquals(sourceAdaptor.Subgroup, this))

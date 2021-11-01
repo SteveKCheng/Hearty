@@ -53,7 +53,7 @@ namespace JobBank.Scheduling
         /// never makes sense to consume the same scheduling group
         /// from multiple clients.  
         /// </returns>
-        protected SchedulingFlow<T> AsSource()
+        public SchedulingFlow<T> AsSource()
         {
             var toWakeUp = _toWakeUp;
             if (toWakeUp == null)

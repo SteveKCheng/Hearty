@@ -201,7 +201,7 @@ namespace JobBank.Scheduling
         /// An instance of <see cref="ChannelReader{T}" /> connected
         /// to this scheduling group.
         /// </returns>
-        protected ChannelReader AsChannelReader()
+        public ChannelReader AsChannelReader()
         {
             var toWakeUp = _toWakeUp;
             if (toWakeUp == null)
@@ -248,7 +248,7 @@ namespace JobBank.Scheduling
         /// is complete after those items are read.
         /// </para>
         /// </remarks>
-        protected void TerminateChannelReader()
+        public void TerminateChannelReader()
         {
             if (_toWakeUp is not ChannelReader channelReader)
             {

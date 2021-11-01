@@ -41,12 +41,6 @@ namespace JobBank.Tests
             base.AdmitChild(child, activate: true);
             base.ResetWeight(child, weight, reset: false);
         }
-
-        public new ChannelReader<DummyJob> AsChannelReader()
-            => base.AsChannelReader();
-
-        public new void TerminateChannelReader()
-            => base.TerminateChannelReader();
     }
 
     internal class SchedulingStats
