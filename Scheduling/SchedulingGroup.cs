@@ -33,9 +33,57 @@ namespace JobBank.Scheduling
         /// </summary>
         private object SyncObject { get; }
 
+        /// <summary>
+        /// The "sender" object that will be passed as the first argument to
+        /// <see cref="_eventHandler" />.
+        /// </summary>
+        private readonly object _eventSender;
+
+        /// <summary>
+        /// Callback that is invoked whenever a child queue activates or de-activates.
+        /// </summary>
+        /// <remarks>
+        /// Such a callback can be used to expire child queues that become empty
+        /// (after a period of time), i.e. remove their entries from other
+        /// data structures in which they are registered.
+        /// </remarks>
+        private readonly EventHandler<SchedulingActivationEventArgs>? _eventHandler;
+
+        /// <summary>
+        /// The maximum number of active child queues that are allowed.
+        /// </summary>
         protected readonly int MaxCapacity = 1024;
 
+        /// <summary>
+        /// Construct a parent scheduling group.
+        /// </summary>
+        /// <param name="capacity">
+        /// The number of child queues to allocate for initially in 
+        /// internal data structures.
+        /// </param>
         protected SchedulingGroup(int capacity)
+            : this(capacity, null, null)
+        {
+        }
+
+        /// <summary>
+        /// Construct a parent scheduling group.
+        /// </summary>
+        /// <param name="capacity">
+        /// The number of child queues to allocate for initially in 
+        /// internal data structures.
+        /// </param>
+        /// <param name="eventHandler">
+        /// If non-null, the specified event handler is invoked
+        /// whenever a child queue of the new scheduling group 
+        /// is activated or de-activated.
+        /// </param>
+        /// <param name="eventSender">
+        /// The "sender" argument to pass to <paramref name="eventHandler" />.
+        /// If null, the "sender" argument will refer to the new instance
+        /// of this class being constructed.
+        /// </param>
+        protected SchedulingGroup(int capacity, EventHandler<SchedulingActivationEventArgs>? eventHandler, object? eventSender)
         {
             if (capacity < 0 || capacity > MaxCapacity)
                 throw new ArgumentOutOfRangeException(nameof(capacity));
@@ -47,6 +95,9 @@ namespace JobBank.Scheduling
             _lastExtractedBalance = -1;
 
             SyncObject = new object();
+
+            _eventSender = eventSender ?? this;
+            _eventHandler = eventHandler;
         }
 
         /// <summary>
@@ -69,6 +120,12 @@ namespace JobBank.Scheduling
         /// "catch up".
         /// </remarks>
         private uint _countRefills = 0;
+
+        /// <summary>
+        /// Incremented by one every time the callback is
+        /// invoked for activating or de-activating a child flow.
+        /// </summary>
+        private uint _eventCounter = 0;
 
         /// <summary>
         /// The balance of the last queue that was extracted
@@ -233,7 +290,21 @@ namespace JobBank.Scheduling
 #pragma warning restore CS8762
                     }
 
-                    DeactivateChildCore(child);
+                    var eventArgs = DeactivateChildCore(child);
+
+                    if (eventArgs != null)
+                    {
+                        // Do not invoke user's function inside the lock
+                        Monitor.Exit(syncObject);
+                        try
+                        {
+                            InvokeEventHandler(eventArgs);
+                        }
+                        finally
+                        {
+                            Monitor.Enter(syncObject);
+                        }
+                    }
                 }
             }
 
@@ -308,6 +379,7 @@ namespace JobBank.Scheduling
         internal void ActivateChild(SchedulingFlow<T> child)
         {
             bool firstActivated = false;
+            SchedulingActivationEventArgs? eventArgs = default;
 
             lock (SyncObject)
             {
@@ -341,49 +413,43 @@ namespace JobBank.Scheduling
                     _priorityHeap.Insert(newBalance, child);
 
                     firstActivated = (CountActiveSources == 1);
+                    eventArgs = _eventHandler != null ? new(true, _eventCounter++, child.Attachment) 
+                                                      : null;
                 }
             }
 
             if (firstActivated)
             {
-                OnFirstActivatedBase();
-                OnFirstActivated();
+                var toWakeUp = _toWakeUp;
+                if (toWakeUp is SourceImpl sourceAdaptor)
+                    sourceAdaptor.OnSubgroupActivated();
+                else if (toWakeUp is ChannelReader channelReader)
+                    channelReader.OnSubgroupActivated();
             }
+
+            InvokeEventHandler(eventArgs);
         }
 
         /// <summary>
-        /// Called upon activating a child queue when there were
-        /// previously no existing active child queues.
+        /// Common code to run when a child queue is to be de-activated.
         /// </summary>
-        private void OnFirstActivatedBase()
-        {
-            var toWakeUp = _toWakeUp;
-            if (toWakeUp is SourceImpl sourceAdaptor)
-                sourceAdaptor.OnSubgroupActivated();
-            else if (toWakeUp is ChannelReader channelReader)
-                channelReader.OnSubgroupActivated();
-        }
-
-        /// <summary>
-        /// Called upon activating a child queue when there were
-        /// previously no existing active child queues.
-        /// </summary>
-        /// <remarks>
-        /// An event handler is not used for this purpose because
-        /// it does not make sense for <see cref="SchedulingGroup{T}" />
-        /// to be consumed from multiple clients.
-        /// </remarks>
-        protected virtual void OnFirstActivated()
-        {
-        }
-
-        private void DeactivateChildCore(SchedulingFlow<T> child)
+        /// <returns>
+        /// Arguments for the event handler to invoke for the de-activation event.
+        /// This method does not invoke it directly as it must be done outside
+        /// the lock for this instance's own data structures.  The return
+        /// value is null if the event handler should not be invoked.
+        /// </returns>
+        private SchedulingActivationEventArgs? DeactivateChildCore(SchedulingFlow<T> child)
         {
             if (child.IsActive)
             {
                 _priorityHeap.Delete(child.PriorityHeapIndex);
                 child.RefillEpoch = _countRefills;
+                return _eventHandler != null ? new(false, _eventCounter++, child.Attachment) 
+                                             : null;
             }
+
+            return null;
         }
 
         /// <summary>
@@ -394,13 +460,17 @@ namespace JobBank.Scheduling
         /// </param>
         internal void DeactivateChild(SchedulingFlow<T> child)
         {
+            SchedulingActivationEventArgs? eventArgs;
+
             lock (SyncObject)
             {
                 if (!CheckCorrectParent(child, optional: true))
                     return;
 
-                DeactivateChildCore(child);
+                eventArgs = DeactivateChildCore(child);
             }
+
+            InvokeEventHandler(eventArgs);
         }
 
         /// <summary>
@@ -423,20 +493,35 @@ namespace JobBank.Scheduling
         internal void DeactivateChildAndDisown(SchedulingFlow<T> child, 
                                                ref SchedulingGroup<T>? parentRef)
         {
+            SchedulingActivationEventArgs? eventArgs;
+
             lock (SyncObject)
             {
                 if (!CheckCorrectParent(child, optional: true))
                     return;
 
-                DeactivateChildCore(child);
+                eventArgs = DeactivateChildCore(child);
 
                 // Reset weight and statistics while holding the lock
                 child.RefillEpoch = 0;
                 child.Balance = int.MaxValue;
                 child.WasActivated = false;
+                child.Attachment = null;
 
                 parentRef = null;
             }
+
+            InvokeEventHandler(eventArgs);
+        }
+
+        /// <summary>
+        /// Invoke the callback for activating or de-activating a child queue,
+        /// if there is one.
+        /// </summary>
+        private void InvokeEventHandler(in SchedulingActivationEventArgs? eventArgs)
+        {
+            if (eventArgs != null)
+                _eventHandler!.Invoke(_eventSender, eventArgs.GetValueOrDefault());
         }
 
         /// <summary>
