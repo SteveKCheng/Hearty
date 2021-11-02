@@ -46,5 +46,18 @@ namespace JobBank.Scheduling
             Counter = counter;
             Attachment = attachment;
         }
+
+        /// <summary>
+        /// Whether this event is (likely to be) newer than
+        /// another event with the given counter, tolerating
+        /// overflows of the counter.
+        /// </summary>
+        /// <param name="counter">
+        /// Counter (version) of another event to compare against.
+        /// </param>
+        public bool IsNewerThan(uint counter)
+        {
+            return unchecked((int)(Counter - counter)) > 0;
+        }
     }
 }

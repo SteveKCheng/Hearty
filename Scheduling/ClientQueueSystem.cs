@@ -42,7 +42,9 @@ namespace JobBank.Scheduling
         {
             public long DeactivationTime;
             public TQueue Queue;
+            public uint Epoch;
             public bool IsInExpiryQueue;
+            public bool IsNewlyAdded;
         }
 
         private readonly Func<TKey, TQueue> _factory;
@@ -78,12 +80,18 @@ namespace JobBank.Scheduling
                 if (!_members.TryGetValue(key, out var entry))
                     return;
 
+                // Ignore if events come in out of order
+                if (!args.IsNewerThan(entry.Epoch) && !entry.IsNewlyAdded)
+                    return;
+
                 if (!args.Activated)
                 {
                     toQueueForExpiry = !entry.IsInExpiryQueue;
                     entry.IsInExpiryQueue = true;
                 }
 
+                entry.IsNewlyAdded = false;
+                entry.Epoch = args.Counter;
                 entry.DeactivationTime = time;
                 _members[key] = entry;
             }
@@ -134,6 +142,7 @@ namespace JobBank.Scheduling
                 entry.Queue = queue;
                 entry.DeactivationTime = Environment.TickCount64;
                 entry.IsInExpiryQueue = true;
+                entry.IsNewlyAdded = true;
 
                 lock (_members)
                 {
