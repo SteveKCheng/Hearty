@@ -109,9 +109,15 @@ namespace JobBank.Scheduling
 
             lock (_members)
             {
-                if (!_members.TryGetValue(key, out var entry) ||
-                    entry.DeactivationTime == long.MaxValue)
+                if (!_members.TryGetValue(key, out var entry))
                     return;
+
+                if (entry.DeactivationTime == long.MaxValue)
+                {
+                    entry.IsInExpiryQueue = false;
+                    _members[key] = entry;
+                    return;
+                }
 
                 if (entry.DeactivationTime < now - _expiryQueue.ExpiryTicks)
                 {
