@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace JobBank.Scheduling
@@ -35,6 +38,7 @@ namespace JobBank.Scheduling
     /// </typeparam>
     public class ClientQueueSystem<TMessage, TKey, TQueue> 
         : ISchedulingFlow<TMessage>
+        , IReadOnlyDictionary<TKey, TQueue>
         where TKey : notnull
         where TQueue : ISchedulingFlow<TMessage>
     {
@@ -183,6 +187,61 @@ namespace JobBank.Scheduling
             }
         }
 
+        /// <inheritdoc cref="ISchedulingFlow{T}.AsFlow" />
         public SchedulingFlow<TMessage> AsFlow() => _schedulingGroup.AsFlow();
+
+        /// <inheritdoc cref="IReadOnlyDictionary{TKey, TValue}.Keys" />
+        public IEnumerable<TKey> Keys => ListMembers().Select(item => item.Key);
+
+        /// <inheritdoc cref="IReadOnlyDictionary{TKey, TValue}.Values" />
+        public IEnumerable<TQueue> Values => ListMembers().Select(item => item.Value);
+
+        /// <inheritdoc cref="IReadOnlyDictionary{TKey, TValue}.Count" />
+        public int Count => _members.Count;
+
+        /// <inheritdoc cref="IReadOnlyDictionary{TKey, TValue}.ContainsKey" />
+        public bool ContainsKey(TKey key)
+        {
+            lock (_members)
+            {
+                return _members.ContainsKey(key);
+            }
+        }
+
+        /// <inheritdoc cref="IReadOnlyDictionary{TKey, TValue}.TryGetValue" />
+        public bool TryGetValue(TKey key, [MaybeNullWhen(false)] out TQueue value)
+        {
+            bool exists;
+            Entry entry;
+            lock (_members)
+            {
+                exists = _members.TryGetValue(key, out entry);
+            }
+
+            value = exists ? entry.Queue : default;
+            return exists;
+        }
+
+        private IEnumerable<KeyValuePair<TKey, TQueue>> ListMembers()
+        {
+            KeyValuePair<TKey, TQueue>[] items;
+
+            lock (_members)
+            {
+                items = new KeyValuePair<TKey, TQueue>[_members.Count];
+                int index = 0;
+                foreach (var item in _members)
+                    items[index++] = new(item.Key, item.Value.Queue);
+            }
+
+            return (IEnumerable<KeyValuePair<TKey, TQueue>>)items;
+        }
+
+        /// <inheritdoc cref="IEnumerable{T}.GetEnumerator" />
+        public IEnumerator<KeyValuePair<TKey, TQueue>> GetEnumerator()
+            => ListMembers().GetEnumerator();
+
+        /// <inheritdoc cref="IEnumerable.GetEnumerator" />
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }
