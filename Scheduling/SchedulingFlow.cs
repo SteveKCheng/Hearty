@@ -69,13 +69,13 @@ namespace JobBank.Scheduling
         /// as it is de-queued.  The parent will set this property
         /// when the balance needs to be re-filled or adjusted.
         /// </remarks>
-        protected internal int Balance { get; internal set; }
+        public int Balance { get; internal set; }
 
         /// <summary>
         /// Whether this queue is active, i.e. it may have a job available
         /// from the next call to <see cref="TakeJob" />.
         /// </summary>
-        protected internal bool IsActive => PriorityHeapIndex >= 0;
+        public bool IsActive => PriorityHeapIndex >= 0;
 
         /// <summary>
         /// Backing field for <see cref="Weight" />.
@@ -123,7 +123,7 @@ namespace JobBank.Scheduling
         /// <see cref="_inverseWeight" />.
         /// </para>
         /// </remarks>
-        protected internal int Weight
+        public int Weight
         {
             get => _weight;
             internal set
