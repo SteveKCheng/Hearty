@@ -2,8 +2,9 @@
 
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
-	  <RootNamespace>JobBank.Server.Program</RootNamespace>
-	  <AssemblyName>JobBank.Server.Program</AssemblyName>
+    <RootNamespace>JobBank.Server.Program</RootNamespace>
+    <AssemblyName>JobBank.Server.Program</AssemblyName>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
