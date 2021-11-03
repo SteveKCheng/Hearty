@@ -222,24 +222,28 @@ namespace JobBank.Scheduling
             return exists;
         }
 
-        private IEnumerable<KeyValuePair<TKey, TQueue>> ListMembers()
+        /// <summary>
+        /// Take a snapshot of all the member queues currently in this queue system.
+        /// </summary>
+        public KeyValuePair<TKey, TQueue>[] ListMembers()
         {
             KeyValuePair<TKey, TQueue>[] items;
 
             lock (_members)
             {
                 items = new KeyValuePair<TKey, TQueue>[_members.Count];
+
                 int index = 0;
                 foreach (var item in _members)
                     items[index++] = new(item.Key, item.Value.Queue);
             }
 
-            return (IEnumerable<KeyValuePair<TKey, TQueue>>)items;
+            return items;
         }
 
         /// <inheritdoc cref="IEnumerable{T}.GetEnumerator" />
         public IEnumerator<KeyValuePair<TKey, TQueue>> GetEnumerator()
-            => ListMembers().GetEnumerator();
+            => ((IEnumerable<KeyValuePair<TKey, TQueue>>)ListMembers()).GetEnumerator();
 
         /// <inheritdoc cref="IEnumerable.GetEnumerator" />
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
