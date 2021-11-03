@@ -100,6 +100,8 @@ namespace JobBank.Tests
                 //lastArrivalTime = job.ArrivalTime;
 
                 currentTime = Math.Max(currentTime, job!.ArrivalTime);
+                job.StartTime = currentTime;
+
                 currentTime += job.InitialCharge;
                 job.ExitTime = currentTime;
 
@@ -332,16 +334,101 @@ namespace JobBank.Tests
             return waitTimes;
         }
 
+        /// <summary>
+        /// Return the indefinite integral of the work done
+        /// in the simulation.
+        /// </summary>
+        /// <param name="jobs">
+        /// The list of jobs processed by one child queue, in order.
+        /// </param>
+        /// <returns>
+        /// The indefinite integral, with initial condition set as zero
+        /// at the start of the simulation.
+        /// </returns>
+        private static Func<double, double> 
+            ComputeWorkIntegral(IReadOnlyList<DummyJob> jobs)
+        {
+            var knots = new KeyValuePair<int, int>[jobs.Count];
 
-                // Expected range of sample mean of exit wait times.
-                //
-                // This should be around childWriters.Length × mean arrival time,
-                // because the jobs are all "executed" in serial.
-                //
-                // This is a weak test that all child flows are being de-queued fairly.
-                int N = childWriters.Length;
-                Assert.InRange(stats.ExitWaitMean, low * N, high * N);
+            int currentTime = int.MinValue;
+
+            int runningIntegral = 0;
+            int countKnots = 0;
+
+            // Calculate the knots of the indefinite integral,
+            // which is piecewise linear.
+            foreach (var job in jobs)
+            {
+                Assert.InRange(job.StartTime, currentTime, job.ExitTime);
+
+                int timeTaken = job.ExitTime - job.StartTime;
+
+                if (job.StartTime != currentTime || countKnots == 0)
+                    knots[countKnots++] = new(job.StartTime, runningIntegral);
+                else
+                    countKnots--;   // merge with preceding knot
+
+                runningIntegral += timeTaken;
+                knots[countKnots++] = new(job.ExitTime, runningIntegral);
+
+                currentTime = job.ExitTime;
             }
+
+            // Indefinite integral is identically zero if there are no jobs
+            if (countKnots == 0)
+                return (double t) => 0.0;
+
+            // Return piecewise-linear interpolant
+            return (double t) =>
+            {
+                var knotsSpan = knots.AsSpan().Slice(0, countKnots);
+                int index = BinarySearch(knotsSpan, (int)t, false);
+                if (index == 0)
+                {
+                    // Extrapolate as flat on the extreme left
+                    return 0.0;
+                }
+                else if (index < countKnots)
+                {
+                    // Linearly interpolate
+                    (int t_left, int y_left) = knotsSpan[index - 1];
+                    (int t_right, int y_right) = knotsSpan[index];
+                    var slope = (double)(y_right - y_left) / (double)(t_right - t_left);
+                    return slope * (t - (double)t_left) + (double)y_left;
+                }
+                else
+                {
+                    // Extrapolate as flat on the extreme right
+                    return (double)knotsSpan[^1].Value;
+                }
+            };
+        }
+
+        private static int BinarySearch<TKey, TValue>(
+            Span<KeyValuePair<TKey, TValue>> sorted, 
+            TKey target,
+            bool forUpperBound)
+        {
+            // The closed interval [left,right] brackets the returned index
+            int left = 0;
+            int right = sorted.Length;
+
+            var comparer = Comparer<TKey>.Default;
+
+            // Bisect until the interval brackets only one choice of index
+            while (left != right)
+            {
+                int mid = (left + right) >> 1;
+
+                int comparison = comparer.Compare(sorted[mid].Key, target);
+                    
+                if (comparison < 0 || (forUpperBound && (comparison == 0)))
+                    left = mid + 1;
+                else
+                    right = mid;
+            }
+
+            return left;
         }
 
         private static IEnumerable<double> GetSuccessiveDifferences(IEnumerable<double> numbers)

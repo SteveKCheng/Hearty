@@ -10,17 +10,40 @@ using System.Diagnostics;
 
 namespace JobBank.Tests
 {
+    /// <summary>
+    /// A job item to consider in simulations of job scheduling.
+    /// </summary>
     [DebuggerDisplay("Id: {Id} Child: {ChildIndex} Charge: {InitialCharge} Arrival: {ArrivalTime} Exit: {ExitTime}")]
     internal class DummyJob : ISchedulingExpense
     {
+        /// <summary>
+        /// The time that the job is assumed to take in the simulation.
+        /// </summary>
         public int InitialCharge { get; init; }
 
+        /// <summary>
+        /// The identifier for this job global to the simulation.
+        /// </summary>
         public int Id { get; init; }
 
+        /// <summary>
+        /// The simulated time when this job "arrives" at the queue.
+        /// </summary>
         public int ArrivalTime { get; init; }
 
+        /// <summary>
+        /// The simulated time when this job gets de-queued and started.
+        /// </summary>
+        public int StartTime { get; set; }
+
+        /// <summary>
+        /// The time when this job is finished in the simulation.
+        /// </summary>
         public int ExitTime { get; set; }
 
+        /// <summary>
+        /// The index of the child queue that this job is put into.
+        /// </summary>
         public int ChildIndex { get; init; }
     }
 
