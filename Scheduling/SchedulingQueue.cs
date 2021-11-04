@@ -19,7 +19,7 @@ namespace JobBank.Scheduling
     /// internally based on <see cref="ConcurrentQueue{T}" />.
     /// </para>
     /// <para>
-    /// Use <see cref="SimpleJobQueue{T}" /> instead of this class 
+    /// Use <see cref="SchedulingChannel{T}" /> instead of this class 
     /// to adapt an existing channel as a scheduling flow.
     /// </para>
     /// </remarks>

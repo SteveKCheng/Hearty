@@ -96,7 +96,7 @@ namespace JobBank.Tests
             for (int i = 0; i < childWriters.Length; ++i)
             {
                 var channel = Channel.CreateUnbounded<DummyJob>();
-                var child = new SimpleJobQueue<DummyJob>(channel.Reader);
+                var child = new SchedulingChannel<DummyJob>(channel.Reader);
                 parent.AdmitChild(child);
                 childWriters[i] = channel.Writer;
             }

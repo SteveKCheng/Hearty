@@ -27,7 +27,7 @@
     <Compile Include="SchedulingGroup.ChannelReader.cs" />
     <Compile Include="SchedulingFlow.cs" />
     <Compile Include="SchedulingGroup.cs" />
-    <Compile Include="SimpleJobQueue.cs" />
+    <Compile Include="SchedulingChannel.cs" />
     <Compile Include="ResettableConcurrentTaskSource.cs" />
   </ItemGroup>
 

@@ -6,14 +6,15 @@ using System.Threading.Tasks;
 namespace JobBank.Scheduling
 {
     /// <summary>
-    /// A job queue, for the fair scheduling system, backed by 
-    /// <see cref="ChannelReader{T}" />.
+    /// Adapts <see cref="ChannelReader{T}" /> to be a flow for the
+    /// fair scheduling system.
     /// </summary>
-    public class SimpleJobQueue<T> : SchedulingFlow<T> where T: ISchedulingExpense
+    public class SchedulingChannel<T> : SchedulingFlow<T> 
+        where T: ISchedulingExpense
     {
         private readonly ChannelReader<T> _channelReader;
 
-        public SimpleJobQueue(ChannelReader<T> channelReader)
+        public SchedulingChannel(ChannelReader<T> channelReader)
         {
             _channelReader = channelReader;
         }
