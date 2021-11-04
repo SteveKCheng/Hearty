@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="SchedulingQueue.cs" />
     <Compile Include="SimpleExpiryQueue.cs" />
     <Compile Include="ISchedulingAccount.cs" />
     <Compile Include="ISchedulingExpense.cs" />
