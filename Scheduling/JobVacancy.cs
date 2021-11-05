@@ -15,16 +15,25 @@ namespace JobBank.Scheduling
     /// </typeparam>
     public readonly struct JobVacancy<TInput, TOutput>
     {
-        public ValueTask RunJobAsync(ScheduledJob<TInput, TOutput> job)
+        public void LaunchJob(ScheduledJob<TInput, TOutput> job)
             => _action.Invoke(_state, job);
 
-        private readonly object? _state;
-        private readonly Func<object?, ScheduledJob<TInput, TOutput>, ValueTask> _action;
+        /// <summary>
+        /// An arbitrary ID that can be assigned by the originator
+        /// of this instance, for debugging and monitoring.
+        /// </summary>
+        public uint ExecutionId { get; }
 
-        public JobVacancy(Func<object?, ScheduledJob<TInput, TOutput>, ValueTask> action, object? state)
+        private readonly object? _state;
+        private readonly Action<object?, ScheduledJob<TInput, TOutput>> _action;
+
+        public JobVacancy(Action<object?, ScheduledJob<TInput, TOutput>> action, 
+                          object? state,
+                          uint executionId)
         {
             _action = action;
             _state = state;
+            ExecutionId = executionId;
         }
     }
 }

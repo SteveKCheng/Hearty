@@ -95,6 +95,10 @@ namespace JobBank.Scheduling
         /// </remarks>
         public CancellationToken CancellationToken { get; }
 
+        /// <summary>
+        /// The initial estimate of the amount of time the job
+        /// would take, in milliseconds.
+        /// </summary>
         public int InitialCharge { get; }
 
         private int _currentCharge;
@@ -110,6 +114,10 @@ namespace JobBank.Scheduling
             }
         }
 
+        /// <summary>
+        /// Asynchronous task that furnishes the result
+        /// when the job finishes executing.
+        /// </summary>
         public Task<TOutput> OutputTask => _taskBuilder.Task;
 
         public void SetResult(TOutput output)
@@ -118,10 +126,10 @@ namespace JobBank.Scheduling
         public void SetException(Exception exception)
             => _taskBuilder.SetException(exception);
 
-        internal SharedFuture(ISchedulingAccount owner,
-                              in TInput input, 
-                              int initialCharge, 
-                              CancellationToken cancellationToken)
+        public SharedFuture(ISchedulingAccount owner,
+                            in TInput input, 
+                            int initialCharge, 
+                            CancellationToken cancellationToken)
         {
             _owner = owner;
 
@@ -130,8 +138,35 @@ namespace JobBank.Scheduling
             CancellationToken = cancellationToken;
         }
 
+        /// <summary>
+        /// Create a representative of this job 
+        /// <see cref="ScheduledJob{TInput, TOutput}" />
+        /// to push into a job-scheduling queue. 
+        /// </summary>
+        /// <remarks>
+        /// If the same job gets scheduled multiple times (by different clients),
+        /// each time there is a different representative that points to the same
+        /// <see cref="SharedFuture{TInput, TOutput}" />.
+        /// </remarks>
+        public ScheduledJob<TInput, TOutput> CreateJob()
+            => new ScheduledJob<TInput, TOutput>(this);
+
+        /// <summary>
+        /// Builds the task in <see cref="OutputTask" />.
+        /// </summary>
+        /// <remarks>
+        /// This task builder is used to avoid allocating a separate <see cref="TaskCompletionSource{TResult}" />.
+        /// This class here does not inherit from <see cref="TaskCompletionSource{TResult}" /> but we do not want to 
+        /// expose that functionality in public.   For similar reasons this class does not simply
+        /// implement <see cref="System.Threading.Tasks.Sources.IValueTaskSource{TResult}" />
+        /// even if that could avoid one more allocation.
+        /// </remarks>
         private AsyncTaskMethodBuilder<TOutput> _taskBuilder;
 
+        /// <summary>
+        /// For re-charging or crediting the originating queue for
+        /// revised estimates of the execution time of the job.
+        /// </summary>
         private readonly ISchedulingAccount _owner;
     }
 }

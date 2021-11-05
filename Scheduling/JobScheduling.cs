@@ -59,7 +59,7 @@ namespace JobBank.Scheduling
                 if (!job.TryStartJob())
                     continue;
 
-                await vacancy.RunJobAsync(job).ConfigureAwait(false);
+                vacancy.LaunchJob(job);
             }
         }
     }
