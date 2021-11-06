@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace JobBank.Scheduling
 {
     /// <summary>
-    /// A job that can be consumed from a queuing system once resources
+    /// Represents a job that can be consumed from a queuing system once resources
     /// are available to execute it.
     /// </summary>
     /// <typeparam name="TInput">
@@ -16,22 +16,40 @@ namespace JobBank.Scheduling
     /// <typeparam name="TOutput">
     /// The outputs from executing the job.
     /// </typeparam>
-    public struct ScheduledJob<TInput, TOutput> : ISchedulingExpense
+    /// <remarks>
+    /// The job that is eventually executed is represented by 
+    /// <see cref="SharedFuture{TInput, TOutput}" />, but the actual item
+    /// to put into the queuing system is this structure which wraps
+    /// <see cref="SharedFuture{TInput, TOutput}" />.  This wrapping allows
+    /// the same job to be queued into more than one queue 
+    /// (of differing priorities, such that the first to de-queue would
+    /// launch the job), to avoid priority inversion.
+    /// </remarks>
+    public readonly struct ScheduledJob<TInput, TOutput> : ISchedulingExpense
     {
-        private readonly SharedFuture<TInput, TOutput> _future;
+        /// <summary>
+        /// The underlying "job" object that may be shared across multiple queues
+        /// because it has been enqueued more than once.
+        /// </summary>
+        public SharedFuture<TInput, TOutput> Future { get; }
+
+        /// <summary>
+        /// The queue that has this instance enqueued, needed for adjusting
+        /// its debit balance.
+        /// </summary>
+        public ISchedulingAccount Account { get; }
 
         /// <inheritdoc cref="ISchedulingExpense.InitialCharge" />
-        public int InitialCharge => _future.InitialCharge;
+        public int InitialCharge => Future.InitialCharge;
 
-        internal ScheduledJob(SharedFuture<TInput, TOutput> future)
+        /// <summary>
+        /// Instantiates a representative of <see cref="SharedFuture{TInput, TOutput}" />.
+        /// </summary>
+        internal ScheduledJob(SharedFuture<TInput, TOutput> future,
+                              ISchedulingAccount account)
         {
-            _future = future;
+            Future = future;
+            Account = account;
         }
-
-        public TInput Input => _future.Input;
-
-        public bool TryStartJob() => true;
-
-        public void SetResult(TOutput output) => _future.SetResult(output);
     }
 }

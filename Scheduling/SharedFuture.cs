@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -102,16 +103,64 @@ namespace JobBank.Scheduling
         public int InitialCharge { get; }
 
         private int _currentCharge;
+        private long _startTime;
+        private readonly ISchedulingAccount _account;
 
-        public int CurrentCharge
+        /// <summary>
+        /// Arranges a timer that periodically fires to 
+        /// adjust queue balances for the time taken so far to run the job.
+        /// </summary>
+        private readonly SimpleExpiryQueue _expiryQueue;
+
+        /// <summary>
+        /// Called as an <see cref="ExpiryAction"/> so queue balances
+        /// can be updated for the currntly running job.
+        /// </summary>
+        private bool UpdateCurrentCharge(long now)
         {
-            get => _currentCharge;
-            set
+            int currentCharge = _currentCharge;
+
+            // Do not update charges if job has completed.
+            if (currentCharge < 0)
+                return false;
+
+            int elapsed = MiscArithmetic.SaturateToInt(now - _startTime);
+            if (elapsed > currentCharge)
             {
-                int change = MiscArithmetic.SaturatingSubtract(_currentCharge, value);
-                _currentCharge = value;
-                _owner.AdjustBalance(change);
+                int resolution = InitialCharge >= 100 ? InitialCharge : 100;
+                int extraCharge = elapsed - currentCharge;
+
+                // Round up extraCharge to closest unit of resolution,
+                // saturating on overflow.
+                int roundedCharge =
+                    (extraCharge <= int.MaxValue - resolution)
+                      ? (extraCharge + (resolution - 1)) / resolution * resolution
+                      : int.MaxValue;
+
+                roundedCharge = MiscArithmetic.SaturatingAdd(currentCharge, roundedCharge);
+
+                // If this last timer firing raced with the job completing,
+                // do not update charges any longer.
+                if (Interlocked.CompareExchange(ref _currentCharge, roundedCharge, currentCharge) != currentCharge)
+                    return false;
+
+                _account.AdjustBalance(-roundedCharge);
             }
+
+            // Re-schedule timer as long as job has not completed
+            return true;
+        }
+
+        /// <summary>
+        /// Adjusts queue balances for the final measurement of the
+        /// time taken by the job once it ends.
+        /// </summary>
+        private void FinalizeCharge(long now)
+        {
+            int elapsed = MiscArithmetic.SaturateToInt(now - _startTime);
+            int currentCharge = Interlocked.Exchange(ref _currentCharge, -1);
+            Debug.Assert(currentCharge >= 0);
+            _account.AdjustBalance(currentCharge - elapsed);
         }
 
         /// <summary>
@@ -120,18 +169,38 @@ namespace JobBank.Scheduling
         /// </summary>
         public Task<TOutput> OutputTask => _taskBuilder.Task;
 
-        public void SetResult(TOutput output)
-            => _taskBuilder.SetResult(output);
+        /// <summary>
+        /// Set to one when the job is launched, to prevent
+        /// it from being launched multiple times.
+        /// </summary>
+        private int _jobLaunched;
 
-        public void SetException(Exception exception)
-            => _taskBuilder.SetException(exception);
-
-        public SharedFuture(ISchedulingAccount owner,
-                            in TInput input, 
+        /// <summary>
+        /// Prepare a job that can eventually be launched on some worker.
+        /// </summary>
+        /// <param name="input">The input describing the job. </param>
+        /// <param name="initialCharge">The initial estimate of the
+        /// time to execute the job, in milliseconds.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be triggered to cancel the job.
+        /// </param>
+        /// <param name="account">
+        /// The abstract queue to charge back for the time taken
+        /// to execute the job.
+        /// </param>
+        /// <param name="expiryQueue">
+        /// Used to periodically fire timers to update the estimate
+        /// of the time needed to execute the job.
+        /// </param>
+        public SharedFuture(in TInput input, 
                             int initialCharge, 
-                            CancellationToken cancellationToken)
+                            CancellationToken cancellationToken,
+                            ISchedulingAccount account,
+                            SimpleExpiryQueue expiryQueue)
         {
-            _owner = owner;
+            _account = account;
+            _expiryQueue = expiryQueue;
 
             Input = input;
             InitialCharge = initialCharge;
@@ -149,24 +218,73 @@ namespace JobBank.Scheduling
         /// <see cref="SharedFuture{TInput, TOutput}" />.
         /// </remarks>
         public ScheduledJob<TInput, TOutput> CreateJob()
-            => new ScheduledJob<TInput, TOutput>(this);
+            => new ScheduledJob<TInput, TOutput>(this, _account);
 
         /// <summary>
         /// Builds the task in <see cref="OutputTask" />.
         /// </summary>
         /// <remarks>
         /// This task builder is used to avoid allocating a separate <see cref="TaskCompletionSource{TResult}" />.
-        /// This class here does not inherit from <see cref="TaskCompletionSource{TResult}" /> but we do not want to 
-        /// expose that functionality in public.   For similar reasons this class does not simply
+        /// This class here does not inherit from <see cref="TaskCompletionSource{TResult}" /> to avoid
+        /// exposing the task-building functionality in public.   For similar reasons this class does not simply
         /// implement <see cref="System.Threading.Tasks.Sources.IValueTaskSource{TResult}" />
         /// even if that could avoid one more allocation.
         /// </remarks>
         private AsyncTaskMethodBuilder<TOutput> _taskBuilder;
 
         /// <summary>
-        /// For re-charging or crediting the originating queue for
-        /// revised estimates of the execution time of the job.
+        /// Launch this job on a worker and set the result of <see cref="OutputTask" />.
         /// </summary>
-        private readonly ISchedulingAccount _owner;
+        private async Task LaunchJobInternalAsync(Func<TInput, ValueTask<TOutput>> worker)
+        {
+            try
+            {
+                _startTime = Environment.TickCount64;
+                _currentCharge = InitialCharge;
+
+                _expiryQueue.Enqueue(
+                    static (t, s) => Unsafe.As<SharedFuture<TInput, TOutput>>(s!)
+                                           .UpdateCurrentCharge(t),
+                    this);
+
+                try
+                {
+                    var output = await worker.Invoke(Input)
+                                             .ConfigureAwait(false);
+                    _taskBuilder.SetResult(output);
+                }
+                catch (Exception e)
+                {
+                    _taskBuilder.SetException(e);
+                }
+
+                var endTime = Environment.TickCount64;
+                FinalizeCharge(endTime);
+            }
+            catch (Exception e)
+            {
+                _taskBuilder.SetException(e);
+            }
+        }
+
+        /// <summary>
+        /// Have a worker launch this job, but only if it has not been
+        /// launched before.
+        /// </summary>
+        /// <param name="worker">
+        /// The worker that would execute the job.
+        /// </param>
+        /// <returns>
+        /// True if this job has been launched on <paramref name="worker" />;
+        /// false if it was already launched (on another worker).
+        /// </returns>
+        public bool TryLaunchJob(Func<TInput, ValueTask<TOutput>> worker)
+        {
+            if (Interlocked.Exchange(ref _jobLaunched, 1) != 0)
+                return false;
+
+            _ = LaunchJobInternalAsync(worker);
+            return true;
+        }
     }
 }

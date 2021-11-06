@@ -56,10 +56,7 @@ namespace JobBank.Scheduling
                     continue;
                 }
 
-                if (!job.TryStartJob())
-                    continue;
-
-                vacancy.LaunchJob(job);
+                vacancy.TryLaunchJob(job);
             }
         }
     }
