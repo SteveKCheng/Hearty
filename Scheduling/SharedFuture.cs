@@ -110,7 +110,7 @@ namespace JobBank.Scheduling
         /// Arranges a timer that periodically fires to 
         /// adjust queue balances for the time taken so far to run the job.
         /// </summary>
-        private readonly SimpleExpiryQueue _expiryQueue;
+        private readonly SimpleExpiryQueue _timingQueue;
 
         /// <summary>
         /// Called as an <see cref="ExpiryAction"/> so queue balances
@@ -189,7 +189,7 @@ namespace JobBank.Scheduling
         /// The abstract queue to charge back for the time taken
         /// to execute the job.
         /// </param>
-        /// <param name="expiryQueue">
+        /// <param name="timingQueue">
         /// Used to periodically fire timers to update the estimate
         /// of the time needed to execute the job.
         /// </param>
@@ -197,10 +197,10 @@ namespace JobBank.Scheduling
                             int initialCharge, 
                             CancellationToken cancellationToken,
                             ISchedulingAccount account,
-                            SimpleExpiryQueue expiryQueue)
+                            SimpleExpiryQueue timingQueue)
         {
             _account = account;
-            _expiryQueue = expiryQueue;
+            _timingQueue = timingQueue;
 
             Input = input;
             InitialCharge = initialCharge;
@@ -243,7 +243,7 @@ namespace JobBank.Scheduling
                 _startTime = Environment.TickCount64;
                 _currentCharge = InitialCharge;
 
-                _expiryQueue.Enqueue(
+                _timingQueue.Enqueue(
                     static (t, s) => Unsafe.As<SharedFuture<TInput, TOutput>>(s!)
                                            .UpdateCurrentCharge(t),
                     this);
