@@ -107,31 +107,31 @@ namespace JobBank.Scheduling
         private void ScheduleForExpiry(object key)
             => _expiryQueue.Enqueue((now, state) => TryCleanUp(now, state!), key);
 
-        private void TryCleanUp(long now, object state)
+        private bool TryCleanUp(long now, object state)
         {
             var key = (TKey)state;
 
             lock (_members)
             {
                 if (!_members.TryGetValue(key, out var entry))
-                    return;
+                    return false;
 
                 if (entry.DeactivationTime == long.MaxValue)
                 {
                     entry.IsInExpiryQueue = false;
                     _members[key] = entry;
-                    return;
+                    return false;
                 }
 
                 if (entry.DeactivationTime < now - _expiryQueue.ExpiryTicks)
                 {
                     // Expire now
                     _members.Remove(key);
-                    return;
+                    return false;
                 }
             }
 
-            ScheduleForExpiry(state);
+            return true;
         }
 
         public TQueue GetOrAdd(TKey key)

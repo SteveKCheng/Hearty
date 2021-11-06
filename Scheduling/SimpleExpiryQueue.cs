@@ -15,7 +15,10 @@ namespace JobBank.Scheduling
     /// <param name="state">
     /// The arbitrary object registered with <see cref="SimpleExpiryQueue.Enqueue" />.
     /// </param>
-    public delegate void CleanUpAction(long now, object? state);
+    /// <returns>
+    /// True if the clean-up action should be re-queued, false if not.
+    /// </returns>
+    public delegate bool ExpiryAction(long now, object? state);
 
     /// <summary>
     /// Cleans up registered objects after a certain time interval.
@@ -53,14 +56,14 @@ namespace JobBank.Scheduling
             /// <summary>
             /// The clean-up action to invoke.
             /// </summary>
-            public readonly CleanUpAction Action;
+            public readonly ExpiryAction Action;
 
             /// <summary>
             /// State object passed to <see cref="Action" />.
             /// </summary>
             public readonly object? State;
 
-            public Entry(long deadline, CleanUpAction action, object? state)
+            public Entry(long deadline, ExpiryAction action, object? state)
             {
                 Deadline = deadline;
                 Action = action;
@@ -123,24 +126,19 @@ namespace JobBank.Scheduling
         /// </summary>
         private void OnTimerFiring()
         {
-            bool toDequeue = false;
+            Entry entry;
+            bool more;
 
-            while (true)
+            lock (_queue)
             {
-                Entry entry;
+                more = _queue.TryPeek(out entry);
+            }
 
-                lock (_queue)
-                {
-                    if (toDequeue)
-                        _queue.Dequeue();
-
-                    if (!_queue.TryPeek(out entry))
-                        break;
-                }
-
+            while (more)
+            {
                 // Stop de-queuing and re-schedule upon reaching
                 // an entry that should not be expiring yet
-                var now = Environment.TickCount64;
+                long now = Environment.TickCount64;
                 if (entry.Deadline > now)
                 {
                     _timer.Change(Math.Max(ExpiryTicks, entry.Deadline - now),
@@ -148,8 +146,28 @@ namespace JobBank.Scheduling
                     break;
                 }
 
-                toDequeue = true;
-                entry.Action.Invoke(now, entry.State);
+                bool toRequeue = false;
+                try
+                {
+                    toRequeue = entry.Action.Invoke(now, entry.State);
+                }
+                catch
+                {
+                    // FIXME report as event
+                }
+
+                long deadline = toRequeue ? Environment.TickCount64 + ExpiryTicks 
+                                          : default;
+
+                lock (_queue)
+                {
+                    _queue.Dequeue();
+
+                    if (toRequeue)
+                        _queue.Enqueue(new Entry(deadline, entry.Action, entry.State));
+
+                    more = _queue.TryPeek(out entry);
+                }
             }
         }
 
@@ -169,7 +187,7 @@ namespace JobBank.Scheduling
         /// This deadline time is measured in the same way as
         /// <see cref="Environment.TickCount64" />.
         /// </returns>
-        public long Enqueue(CleanUpAction action, object? state)
+        public long Enqueue(ExpiryAction action, object? state)
         {
             var now = Environment.TickCount64;
             var deadline = now + ExpiryTicks;
