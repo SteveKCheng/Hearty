@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Channels;
 
 namespace JobBank.Scheduling
 {
@@ -105,5 +106,17 @@ namespace JobBank.Scheduling
         /// classes minus one.
         /// </param>
         public TQueue this[int index] => _members[index];
+
+        /// <summary>
+        /// Obtain the reading side of the channel which receives
+        /// the messages in prioritized order.
+        /// </summary>
+        public ChannelReader<TMessage> AsChannel() => _schedulingGroup.AsChannelReader();
+
+        /// <summary>
+        /// Stop receiving messages from the channel returned by
+        /// <see cref="AsChannel" />.
+        /// </summary>
+        public void TerminateChannel() => _schedulingGroup.TerminateChannelReader();
     }
 }
