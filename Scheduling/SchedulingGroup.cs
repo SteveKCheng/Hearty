@@ -283,14 +283,15 @@ namespace JobBank.Scheduling
 #pragma warning restore CS8762
                     }
 
-                    var eventArgs = DeactivateChildCore(child);
+                    var eventArgs = DeactivateChildCore(child, out bool lastDeactivated);
 
-                    if (eventArgs != null)
+                    if (eventArgs != null || lastDeactivated)
                     {
                         // Do not invoke user's function inside the lock
                         Monitor.Exit(syncObject);
                         try
                         {
+                            NotifyDeactivation(lastDeactivated);
                             InvokeEventHandler(eventArgs);
                         }
                         finally
@@ -434,18 +435,21 @@ namespace JobBank.Scheduling
         /// the lock for this instance's own data structures.  The return
         /// value is null if the event handler should not be invoked.
         /// </returns>
-        private SchedulingActivationEventArgs? DeactivateChildCore(SchedulingFlow<T> child)
+        private SchedulingActivationEventArgs? DeactivateChildCore(SchedulingFlow<T> child,
+                                                                   out bool lastDeactivated)
         {
             if (child.IsActive)
             {
                 _priorityHeap.Delete(child.PriorityHeapIndex);
                 child.RefillEpoch = _countRefills;
+                lastDeactivated = (_priorityHeap.Count == 0);
                 return _eventHandler != null ? new(false, 
                                                    unchecked(++_eventCounter), 
                                                    child.Attachment) 
                                              : null;
             }
 
+            lastDeactivated = false;
             return null;
         }
 
@@ -458,15 +462,17 @@ namespace JobBank.Scheduling
         internal void DeactivateChild(SchedulingFlow<T> child)
         {
             SchedulingActivationEventArgs? eventArgs;
+            bool lastDeactivated;
 
             lock (SyncObject)
             {
                 if (!CheckCorrectParent(child, optional: true))
                     return;
 
-                eventArgs = DeactivateChildCore(child);
+                eventArgs = DeactivateChildCore(child, out lastDeactivated);
             }
 
+            NotifyDeactivation(lastDeactivated);
             InvokeEventHandler(eventArgs);
         }
 
@@ -491,13 +497,14 @@ namespace JobBank.Scheduling
                                                ref SchedulingGroup<T>? parentRef)
         {
             SchedulingActivationEventArgs? eventArgs;
+            bool lastDeactivated;
 
             lock (SyncObject)
             {
                 if (!CheckCorrectParent(child, optional: true))
                     return;
 
-                eventArgs = DeactivateChildCore(child);
+                eventArgs = DeactivateChildCore(child, out lastDeactivated);
 
                 // Reset weight and statistics while holding the lock
                 child.RefillEpoch = 0;
@@ -508,6 +515,7 @@ namespace JobBank.Scheduling
                 parentRef = null;
             }
 
+            NotifyDeactivation(lastDeactivated);
             InvokeEventHandler(eventArgs);
         }
 
@@ -519,6 +527,20 @@ namespace JobBank.Scheduling
         {
             if (eventArgs != null)
                 _eventHandler!.Invoke(_eventSender, eventArgs.GetValueOrDefault());
+        }
+
+        /// <summary>
+        /// Notifies <see cref="FlowImpl" />, if it has been instantiated,
+        /// when all child queues have de-activated.
+        /// </summary>
+        /// <param name="lastDeactivated">
+        /// The output flag from <see cref="DeactivateChildCore" />,
+        /// indicating if notification should occur.
+        /// </param>
+        private void NotifyDeactivation(bool lastDeactivated)
+        {
+            if (lastDeactivated && _toWakeUp is FlowImpl flowAdaptor)
+                flowAdaptor.OnSubgroupDeactivated();
         }
 
         /// <summary>

@@ -38,6 +38,17 @@ namespace JobBank.Scheduling
             /// </summary>
             internal void OnSubgroupActivated() => Activate();
 
+            /// <summary>
+            /// Called by <see cref="SchedulingGroup{T}" />
+            /// when it de-activates because it became empty.
+            /// </summary>
+            internal void OnSubgroupDeactivated() => Deactivate();
+
+            /// <summary>
+            /// Called by <see cref="SchedulingGroup{T}" /> to
+            /// propagate an adjustment of balance from one of its
+            /// child queues.
+            /// </summary>
             internal void OnAdjustBalance(int debit) => AdjustBalance(debit);
         }
 
