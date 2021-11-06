@@ -22,7 +22,16 @@ namespace JobBank.Scheduling
         /// </summary>
         public uint ExecutionId { get; }
 
-        private readonly Func<TInput, ValueTask<TOutput>> _action;
+        /// <summary>
+        /// Name that identifies the worker being claimed, 
+        /// for debugging and monitoring.
+        /// </summary>
+        public string WorkerName => _worker.Name;
+
+        /// <summary>
+        /// The worker which is being claimed for job execution.
+        /// </summary>
+        private readonly IJobWorker<TInput, TOutput> _worker;
 
         /// <summary>
         /// Use this vacancy to launch a scheduled job,
@@ -33,19 +42,20 @@ namespace JobBank.Scheduling
         /// if it had already been launched earlier.
         /// </returns>
         public bool TryLaunchJob(in ScheduledJob<TInput, TOutput> job)
-            => job.Future.TryLaunchJob(_action);
+            => job.Future.TryLaunchJob(_worker, ExecutionId);
 
         /// <summary>
         /// Represent a claim to resources on a worker to launch a job.
         /// </summary>
-        /// <param name="action"></param>
+        /// <param name="worker">The worker whose resources are being
+        /// claimed to launch a job. </param>
         /// <param name="executionId">
         /// See <see cref="ExecutionId" />.
         /// </param>
-        public JobVacancy(Func<TInput, ValueTask<TOutput>> action, 
+        public JobVacancy(IJobWorker<TInput, TOutput> worker, 
                           uint executionId)
         {
-            _action = action;
+            _worker = worker;
             ExecutionId = executionId;
         }
     }

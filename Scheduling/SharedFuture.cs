@@ -235,7 +235,8 @@ namespace JobBank.Scheduling
         /// <summary>
         /// Launch this job on a worker and set the result of <see cref="OutputTask" />.
         /// </summary>
-        private async Task LaunchJobInternalAsync(Func<TInput, ValueTask<TOutput>> worker)
+        private async Task LaunchJobInternalAsync(IJobWorker<TInput, TOutput> worker,
+                                                  uint executionId)
         {
             try
             {
@@ -249,7 +250,9 @@ namespace JobBank.Scheduling
 
                 try
                 {
-                    var output = await worker.Invoke(Input)
+                    var output = await worker.ExecuteJobAsync(executionId,
+                                                              Input,
+                                                              CancellationToken)
                                              .ConfigureAwait(false);
                     _taskBuilder.SetResult(output);
                 }
@@ -274,16 +277,20 @@ namespace JobBank.Scheduling
         /// <param name="worker">
         /// The worker that would execute the job.
         /// </param>
+        /// <param name="executionId">
+        /// ID to identify the job execution for the worker, assigned by convention.
+        /// </param>
         /// <returns>
         /// True if this job has been launched on <paramref name="worker" />;
         /// false if it was already launched (on another worker).
         /// </returns>
-        public bool TryLaunchJob(Func<TInput, ValueTask<TOutput>> worker)
+        public bool TryLaunchJob(IJobWorker<TInput, TOutput> worker,
+                                 uint executionId)
         {
             if (Interlocked.Exchange(ref _jobLaunched, 1) != 0)
                 return false;
 
-            _ = LaunchJobInternalAsync(worker);
+            _ = LaunchJobInternalAsync(worker, executionId);
             return true;
         }
     }
