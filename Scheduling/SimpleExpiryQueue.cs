@@ -27,17 +27,42 @@ namespace JobBank.Scheduling
     /// <para>
     /// This class provides time-based garbage collection, essentially.
     /// Its functionality is deliberately limited to enable a simple 
-    /// implementation.
+    /// and fast implementation.
     /// </para>
     /// <para>
     /// It is designed to scale for thousands of objects being infrequently
     /// registered.  It uses minimal resources, e.g. clean-ups for all the
-    /// objects are triggered by one shared timer.
+    /// objects are triggered by one shared <see cref="Timer" /> object.
+    /// </para>
+    /// <para>
+    /// Note that the current implementation of .NET, whenever it fires
+    /// any instance of <see cref="Timer" />, it must linearly scan 
+    /// a (global) list of all active instances!  This very sub-optimal 
+    /// implementation thus requires user-level code to coalesce its own 
+    /// timers to achieve any reasonable degree of scalability.
     /// </para>
     /// <para>
     /// To avoid the need to sort the registered objects,
     /// it is not possible to unregister objects, and the time to expiry
     /// is the same for all objects.
+    /// </para>
+    /// <para>
+    /// The registered expiry actions are executed in sequence.
+    /// In contrast, if individual <see cref="Timer" /> timers are used
+    /// then the actions may fire in parallel, via .NET's standard thread 
+    /// pool.  Again, that may be bad for scalability when there could be
+    /// hundreds of expiry actions.
+    /// </para>
+    /// <para>
+    /// The expiry actions registered with this class should be quick to 
+    /// execute, so that it makes sense execute them in sequence.  
+    /// As the relative expiry time is constant, and registered actions cannot
+    /// be cancelled, if the objects have varying lifetimes, then 
+    /// effectively they need to be polled.  So if an expiry action 
+    /// executes before the target object has really expired, 
+    /// it should do nothing but get itself re-queued, either
+    /// immediately or later upon receiving some other callback.
+    /// The latter approach should be quite parsimonious of resources.
     /// </para>
     /// </remarks>
     public class SimpleExpiryQueue : IDisposable
