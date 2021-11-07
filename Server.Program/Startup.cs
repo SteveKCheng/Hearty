@@ -58,6 +58,7 @@ namespace JobBank.Server.Program
 
             services.AddSingleton<PathsDirectory, InMemoryPathsDirectory>();
             services.AddSingleton<JobsServerConfiguration>();
+            services.AddSingleton<TimeoutProvider, SimpleTimeoutProvider>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

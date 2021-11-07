@@ -113,14 +113,18 @@ namespace JobBank.Scheduling
         public int ExpiryTicks { get; }
 
         /// <summary>
-        /// The implementation-defined minimum value for <see cref="ExpiryTicks" />: 1 second.
+        /// The implementation-defined minimum value for <see cref="ExpiryTicks" />: 20 milliseconds.
         /// </summary>
-        public readonly int MinimumTicks = 1000;
+        /// <remarks>
+        /// Note that .NET timers, depending on the underlying platform, may well
+        /// have a resolution of only 10-20 milliseconds.
+        /// </remarks>
+        public static int MinimumTicks { get; } = 20;
 
         /// <summary>
         /// The implementation-defined maximum value for <see cref="ExpiryTicks" />: 24 hours.
         /// </summary>
-        public readonly int MaximumTicks = 1000 * 60 * 60 * 24;
+        public static int MaximumTicks { get; } = 1000 * 60 * 60 * 24;
 
         /// <summary>
         /// Prepare the queue where objects may be registered for clean-up..
