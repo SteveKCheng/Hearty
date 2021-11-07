@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading;
 
 namespace JobBank.Scheduling
 {
@@ -24,7 +25,7 @@ namespace JobBank.Scheduling
     /// </para>
     /// </remarks>
     public sealed class SchedulingQueue<T> 
-        : SchedulingFlow<T>, ISchedulingFlow<T>, IReadOnlyCollection<T>
+        : SchedulingFlow<T>, ISchedulingFlow<T>, ISchedulingAccount, IReadOnlyCollection<T>
         where T: ISchedulingExpense
     {
         private readonly ConcurrentQueue<T> _queue;
@@ -102,5 +103,8 @@ namespace JobBank.Scheduling
 
         /// <inheritdoc cref="IEnumerable.GetEnumerator" />
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+        /// <inheritdoc cref="ISchedulingAccount.AdjustBalance" />
+        void ISchedulingAccount.AdjustBalance(int debit) => base.AdjustBalance(debit);
     }
 }
