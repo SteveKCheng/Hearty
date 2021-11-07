@@ -266,6 +266,7 @@ namespace JobBank.Scheduling
             }
             catch (Exception e)
             {
+                worker.AbandonJob(executionId);
                 _taskBuilder.SetException(e);
             }
         }
@@ -288,7 +289,10 @@ namespace JobBank.Scheduling
                                  uint executionId)
         {
             if (Interlocked.Exchange(ref _jobLaunched, 1) != 0)
+            {
+                worker.AbandonJob(executionId);
                 return false;
+            }
 
             _ = LaunchJobInternalAsync(worker, executionId);
             return true;

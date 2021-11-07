@@ -47,16 +47,13 @@ namespace JobBank.Scheduling
                 if (!await jobsChannel.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
                     break;
 
-                if (!vacanciesChannel.TryRead(out var vacancy))
-                    continue;
-
-                if (!jobsChannel.TryRead(out var job))
+                if (vacanciesChannel.TryRead(out var vacancy))
                 {
-                    // FIXME Dispose vacancy if no job
-                    continue;
+                    if (jobsChannel.TryRead(out var job))
+                        vacancy.TryLaunchJob(job);
+                    else
+                        vacancy.Dispose();
                 }
-
-                vacancy.TryLaunchJob(job);
             }
         }
     }
