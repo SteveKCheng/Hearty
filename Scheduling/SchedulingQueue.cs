@@ -3,6 +3,8 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics.X86;
 using System.Threading;
 
 namespace JobBank.Scheduling
@@ -109,36 +111,21 @@ namespace JobBank.Scheduling
 
         #region Statistics
 
-        private long _cumulativeCharges;
-        private int _countItemsProcessed;
+        private SequenceLock<SchedulingStatistics> _completionStats;
 
         /// <inheritdoc cref="ISchedulingAccount.TabulateCompletedItem(int)" />
         public void TabulateCompletedItem(int charge)
         {
-            lock (_queue)
+            var oldStats = _completionStats.BeginWriteTransaction(out uint version);
+            _completionStats.EndWriteTransaction(version, new SchedulingStatistics
             {
-                _cumulativeCharges += charge;
-                _countItemsProcessed++;
-            }
+                CumulativeCharge = oldStats.CumulativeCharge + charge,
+                ItemsCount = oldStats.ItemsCount + 1
+            });
         }
 
         /// <inheritdoc cref="ISchedulingAccount.CompletionStatistics" />
-        public SchedulingStatistics CompletionStatistics
-        {
-            get
-            {
-                // In theory we can use a "seq-lock" here for better
-                // scalability.  We leave that for later.
-                lock (_queue)
-                {
-                    return new SchedulingStatistics
-                    {
-                        CumulativeCharge = _cumulativeCharges,
-                        ItemsCount = _countItemsProcessed
-                    };
-                }
-            }
-        }
+        public SchedulingStatistics CompletionStatistics => _completionStats.Read();
 
         #endregion
     }
