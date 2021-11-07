@@ -106,5 +106,40 @@ namespace JobBank.Scheduling
 
         /// <inheritdoc cref="ISchedulingAccount.AdjustBalance" />
         void ISchedulingAccount.AdjustBalance(int debit) => base.AdjustBalance(debit);
+
+        #region Statistics
+
+        private long _cumulativeCharges;
+        private int _countItemsProcessed;
+
+        /// <inheritdoc cref="ISchedulingAccount.TabulateCompletedItem(int)" />
+        public void TabulateCompletedItem(int charge)
+        {
+            lock (_queue)
+            {
+                _cumulativeCharges += charge;
+                _countItemsProcessed++;
+            }
+        }
+
+        /// <inheritdoc cref="ISchedulingAccount.CompletionStatistics" />
+        public SchedulingStatistics CompletionStatistics
+        {
+            get
+            {
+                // In theory we can use a "seq-lock" here for better
+                // scalability.  We leave that for later.
+                lock (_queue)
+                {
+                    return new SchedulingStatistics
+                    {
+                        CumulativeCharge = _cumulativeCharges,
+                        ItemsCount = _countItemsProcessed
+                    };
+                }
+            }
+        }
+
+        #endregion
     }
 }

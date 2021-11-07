@@ -12,6 +12,7 @@
   <ItemGroup>
     <Compile Include="IJobWorker.cs" />
     <Compile Include="SchedulingQueue.cs" />
+    <Compile Include="SchedulingStatistics.cs" />
     <Compile Include="SimpleExpiryQueue.cs" />
     <Compile Include="ISchedulingAccount.cs" />
     <Compile Include="ISchedulingExpense.cs" />

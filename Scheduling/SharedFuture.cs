@@ -161,6 +161,7 @@ namespace JobBank.Scheduling
             int currentCharge = Interlocked.Exchange(ref _currentCharge, -1);
             Debug.Assert(currentCharge >= 0);
             _account.AdjustBalance(currentCharge - elapsed);
+            _account.TabulateCompletedItem(currentCharge);
         }
 
         /// <summary>
