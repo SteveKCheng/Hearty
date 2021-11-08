@@ -40,21 +40,38 @@ namespace JobBank.Scheduling
             {
                 uint version1 = Volatile.Read(ref _version);
 
-                var data = _data;
+                // Avoid contending the cache line(s) for _data if
+                // _version is already contended
+                if ((version1 & 1u) == 0)
+                {
+                    var data = _data;
 
-                // This needs to be a load-load barrier but .NET does not have any
-                // API for that.  Assume the machine code generator is not doing
-                // any clever re-ordering of these loads on x86.  Use a full
-                // memory fence if we are running on non-x86 hardware, which
-                // may sport weakly-ordered memory access.
-                if (!X86Base.IsSupported)
-                    Thread.MemoryBarrier();
+                    // There needs to be a load-load barrier here
+                    // but .NET does not have any API for that.  
+                    uint version2;
+                    if (X86Base.IsSupported)
+                    {
+                        // On x86 only a compiler barrier is needed, i.e. ensure
+                        // that there is no re-ordering of loads in the generated
+                        // machine code.  We can check that is so by JIT disassembly
+                        // from https://sharplabs.io.  The "volatile" read here is
+                        // not logically necessary but makes it less likely
+                        // another version of the compiler will try to re-order.
+                        version2 = Volatile.Read(ref _version);
+                    }
+                    else
+                    {
+                        // Use a full memory fence if we are running on non-x86
+                        // hardware, which may sport weakly-ordered memory access.
+                        Thread.MemoryBarrier();
+                        version2 = _version;
+                    }
 
-                uint version2 = Volatile.Read(ref _version);
+                    if (version1 == version2)
+                        return data;
+                }
 
-                if (version1 == version2 && (version1 & 1u) == 0)
-                    return data;
-
+                // Contending with concurrent writer
                 spinWait.SpinOnce();
             } while (true);
         }
@@ -91,12 +108,13 @@ namespace JobBank.Scheduling
                 if ((oldVersion & 1u) == 0)
                 {
                     // The above "interlocked" operation in .NET implies a full memory
-                    // barrier in .NET and so it already prevents any following store to
-                    // _data from being re-ordered to before the store to _version.
+                    // barrier in .NET, and so it already prevents any following store
+                    // to _data from being re-ordered to before the store to _version.
                     version = oldVersion;
                     return _data;
                 }
 
+                // Contending with concurrent writer
                 spinWait.SpinOnce();
             } while (true);
         }
