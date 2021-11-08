@@ -22,6 +22,11 @@ namespace JobBank.Scheduling
         /// The input describing what to execute, which typically comes
         /// from a job message of type <see cref="ScheduledJob{TInput, TOutput}" />.
         /// </param>
+        /// <param name="initialCharge">
+        /// The charge in resources initially estimated for the job. 
+        /// This value should not affect the job execution but can be used 
+        /// for monitoring.
+        /// </param>
         /// <param name="cancellationToken">
         /// Used to cancel the job.
         /// </param>
@@ -33,6 +38,7 @@ namespace JobBank.Scheduling
         /// The outputs from completing the job.
         /// </returns>
         ValueTask<TOutput> ExecuteJobAsync(uint executionId,
+                                           int initialCharge,
                                            TInput input,
                                            CancellationToken cancellationToken);
 

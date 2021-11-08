@@ -24,9 +24,9 @@ namespace JobBank.Server.Program.Pages
 
             int howMany = speed switch
             {
-                2 => 50,
-                1 => 20,
-                _ => 5
+                2 => 100,
+                1 => 70,
+                _ => 20
             };
 
             var clientName = GetClientName(client);

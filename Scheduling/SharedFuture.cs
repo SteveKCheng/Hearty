@@ -241,8 +241,9 @@ namespace JobBank.Scheduling
         {
             try
             {
+                var initialCharge = InitialCharge;
                 _startTime = Environment.TickCount64;
-                _currentCharge = InitialCharge;
+                _currentCharge = initialCharge;
 
                 _timingQueue.Enqueue(
                     static (t, s) => Unsafe.As<SharedFuture<TInput, TOutput>>(s!)
@@ -252,6 +253,7 @@ namespace JobBank.Scheduling
                 try
                 {
                     var output = await worker.ExecuteJobAsync(executionId,
+                                                              initialCharge,
                                                               Input,
                                                               CancellationToken)
                                              .ConfigureAwait(false);
