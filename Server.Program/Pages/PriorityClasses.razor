@@ -1,0 +1,40 @@
+﻿@page "/priority-classes"
+
+@using JobBank.Server.Program.Data
+@inject JobSchedulingSystem _jobScheduling
+@inject TimeoutProvider _timeoutProvider
+
+<h1>Priority classes</h1>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Client</th>
+            <th>Job Count</th>
+            <th>Time Taken (s)</th>
+        </tr>
+    </thead>
+
+    @for (int i = _jobScheduling.PriorityClasses.Count; i > 0; --i)
+    {
+        var classe = _jobScheduling.PriorityClasses[i - 1];
+
+        <tbody>
+            <tr>
+                <th colspan="3">Priority Class @(i-1): Weight @classe.AsFlow().Weight</th>
+            </tr>
+
+            @foreach (var (key, client) in classe.ListMembers())
+            {
+                var stats = client.CompletionStatistics;
+                var seconds = (double)stats.CumulativeCharge / 1000.0;
+
+                <tr>
+                    <td>@key</td>
+                    <td>@client.Count</td>
+                    <td>@seconds.ToString("F3")</td>
+                </tr>
+            }
+        </tbody>
+    }
+</table>

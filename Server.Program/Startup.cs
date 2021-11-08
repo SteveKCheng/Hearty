@@ -58,6 +58,7 @@ namespace JobBank.Server.Program
 
             services.AddSingleton<PathsDirectory, InMemoryPathsDirectory>();
             services.AddSingleton<JobsServerConfiguration>();
+            services.AddSingleton<JobSchedulingSystem>();
             services.AddSingleton<TimeoutProvider, SimpleTimeoutProvider>();
         }
 
@@ -86,6 +87,8 @@ namespace JobBank.Server.Program
                 endpoints.MapFallbackToPage("/_Host");
                 
                 var jobsServerConfig = app.ApplicationServices.GetRequiredService<JobsServerConfiguration>();
+                var jobScheduling = app.ApplicationServices.GetRequiredService<JobSchedulingSystem>();
+
                 endpoints.MapPostJob(jobsServerConfig, "pricing", async (JobInput input, PromiseId promiseId) =>
                 {
                     using var stream = input.PipeReader.AsStream();
@@ -100,9 +103,12 @@ namespace JobBank.Server.Program
                         return new Payload("application/json", Encoding.ASCII.GetBytes(@"{ ""status"": ""completed"" }"));
                     }
 
+                    var request = new Payload(input.ContentType ?? string.Empty, requestData);
+                    await jobScheduling.PushJobForClientAsync("testClient", 5, request);
+
                     return new Job(MockWork())
                     {
-                        RequestOutput = new Payload(input.ContentType ?? string.Empty, requestData)
+                        RequestOutput = request
                     };
                 });
 
