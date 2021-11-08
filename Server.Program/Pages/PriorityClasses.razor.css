@@ -1,0 +1,30 @@
+﻿tr.priority-class {
+    background-color: yellow;
+    font-size: 0.8em;
+}
+
+tr.job-queue th {
+    padding: 2px;
+}
+
+table.job-queue thead tr {
+    border-top: none;
+}
+
+table.job-queue tr {
+    border-top: 1px dashed grey;
+}
+
+table.job-queue tr.job-queue td:first-child {
+    padding-left: 1em;
+}
+
+table.job-queue {
+    width: 100%;
+    color: #212529;
+    border-collapse: collapse;
+}
+
+table.job-queue col.client {
+    width: 10em;
+}

@@ -5,36 +5,44 @@
 
 <h1>Mock Job Load</h1>
 
-@for (int i = 0; i < 3; ++i)
-{
-    // Avoid lambda capture of mutable loop index
-    int c = i;
+<table class="control-panel">
 
-    <h2>@GetClientName(c)</h2>
+    <colgroup>
+        <col class="client" />
+        <col class="priority" />
+        <col class="speed" />
+        <col class="speed" />
+        <col class="speed" />
+    </colgroup>
 
-    <table>
-        <tr>
+    @for (int i = 0; i < 3; ++i)
+    {
+        // Avoid lambda capture of mutable loop index
+        int c = i;
+
+        <tr class="client">
+            <th class="client" rowspan="4">@GetClientName(c)</th>
             <th>Priority</th>
-            <th colspan="3">Job speed</th>
+            <th class="speed" colspan="3">Job speed</th>
         </tr>
         <tr>
             <td>High</td>
-            <td><button @onclick="() => InjectJobs(c, 8, 2)">Fast</button></td>
-            <td><button @onclick="() => InjectJobs(c, 8, 1)">Medium</button></td>
-            <td><button @onclick="() => InjectJobs(c, 8, 0)">Slow</button></td>
+            <td class="speed"><button @onclick="() => InjectJobs(c, 8, 2)">Fast</button></td>
+            <td class="speed"><button @onclick="() => InjectJobs(c, 8, 1)">Medium</button></td>
+            <td class="speed"><button @onclick="() => InjectJobs(c, 8, 0)">Slow</button></td>
         </tr>
         <tr>
             <td>Normal</td>
-            <td><button @onclick="() => InjectJobs(c, 5, 2)">Fast</button></td>
-            <td><button @onclick="() => InjectJobs(c, 5, 1)">Medium</button></td>
-            <td><button @onclick="() => InjectJobs(c, 5, 0)">Slow</button></td>
+            <td class="speed"><button @onclick="() => InjectJobs(c, 5, 2)">Fast</button></td>
+            <td class="speed"><button @onclick="() => InjectJobs(c, 5, 1)">Medium</button></td>
+            <td class="speed"><button @onclick="() => InjectJobs(c, 5, 0)">Slow</button></td>
         </tr>
         <tr>
             <td>Background</td>
-            <td><button @onclick="() => InjectJobs(c, 2, 2)">Fast</button></td>
-            <td><button @onclick="() => InjectJobs(c, 2, 1)">Medium</button></td>
-            <td><button @onclick="() => InjectJobs(c, 2, 0)">Slow</button></td>
+            <td class="speed"><button @onclick="() => InjectJobs(c, 2, 2)">Fast</button></td>
+            <td class="speed"><button @onclick="() => InjectJobs(c, 2, 1)">Medium</button></td>
+            <td class="speed"><button @onclick="() => InjectJobs(c, 2, 0)">Slow</button></td>
         </tr>
-    </table>
-}
+    }
 
+</table>
