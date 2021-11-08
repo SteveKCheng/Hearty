@@ -98,13 +98,13 @@ namespace JobBank.Server.Program
 
         private Task _jobRunnerTask;
 
-        public ValueTask PushJobForClientAsync(string client, int priority, PromiseOutput request)
+        public ValueTask PushJobForClientAsync(string client, int priority, PromiseOutput request, int charge)
         {
             var queue = PriorityClasses[priority].GetOrAdd(client);
 
             var future = new SharedFuture<PromiseOutput, PromiseOutput>(
                             request,
-                            100,
+                            charge,
                             CancellationToken.None,
                             queue,
                             _timingQueue);

@@ -1,0 +1,40 @@
+﻿@page "/mock-job-load"
+
+@using JobBank.Server.Program.Data
+@inject JobSchedulingSystem _jobScheduling
+
+<h1>Mock Job Load</h1>
+
+@for (int i = 0; i < 3; ++i)
+{
+    // Avoid lambda capture of mutable loop index
+    int c = i;
+
+    <h2>@GetClientName(c)</h2>
+
+    <table>
+        <tr>
+            <th>Priority</th>
+            <th colspan="3">Job speed</th>
+        </tr>
+        <tr>
+            <td>High</td>
+            <td><button @onclick="() => InjectJobs(c, 8, 2)">Fast</button></td>
+            <td><button @onclick="() => InjectJobs(c, 8, 1)">Medium</button></td>
+            <td><button @onclick="() => InjectJobs(c, 8, 0)">Slow</button></td>
+        </tr>
+        <tr>
+            <td>Normal</td>
+            <td><button @onclick="() => InjectJobs(c, 5, 2)">Fast</button></td>
+            <td><button @onclick="() => InjectJobs(c, 5, 1)">Medium</button></td>
+            <td><button @onclick="() => InjectJobs(c, 5, 0)">Slow</button></td>
+        </tr>
+        <tr>
+            <td>Background</td>
+            <td><button @onclick="() => InjectJobs(c, 2, 2)">Fast</button></td>
+            <td><button @onclick="() => InjectJobs(c, 2, 1)">Medium</button></td>
+            <td><button @onclick="() => InjectJobs(c, 2, 0)">Slow</button></td>
+        </tr>
+    </table>
+}
+

@@ -24,7 +24,7 @@
                 <th colspan="3">Priority Class @(i-1): Weight @classe.AsFlow().Weight</th>
             </tr>
 
-            @foreach (var (key, client) in classe.ListMembers())
+            @foreach (var (key, client) in classe.ListMembers().OrderBy(item => item.Key))
             {
                 var stats = client.CompletionStatistics;
                 var seconds = (double)stats.CumulativeCharge / 1000.0;
