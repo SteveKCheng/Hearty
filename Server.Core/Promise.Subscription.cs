@@ -7,6 +7,9 @@ using JobBank.Utilities;
 
 namespace JobBank.Server
 {
+    using SubscriptionNodeLinks = CircularListLinks<Promise.SubscriptionNode,
+                                               Promise.SubscriptionNode.ListLinksAccessor>;
+
     public partial class Promise
     {
         /// <summary>
@@ -27,8 +30,23 @@ namespace JobBank.Server
         /// (custom) task source provided to each client.
         /// </para>
         /// </remarks>
-        internal class SubscriptionNode : CircularListNode<SubscriptionNode>, IValueTaskSource<SubscribedResult>
+        internal class SubscriptionNode : IValueTaskSource<SubscribedResult>
         {
+            /// <summary>
+            /// Accesses <see cref="SubscriptionNode._listLinks" /> in order to use
+            /// <see cref="CircularListLinks{T, TLinksAccessor}" />.
+            /// </summary>
+            internal struct ListLinksAccessor : IInteriorStruct<SubscriptionNode, SubscriptionNodeLinks>
+            {
+                public ref SubscriptionNodeLinks GetInteriorReference(SubscriptionNode parent)
+                    => ref parent._listLinks;
+            }
+
+            /// <summary>
+            /// Forms the linked list of all subscription nodes.
+            /// </summary>
+            private SubscriptionNodeLinks _listLinks;
+
             /// <summary>
             /// The (parent) promise object that is being subscribed to.
             /// </summary>
@@ -69,6 +87,7 @@ namespace JobBank.Server
             {
                 Promise = promise;
                 Client = client;
+                _listLinks = new SubscriptionNodeLinks(this);
             }
 
             /// <summary>
@@ -111,7 +130,7 @@ namespace JobBank.Server
                     if (_isAttached)
                         return;
 
-                    base.AppendSelf(ref Promise._firstSubscription);
+                    SubscriptionNodeLinks.Append(this, ref Promise._firstSubscription);
                     _isAttached = true;
                 }
 
@@ -140,8 +159,10 @@ namespace JobBank.Server
                     if (!wasAttached && !_inWakeUpList)
                         return;
 
-                    base.RemoveSelf(ref (_inWakeUpList ? ref Promise._firstToWake
-                                                       : ref Promise._firstSubscription));
+                    SubscriptionNodeLinks.Remove(
+                        this, 
+                        ref (_inWakeUpList ? ref Promise._firstToWake
+                                           : ref Promise._firstSubscription));
 
                     _inWakeUpList = false;
                     _isAttached = false;
@@ -184,9 +205,9 @@ namespace JobBank.Server
                     {
                         Debug.Assert(target._isAttached && target._inWakeUpList);
 
-                        target.RemoveSelf(ref promise._firstToWake);
+                        SubscriptionNodeLinks.Remove(target, ref promise._firstToWake);
                         target._inWakeUpList = false;
-                        target.AppendSelf(ref promise._firstSubscription);
+                        SubscriptionNodeLinks.Append(target, ref promise._firstSubscription);
                     }
                 }
 
@@ -313,7 +334,7 @@ namespace JobBank.Server
 
                             // Add self to parent's wake-up list
                             _inWakeUpList = true;
-                            base.AppendSelf(ref Promise._firstToWake);
+                            SubscriptionNodeLinks.Append(this, ref Promise._firstToWake);
                         }
                         else
                         {
