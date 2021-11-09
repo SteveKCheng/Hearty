@@ -11,11 +11,11 @@ table.control-panel {
     width: 100%;
 }
 
-table.control-panel col.speed {
+table.control-panel col.load {
     width: 4em;
 }
 
-table.control-panel .speed {
+table.control-panel .load {
     text-align: center;
 }
 

@@ -17,21 +17,21 @@ namespace JobBank.Server.Program.Pages
                 _ => $"Client {(char)((int)'A' + index)}"
             };
 
-        private void InjectJobs(int client, int priority, int speed)
+        private void InjectJobs(int client, int priority, int load)
         {
             PromiseOutput request =
                 new Payload("application/json", Encoding.ASCII.GetBytes(@"{ ""request"": ""..."" }"));
 
-            int howMany = speed switch
+            int howMany = load switch
             {
-                2 => 100,
-                1 => 70,
+                0 => 100,
+                1 => 60,
                 _ => 20
             };
 
             var clientName = GetClientName(client);
 
-            var waitingTimeGenerator = _waitingTimeGenerators[speed];
+            var waitingTimeGenerator = _waitingTimeGenerators[load];
 
             for (int i = 0; i < howMany; ++i)
             {
@@ -45,9 +45,9 @@ namespace JobBank.Server.Program.Pages
         public MockJobLoad()
         {
             _waitingTimeGenerators = new Func<double>[3];
-            _waitingTimeGenerators[2] = CreateExponentialWaitingTimeGenerator(34, 200.0, 8000.0);
+            _waitingTimeGenerators[0] = CreateExponentialWaitingTimeGenerator(34, 200.0, 8000.0);
             _waitingTimeGenerators[1] = CreateExponentialWaitingTimeGenerator(34, 500.0, 8000.0);
-            _waitingTimeGenerators[0] = CreateExponentialWaitingTimeGenerator(34, 2000.0, 8000.0);
+            _waitingTimeGenerators[2] = CreateExponentialWaitingTimeGenerator(34, 2000.0, 8000.0);
         }
 
         private static Func<double>

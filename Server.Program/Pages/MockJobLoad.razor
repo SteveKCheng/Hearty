@@ -10,9 +10,9 @@
     <colgroup>
         <col class="client" />
         <col class="priority" />
-        <col class="speed" />
-        <col class="speed" />
-        <col class="speed" />
+        <col class="load" />
+        <col class="load" />
+        <col class="load" />
     </colgroup>
 
     @for (int i = 0; i < 3; ++i)
@@ -23,25 +23,25 @@
         <tr class="client">
             <th class="client" rowspan="4">@GetClientName(c)</th>
             <th>Priority</th>
-            <th class="speed" colspan="3">Job speed</th>
+            <th class="load" colspan="3">Job load</th>
         </tr>
         <tr>
             <td>High</td>
-            <td class="speed"><button @onclick="() => InjectJobs(c, 8, 2)">Fast</button></td>
-            <td class="speed"><button @onclick="() => InjectJobs(c, 8, 1)">Medium</button></td>
-            <td class="speed"><button @onclick="() => InjectJobs(c, 8, 0)">Slow</button></td>
+            <td class="load"><button @onclick="() => InjectJobs(c, 8, 0)">Light</button></td>
+            <td class="load"><button @onclick="() => InjectJobs(c, 8, 1)">Medium</button></td>
+            <td class="load"><button @onclick="() => InjectJobs(c, 8, 2)">Heavy</button></td>
         </tr>
         <tr>
             <td>Normal</td>
-            <td class="speed"><button @onclick="() => InjectJobs(c, 5, 2)">Fast</button></td>
-            <td class="speed"><button @onclick="() => InjectJobs(c, 5, 1)">Medium</button></td>
-            <td class="speed"><button @onclick="() => InjectJobs(c, 5, 0)">Slow</button></td>
+            <td class="load"><button @onclick="() => InjectJobs(c, 5, 0)">Light</button></td>
+            <td class="load"><button @onclick="() => InjectJobs(c, 5, 1)">Medium</button></td>
+            <td class="load"><button @onclick="() => InjectJobs(c, 5, 2)">Heavy</button></td>
         </tr>
         <tr>
             <td>Background</td>
-            <td class="speed"><button @onclick="() => InjectJobs(c, 2, 2)">Fast</button></td>
-            <td class="speed"><button @onclick="() => InjectJobs(c, 2, 1)">Medium</button></td>
-            <td class="speed"><button @onclick="() => InjectJobs(c, 2, 0)">Slow</button></td>
+            <td class="load"><button @onclick="() => InjectJobs(c, 2, 0)">Light</button></td>
+            <td class="load"><button @onclick="() => InjectJobs(c, 2, 1)">Medium</button></td>
+            <td class="load"><button @onclick="() => InjectJobs(c, 2, 2)">Heavy</button></td>
         </tr>
     }
 
