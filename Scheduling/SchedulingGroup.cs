@@ -176,6 +176,17 @@ namespace JobBank.Scheduling
         }
 
         /// <summary>
+        /// If true, the balance of a child flow is not capped to
+        /// the remaining flows.
+        /// </summary>
+        /// <remarks>
+        /// This option should be enabled if the balances in the
+        /// scheduling flows represent available resources 
+        /// rather than time.
+        /// </remarks>
+        public bool RetainBalanceAfterReactivation { get; set; }
+
+        /// <summary>
         /// Re-fill balances on all child queues when none are eligible
         /// to be scheduled.
         /// </summary>
@@ -357,6 +368,9 @@ namespace JobBank.Scheduling
         /// </remarks>
         private int GetUpperBoundBalance()
         {
+            if (RetainBalanceAfterReactivation)
+                return int.MaxValue;
+
             return _priorityHeap.IsNonEmpty ? _priorityHeap[0].Key :
                    _lastExtractedBalance > 0 ? _lastExtractedBalance
                                              : _balanceRefillAmount;
