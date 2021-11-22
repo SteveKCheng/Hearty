@@ -263,14 +263,21 @@ namespace JobBank.Scheduling
                 {
                     _taskBuilder.SetException(e);
                 }
-
-                var endTime = Environment.TickCount64;
-                FinalizeCharge(endTime);
             }
             catch (Exception e)
             {
                 worker.AbandonJob(executionId);
                 _taskBuilder.SetException(e);
+            }
+
+            try
+            {
+                var endTime = Environment.TickCount64;
+                FinalizeCharge(endTime);
+            }
+            catch
+            {
+                // FIXME What to do with exception here?
             }
         }
 
