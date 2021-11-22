@@ -10,7 +10,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="DistributedWorker.cs" />
+    <Compile Include="IDistributedWorker.cs" />
     <Compile Include="IJobWorker.cs" />
+    <Compile Include="WorkerDistribution.cs" />
     <Compile Include="SchedulingQueue.cs" />
     <Compile Include="SchedulingStatistics.cs" />
     <Compile Include="SequenceLock.cs" />

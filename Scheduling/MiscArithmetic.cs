@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace JobBank.Scheduling
@@ -109,6 +110,33 @@ namespace JobBank.Scheduling
                 // to a conditional branch.
                 return uh + (ul >> 31) == 0 ? (int)ul : (int)uo;
             }
+        }
+
+        /// <summary>
+        /// Decrement an unsigned integer without underflowing.
+        /// </summary>
+        /// <param name="location">
+        /// The variable for the 32-bit unsigned integer.
+        /// </param>
+        /// <returns>
+        /// The value before decrementing.  Note this is different
+        /// from <see cref="Interlocked.Decrement(ref uint)" />
+        /// which returns the value after decrementing.
+        /// </returns>
+        public static uint InterlockedSaturatedDecrement(ref uint location)
+        {
+            uint s = location;
+            uint r;
+            do
+            {
+                r = s;
+                if (r == 0)
+                    return 0;
+
+                s = Interlocked.CompareExchange(ref location, r - 1, r);
+            } while (s != r);
+
+            return r;
         }
     }
 }
