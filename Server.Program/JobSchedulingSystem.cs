@@ -27,12 +27,10 @@ namespace JobBank.Server.Program
             public string Name => "DummyWorker";
 
             public async ValueTask<PromiseOutput> ExecuteJobAsync(uint executionId, 
-                                                                  int initialCharge,
-                                                                  PromiseOutput input, 
-                                                                  CancellationToken cancellationToken)
+                                                                  SharedFuture<PromiseOutput, PromiseOutput> future)
             {
                 _logger.LogInformation("Starting job for execution ID {executionId}", executionId);
-                await Task.Delay(initialCharge, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(future.InitialCharge, future.CancellationToken).ConfigureAwait(false);
                 _logger.LogInformation("Completing job for execution ID {executionId}", executionId);
                 return new Payload("application/json", Encoding.ASCII.GetBytes(@"{ ""status"": ""finished job"" }"));
             }

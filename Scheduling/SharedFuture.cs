@@ -252,10 +252,7 @@ namespace JobBank.Scheduling
 
                 try
                 {
-                    var output = await worker.ExecuteJobAsync(executionId,
-                                                              initialCharge,
-                                                              Input,
-                                                              CancellationToken)
+                    var output = await worker.ExecuteJobAsync(executionId, this)
                                              .ConfigureAwait(false);
                     _taskBuilder.SetResult(output);
                 }
@@ -295,8 +292,8 @@ namespace JobBank.Scheduling
         /// True if this job has been launched on <paramref name="worker" />;
         /// false if it was already launched (on another worker).
         /// </returns>
-        public bool TryLaunchJob(IJobWorker<TInput, TOutput> worker,
-                                 uint executionId)
+        internal bool TryLaunchJob(IJobWorker<TInput, TOutput> worker,
+                                   uint executionId)
         {
             if (Interlocked.Exchange(ref _jobLaunched, 1) != 0)
             {

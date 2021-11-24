@@ -131,16 +131,12 @@ namespace JobBank.Scheduling
 
         async ValueTask<TOutput> 
             IJobWorker<TInput, TOutput>.ExecuteJobAsync(uint executionId, 
-                                                        int initialCharge, 
-                                                        TInput input, 
-                                                        CancellationToken cancellationToken)
+                                                        SharedFuture<TInput, TOutput> future)
         {
             try
             {
-                return await _executor.ExecuteJobAsync(executionId,
-                                                       initialCharge,
-                                                       input,
-                                                       cancellationToken);
+                return await _executor.ExecuteJobAsync(executionId, future)
+                                      .ConfigureAwait(false);
             }
             finally
             {
