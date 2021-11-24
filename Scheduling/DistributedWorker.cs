@@ -111,6 +111,10 @@ namespace JobBank.Scheduling
             }
         }
 
+        int IDistributedWorker.TotalResources => _resourceTotal;
+
+        int IDistributedWorker.AvailableResources => (int)_resourceAvailable;
+
         /// <inheritdoc />
         protected override bool TryTakeItem(
             [MaybeNullWhen(false)] out JobVacancy<TInput, TOutput> item,

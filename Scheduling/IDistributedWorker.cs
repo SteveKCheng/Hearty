@@ -19,6 +19,21 @@ namespace JobBank.Scheduling
         /// Name that identifies this worker, for debugging and monitoring.
         /// </summary>
         string Name { get; }
+
+        /// <summary>
+        /// Get the count of total abstract resources.
+        /// </summary>
+        /// <remarks>
+        /// Concretely this value is usually the count of CPUs
+        /// that this worker has.
+        /// </remarks>
+        int TotalResources { get; }
+
+        /// <summary>
+        /// Get the count of abstract resources that are available
+        /// to claim by new jobs.
+        /// </summary>
+        int AvailableResources { get; }
     }
 
     /// <summary>
