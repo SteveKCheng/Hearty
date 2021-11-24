@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -36,7 +37,7 @@ namespace JobBank.Scheduling
     internal sealed class DistributedWorker<TInput, TOutput>
         : SchedulingFlow<JobVacancy<TInput, TOutput>>
         , IJobWorker<TInput, TOutput>
-        , IDistributedWorker
+        , IDistributedWorker<TInput, TOutput>
     {
         /// <summary>
         /// The count of abstract resources that are currently 
@@ -100,6 +101,15 @@ namespace JobBank.Scheduling
 
         /// <inheritdoc cref="IDistributedWorker.Name" />
         public string Name => _executor.Name;
+
+        IEnumerable<SharedFuture<TInput, TOutput>> IDistributedWorker<TInput, TOutput>.CurrentJobs
+        {
+            get
+            {
+                lock (_currentJobs)
+                    return _currentJobs.Values.ToArray();
+            }
+        }
 
         /// <inheritdoc />
         protected override bool TryTakeItem(
