@@ -19,6 +19,9 @@ namespace JobBank.Server.Program
                 ClientQueueSystem<JobMessage, string, ClientQueue>>
             PriorityClasses { get; }
 
+        public WorkerDistribution<PromiseOutput, PromiseOutput>
+            WorkerDistribution { get; }
+
         private class DummyWorker : IJobWorker<PromiseOutput, PromiseOutput>
         {
             public string Name => "DummyWorker";
@@ -28,40 +31,21 @@ namespace JobBank.Server.Program
                                                                   PromiseOutput input, 
                                                                   CancellationToken cancellationToken)
             {
-                try
-                {
-                    _logger.LogInformation("Starting job for execution ID {executionId}", executionId);
-                    await Task.Delay(initialCharge, cancellationToken).ConfigureAwait(false);
-                    _logger.LogInformation("Completing job for execution ID {executionId}", executionId);
-                    return new Payload("application/json", Encoding.ASCII.GetBytes(@"{ ""status"": ""finished job"" }"));
-                }
-                finally
-                {
-                    ReplenishResource();
-                }
+                _logger.LogInformation("Starting job for execution ID {executionId}", executionId);
+                await Task.Delay(initialCharge, cancellationToken).ConfigureAwait(false);
+                _logger.LogInformation("Completing job for execution ID {executionId}", executionId);
+                return new Payload("application/json", Encoding.ASCII.GetBytes(@"{ ""status"": ""finished job"" }"));
             }
 
             public void AbandonJob(uint executionId)
             {
-                ReplenishResource();
             }
 
-            private void ReplenishResource()
-            {
-                _channelWriter.WriteAsync(new(this, unchecked(_executionId++)));
-            }
 
-            public DummyWorker(ILogger logger, ChannelWriter<JobVacancy<PromiseOutput, PromiseOutput>> channelWriter)
+            public DummyWorker(ILogger logger)
             {
                 _logger = logger;
-                _channelWriter = channelWriter;
-
-                ReplenishResource();
             }
-
-            private uint _executionId;
-
-            private readonly ChannelWriter<JobVacancy<PromiseOutput, PromiseOutput>> _channelWriter;
 
             private readonly ILogger _logger;
         }
@@ -81,18 +65,12 @@ namespace JobBank.Server.Program
             for (int i = 0; i < PriorityClasses.Count; ++i)
                 PriorityClasses.ResetWeight(priority: i, weight: (i + 1) * 10);
 
-            var vacanciesChannel = Channel.CreateBounded<JobVacancy<PromiseOutput, PromiseOutput>>(new BoundedChannelOptions(20)
-            {
-                AllowSynchronousContinuations = true,
-                SingleReader = true,
-                SingleWriter = true
-            });
-
-            var worker = new DummyWorker(logger, vacanciesChannel.Writer);
+            WorkerDistribution = new WorkerDistribution<PromiseOutput, PromiseOutput>();
+            WorkerDistribution.CreateWorker(new DummyWorker(logger), 10);
 
             _jobRunnerTask = JobScheduling.RunJobsAsync(
                                 PriorityClasses.AsChannel(),
-                                vacanciesChannel.Reader,
+                                WorkerDistribution.AsChannel(),
                                 CancellationToken.None);
         }
 
