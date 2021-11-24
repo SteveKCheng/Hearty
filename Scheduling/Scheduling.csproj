@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <Compile Include="DistributedWorker.cs" />
+    <Compile Include="IRunningJob.cs" />
     <Compile Include="IDistributedWorker.cs" />
     <Compile Include="IJobWorker.cs" />
     <Compile Include="WorkerDistribution.cs" />

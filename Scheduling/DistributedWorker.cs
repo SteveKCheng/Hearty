@@ -37,7 +37,7 @@ namespace JobBank.Scheduling
     internal sealed class DistributedWorker<TInput, TOutput>
         : SchedulingFlow<JobVacancy<TInput, TOutput>>
         , IJobWorker<TInput, TOutput>
-        , IDistributedWorker<TInput, TOutput>
+        , IDistributedWorker<TInput>
     {
         /// <summary>
         /// The count of abstract resources that are currently 
@@ -97,12 +97,12 @@ namespace JobBank.Scheduling
         /// principle possible, so all access must be locked.
         /// </para>
         /// </remarks>
-        private readonly Dictionary<uint, SharedFuture<TInput, TOutput>> _currentJobs;
+        private readonly Dictionary<uint, IRunningJob<TInput>> _currentJobs;
 
         /// <inheritdoc cref="IDistributedWorker.Name" />
         public string Name => _executor.Name;
 
-        IEnumerable<SharedFuture<TInput, TOutput>> IDistributedWorker<TInput, TOutput>.CurrentJobs
+        IEnumerable<IRunningJob<TInput>> IDistributedWorker<TInput>.CurrentJobs
         {
             get
             {
@@ -183,18 +183,19 @@ namespace JobBank.Scheduling
 
         async ValueTask<TOutput> 
             IJobWorker<TInput, TOutput>.ExecuteJobAsync(uint executionId, 
-                                                        SharedFuture<TInput, TOutput> future)
+                                                        IRunningJob<TInput> runningJob,
+                                                        CancellationToken cancellationToken)
         {
             try
             {
                 lock (_currentJobs)
                 {
-                    _currentJobs.Add(executionId, future);
+                    _currentJobs.Add(executionId, runningJob);
                 }
 
                 try
                 {
-                    return await _executor.ExecuteJobAsync(executionId, future)
+                    return await _executor.ExecuteJobAsync(executionId, runningJob, cancellationToken)
                                           .ConfigureAwait(false);
                 }
                 finally
@@ -236,7 +237,7 @@ namespace JobBank.Scheduling
             _resourceAvailable = (uint)totalResources;
             _inverseResourceTotal = 1000000 / totalResources;
 
-            _currentJobs = new Dictionary<uint, SharedFuture<TInput, TOutput>>(_resourceTotal * 2);
+            _currentJobs = new Dictionary<uint, IRunningJob<TInput>>(_resourceTotal * 2);
         }
 
         public void Dispose()

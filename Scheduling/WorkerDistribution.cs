@@ -60,7 +60,7 @@ namespace JobBank.Scheduling
     /// <typeparam name="TOutput">
     /// The outputs from executing the job.
     /// </typeparam>
-    public class WorkerDistribution<TInput, TOutput> : IReadOnlyDictionary<string, IDistributedWorker<TInput, TOutput>>
+    public class WorkerDistribution<TInput, TOutput> : IReadOnlyDictionary<string, IDistributedWorker<TInput>>
     {
         /// <summary>
         /// Applies fair scheduling to job vacancies.
@@ -84,7 +84,7 @@ namespace JobBank.Scheduling
         public IEnumerable<string> Keys => _allWorkers.Keys;
 
         /// <inheritdoc cref="IReadOnlyDictionary{TKey, TValue}.Values"/>
-        public IEnumerable<IDistributedWorker<TInput, TOutput>> Values => _allWorkers.Values;
+        public IEnumerable<IDistributedWorker<TInput>> Values => _allWorkers.Values;
 
         /// <inheritdoc cref="IReadOnlyCollection{T}.Count" />
         public int Count => _allWorkers.Count;
@@ -93,7 +93,7 @@ namespace JobBank.Scheduling
         /// Get the object representing the 
         /// worker that has been registered under the given name.
         /// </summary>
-        public IDistributedWorker<TInput, TOutput> this[string key] => _allWorkers[key];
+        public IDistributedWorker<TInput> this[string key] => _allWorkers[key];
 
         /// <summary>
         /// Register a worker to participate in this distribution system.
@@ -130,7 +130,7 @@ namespace JobBank.Scheduling
             => _allWorkers.ContainsKey(key);
 
         /// <inheritdoc cref="IReadOnlyDictionary{TKey, TValue}.TryGetValue"/>
-        public bool TryGetValue(string key, [MaybeNullWhen(false)] out IDistributedWorker<TInput, TOutput> value)
+        public bool TryGetValue(string key, [MaybeNullWhen(false)] out IDistributedWorker<TInput> value)
         {
             bool exists = _allWorkers.TryGetValue(key, out var worker);
             value = worker;
@@ -138,14 +138,14 @@ namespace JobBank.Scheduling
         }
 
         /// <inheritdoc cref="IEnumerable{T}.GetEnumerator" />
-        public IEnumerator<KeyValuePair<string, IDistributedWorker<TInput, TOutput>>> GetEnumerator()
+        public IEnumerator<KeyValuePair<string, IDistributedWorker<TInput>>> GetEnumerator()
         {
             var enumerator = _allWorkers.GetEnumerator();
 
             while (enumerator.MoveNext())
             {
                 var item = enumerator.Current;
-                yield return new KeyValuePair<string, IDistributedWorker<TInput, TOutput>>(item.Key, item.Value);
+                yield return new KeyValuePair<string, IDistributedWorker<TInput>>(item.Key, item.Value);
             }
         }
 

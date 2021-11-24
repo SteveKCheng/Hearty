@@ -74,7 +74,7 @@ namespace JobBank.Scheduling
     /// <typeparam name="TOutput">
     /// The outputs from executing the job.
     /// </typeparam>
-    public class SharedFuture<TInput, TOutput>
+    public class SharedFuture<TInput, TOutput> : IRunningJob<TInput>
     {
         /// <summary>
         /// The inputs to execute the job.
@@ -252,7 +252,7 @@ namespace JobBank.Scheduling
 
                 try
                 {
-                    var output = await worker.ExecuteJobAsync(executionId, this)
+                    var output = await worker.ExecuteJobAsync(executionId, this, CancellationToken)
                                              .ConfigureAwait(false);
                     _taskBuilder.SetResult(output);
                 }

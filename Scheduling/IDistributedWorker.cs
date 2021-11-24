@@ -43,18 +43,11 @@ namespace JobBank.Scheduling
     /// <typeparam name="TInput">
     /// The inputs to execute a job.
     /// </typeparam>
-    /// <typeparam name="TOutput">
-    /// The outputs from executing a job.
-    /// When a job is in progress, the output is not available, but if the 
-    /// objects from <see cref="CurrentJobs" /> are retained 
-    /// (e.g. in a monitoring user interface) past completion 
-    /// then the outputs will be available.
-    /// </typeparam>
-    public interface IDistributedWorker<TInput, TOutput> : IDistributedWorker
+    public interface IDistributedWorker<TInput> : IDistributedWorker
     {
         /// <summary>
         /// Get a snapshot of the current jobs being currently processed.
         /// </summary>
-        IEnumerable<SharedFuture<TInput, TOutput>> CurrentJobs { get; }
+        IEnumerable<IRunningJob<TInput>> CurrentJobs { get; }
     }
 }

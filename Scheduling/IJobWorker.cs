@@ -13,7 +13,7 @@ namespace JobBank.Scheduling
     /// <typeparam name="TOutput">
     /// The outputs from executing a job.
     /// </typeparam>
-    public interface IJobWorker<TInput, TOutput>
+    public interface IJobWorker<in TInput, TOutput>
     {
         /// <summary>
         /// Execute a (de-queued) job.
@@ -22,18 +22,22 @@ namespace JobBank.Scheduling
         /// An arbitrary integer, assigned by some convention, that may 
         /// distinguish the jobs executed by this worker.
         /// </param>
-        /// <param name="future">
-        /// The shared future that receives the result from this worker.
+        /// <param name="runningJob">
+        /// Holds an object that manages the job.
         /// The execution itself will need to refer to 
-        /// <see cref="SharedFuture{TInput, TOutput}.Input" />,
+        /// <see cref="IRunningJob{TInput}.Input" />,
         /// but the whole object is passed so that it can be retained
         /// for monitoring purposes.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Used to cancel the job.
         /// </param>
         /// <returns>
         /// The outputs from completing the job.
         /// </returns>
         ValueTask<TOutput> ExecuteJobAsync(uint executionId,
-                                           SharedFuture<TInput, TOutput> future);
+                                           IRunningJob<TInput> runningJob,
+                                           CancellationToken cancellationToken);
 
         /// <summary>
         /// Release reserved resources for a job
