@@ -100,7 +100,7 @@ namespace JobBank.Scheduling
         private readonly Dictionary<uint, IRunningJob<TInput>> _currentJobs;
 
         /// <inheritdoc cref="IDistributedWorker.Name" />
-        public string Name => _executor.Name;
+        public string Name { get; }
 
         IEnumerable<IRunningJob<TInput>> IDistributedWorker<TInput>.CurrentJobs
         {
@@ -218,6 +218,9 @@ namespace JobBank.Scheduling
         /// Construct this wrapper to count resources claims 
         /// for executing jobs.
         /// </summary>
+        /// <param name="name">
+        /// The name of the worker.
+        /// </param>
         /// <param name="executor">
         /// Implements the actual job action.
         /// </param>
@@ -225,9 +228,12 @@ namespace JobBank.Scheduling
         /// The count of abstract resources this worker is assumed to have.
         /// It is usually the number of CPUs, though there may be overcommit.
         /// </param>
-        public DistributedWorker(IJobWorker<TInput, TOutput> executor,
+        public DistributedWorker(string name,
+                                 IJobWorker<TInput, TOutput> executor,
                                  int totalResources)
         {
+            Name = name;
+
             _executor = executor;
 
             if (totalResources <= 0 || totalResources > 100000)

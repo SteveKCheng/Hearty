@@ -14,6 +14,7 @@
     <Compile Include="IRunningJob.cs" />
     <Compile Include="IDistributedWorker.cs" />
     <Compile Include="IJobWorker.cs" />
+    <Compile Include="IWorkerNotification.cs" />
     <Compile Include="WorkerDistribution.cs" />
     <Compile Include="SchedulingQueue.cs" />
     <Compile Include="SchedulingStatistics.cs" />
