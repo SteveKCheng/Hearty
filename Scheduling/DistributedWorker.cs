@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
@@ -74,6 +75,29 @@ namespace JobBank.Scheduling
         /// </remarks>
         private uint _executionId;
 
+        /// <summary>
+        /// Holds references to the jobs this worker is currently
+        /// processing, for monitoring purposes.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// As execution IDs are assigned sequentially, in 
+        /// principle, a circular buffer could be used to map
+        /// IDs to objects.  An open-addressed hashtable with
+        /// the straightforward hash function essentially does
+        /// the same thing, so that is used here for simplicity.
+        /// .NET's implementation of <see cref="uint.GetHashCode"/>
+        /// is already that straightforward hash function, but
+        /// we can override it should the need arise.
+        /// </para>
+        /// <para>
+        /// As with <see cref="_executionId" />, concurrent access
+        /// to this data structure is expected to be rare but in
+        /// principle possible, so all access must be locked.
+        /// </para>
+        /// </remarks>
+        private readonly Dictionary<uint, SharedFuture<TInput, TOutput>> _currentJobs;
+
         /// <inheritdoc cref="IDistributedWorker.Name" />
         public string Name => _executor.Name;
 
@@ -126,8 +150,22 @@ namespace JobBank.Scheduling
                 Activate();
         }
 
+        /// <summary>
+        /// Remove an entry from the list of current jobs being
+        /// processed by this worker.
+        /// </summary>
+        private void RemoveCurrentJob(uint executionId)
+        {
+            lock (_currentJobs)
+                _currentJobs.Remove(executionId);
+        }
+
         void IJobWorker<TInput, TOutput>.AbandonJob(uint executionId)
-            => ReplenishResource();
+        {
+            ReplenishResource();
+            RemoveCurrentJob(executionId);
+            _executor.AbandonJob(executionId);
+        }
 
         async ValueTask<TOutput> 
             IJobWorker<TInput, TOutput>.ExecuteJobAsync(uint executionId, 
@@ -135,8 +173,20 @@ namespace JobBank.Scheduling
         {
             try
             {
-                return await _executor.ExecuteJobAsync(executionId, future)
-                                      .ConfigureAwait(false);
+                lock (_currentJobs)
+                {
+                    _currentJobs.Add(executionId, future);
+                }
+
+                try
+                {
+                    return await _executor.ExecuteJobAsync(executionId, future)
+                                          .ConfigureAwait(false);
+                }
+                finally
+                {
+                    RemoveCurrentJob(executionId);
+                }
             }
             finally
             {
@@ -171,6 +221,8 @@ namespace JobBank.Scheduling
             _resourceTotal = totalResources;
             _resourceAvailable = (uint)totalResources;
             _inverseResourceTotal = 1000000 / totalResources;
+
+            _currentJobs = new Dictionary<uint, SharedFuture<TInput, TOutput>>(_resourceTotal * 2);
         }
 
         public void Dispose()
