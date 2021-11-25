@@ -31,7 +31,7 @@ namespace JobBank.Server.Program
                                                                   CancellationToken cancellationToken)
             {
                 _logger.LogInformation("Starting job for execution ID {executionId}", executionId);
-                await Task.Delay(runningJob.InitialCharge, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(runningJob.InitialWait, cancellationToken).ConfigureAwait(false);
                 _logger.LogInformation("Completing job for execution ID {executionId}", executionId);
                 return new Payload("application/json", Encoding.ASCII.GetBytes(@"{ ""status"": ""finished job"" }"));
             }

@@ -100,10 +100,22 @@ namespace JobBank.Scheduling
         /// The initial estimate of the amount of time the job
         /// would take, in milliseconds.
         /// </summary>
-        public int InitialCharge { get; }
+        public int InitialWait { get; }
 
-        private int _currentCharge;
+        /// <summary>
+        /// The amount of time for the currently running job,
+        /// in milliseconds, that have been charged to all 
+        /// participating accounts.
+        /// </summary>
+        private int _currentWait;
+
+        /// <summary>
+        /// The snapshot of current time, as reported by
+        /// <see cref="Environment.TickCount64" />, when this
+        /// job has started running.
+        /// </summary>
         private long _startTime;
+
         private readonly ISchedulingAccount _account;
 
         /// <summary>
@@ -118,17 +130,17 @@ namespace JobBank.Scheduling
         /// </summary>
         private bool UpdateCurrentCharge(long now)
         {
-            int currentCharge = _currentCharge;
+            int currentWait = _currentWait;
 
             // Do not update charges if job has completed.
-            if (currentCharge < 0)
+            if (currentWait < 0)
                 return false;
 
             int elapsed = MiscArithmetic.SaturateToInt(now - _startTime);
-            if (elapsed > currentCharge)
+            if (elapsed > currentWait)
             {
-                int resolution = InitialCharge >= 100 ? InitialCharge : 100;
-                int extraCharge = elapsed - currentCharge;
+                int resolution = InitialWait >= 100 ? InitialWait : 100;
+                int extraCharge = elapsed - currentWait;
 
                 // Round up extraCharge to closest unit of resolution,
                 // saturating on overflow.
@@ -137,11 +149,12 @@ namespace JobBank.Scheduling
                       ? (extraCharge + (resolution - 1)) / resolution * resolution
                       : int.MaxValue;
 
-                roundedCharge = MiscArithmetic.SaturatingAdd(currentCharge, roundedCharge);
+                // The value to update _currentWait to
+                int updatedWait = MiscArithmetic.SaturatingAdd(currentWait, roundedCharge);
 
                 // If this last timer firing raced with the job completing,
                 // do not update charges any longer.
-                if (Interlocked.CompareExchange(ref _currentCharge, roundedCharge, currentCharge) != currentCharge)
+                if (Interlocked.CompareExchange(ref _currentWait, updatedWait, currentWait) != currentWait)
                     return false;
 
                 _account.AdjustBalance(-roundedCharge);
@@ -158,10 +171,10 @@ namespace JobBank.Scheduling
         private void FinalizeCharge(long now)
         {
             int elapsed = MiscArithmetic.SaturateToInt(now - _startTime);
-            int currentCharge = Interlocked.Exchange(ref _currentCharge, -1);
-            Debug.Assert(currentCharge >= 0);
-            _account.AdjustBalance(currentCharge - elapsed);
-            _account.TabulateCompletedItem(currentCharge);
+            int currentWait = Interlocked.Exchange(ref _currentWait, -1);
+            Debug.Assert(currentWait >= 0);
+            _account.AdjustBalance(currentWait - elapsed);
+            _account.TabulateCompletedItem(currentWait);
         }
 
         /// <summary>
@@ -204,7 +217,7 @@ namespace JobBank.Scheduling
             _timingQueue = timingQueue;
 
             Input = input;
-            InitialCharge = initialCharge;
+            InitialWait = initialCharge;
             CancellationToken = cancellationToken;
         }
 
@@ -241,9 +254,9 @@ namespace JobBank.Scheduling
         {
             try
             {
-                var initialCharge = InitialCharge;
+                var initialCharge = InitialWait;
                 _startTime = Environment.TickCount64;
-                _currentCharge = initialCharge;
+                _currentWait = initialCharge;
 
                 _timingQueue.Enqueue(
                     static (t, s) => Unsafe.As<SharedFuture<TInput, TOutput>>(s!)

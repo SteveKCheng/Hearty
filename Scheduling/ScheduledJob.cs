@@ -40,7 +40,7 @@ namespace JobBank.Scheduling
         public ISchedulingAccount Account { get; }
 
         /// <inheritdoc cref="ISchedulingExpense.InitialCharge" />
-        public int InitialCharge => Future.InitialCharge;
+        public int InitialCharge => Future.InitialWait;
 
         /// <summary>
         /// Instantiates a representative of <see cref="SharedFuture{TInput, TOutput}" />.

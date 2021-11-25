@@ -28,6 +28,6 @@ namespace JobBank.Scheduling
         /// The initial estimate of the amount of time the job
         /// would take, in milliseconds.
         /// </summary>
-        int InitialCharge { get; }
+        int InitialWait { get; }
     }
 }
