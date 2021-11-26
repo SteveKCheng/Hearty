@@ -106,8 +106,12 @@ namespace JobBank.Scheduling
         /// <inheritdoc cref="IEnumerable.GetEnumerator" />
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-        /// <inheritdoc cref="ISchedulingAccount.AdjustBalance" />
-        void ISchedulingAccount.AdjustBalance(int debit) => base.AdjustBalance(debit);
+        /// <inheritdoc cref="ISchedulingAccount.UpdateCurrentItem" />
+        void ISchedulingAccount.UpdateCurrentItem(int? current, int change)
+        {
+            if (current != null)
+                base.AdjustBalance(change != int.MinValue ? -change : int.MaxValue);
+        }
 
         #region Statistics
 

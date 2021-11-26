@@ -10,20 +10,42 @@ namespace JobBank.Scheduling
     /// Adjusts the "account balance" and tracks statistics as
     /// items are processed from a scheduling flow.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Each item has an abstract "charge" that may not be known upfront.
+    /// Usually the charge represents elapsed time, with the measurement
+    /// units decided by convention.  As items are processed, their charges
+    /// on the scheduling flow are recorded.
+    /// </para>
+    /// <para>
+    /// This abstract interface is designed to compose, i.e. for multiple
+    /// scheduling flows to be updated at the same time.
+    /// </para>
+    /// </remarks>
     public interface ISchedulingAccount
     {
         /// <summary>
-        /// Adjust the account balance of the scheduling flow to affect
-        /// its priority in fair scheduling.
+        /// Update the charge incurred for an item that has not 
+        /// completed.
         /// </summary>
-        /// <param name="debit">
-        /// The amount to add to the balance.  At the level of this interface,
-        /// this amount is an abstract charge, but actual implementations
-        /// will decide the measurement units by convention.  A common
-        /// example would be the elapsed time taken to execute a "job", 
-        /// in milliseconds.
+        /// <param name="current">
+        /// The current amount that the item has been charged for.
+        /// Some implementations of this method require this value 
+        /// to be able to update statistics efficiently.
+        /// This value shall be null when a new incomplete item is
+        /// to be introduced.
         /// </param>
-        void AdjustBalance(int debit);
+        /// <param name="change">
+        /// The change in the charge for the item.
+        /// If <paramref name="current" /> is null, this value should
+        /// match the charge, if any, for the item that was initially
+        /// reported to the scheduling flow.
+        /// </param>
+        /// <remarks>
+        /// Upon completion of an item, both this method and 
+        /// <see cref="TabulateCompletedItem(int)"/> must be called
+        /// </remarks>
+        void UpdateCurrentItem(int? current, int change);
 
         /// <summary>
         /// Register an item that was obtained from the scheduling flow

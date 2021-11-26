@@ -157,7 +157,7 @@ namespace JobBank.Scheduling
                 if (Interlocked.CompareExchange(ref _currentWait, updatedWait, currentWait) != currentWait)
                     return false;
 
-                _account.AdjustBalance(-roundedCharge);
+                _account.UpdateCurrentItem(currentWait, roundedCharge);
             }
 
             // Re-schedule timer as long as job has not completed
@@ -170,11 +170,14 @@ namespace JobBank.Scheduling
         /// </summary>
         private void FinalizeCharge(long now)
         {
+            var account = _account;
+
             int elapsed = MiscArithmetic.SaturateToInt(now - _startTime);
             int currentWait = Interlocked.Exchange(ref _currentWait, -1);
             Debug.Assert(currentWait >= 0);
-            _account.AdjustBalance(currentWait - elapsed);
-            _account.TabulateCompletedItem(currentWait);
+
+            account.UpdateCurrentItem(currentWait, elapsed - currentWait);
+            account.TabulateCompletedItem(elapsed);
         }
 
         /// <summary>
@@ -257,6 +260,8 @@ namespace JobBank.Scheduling
                 var initialCharge = InitialWait;
                 _startTime = Environment.TickCount64;
                 _currentWait = initialCharge;
+
+                _account.UpdateCurrentItem(null, initialCharge);
 
                 _timingQueue.Enqueue(
                     static (t, s) => Unsafe.As<SharedFuture<TInput, TOutput>>(s!)
