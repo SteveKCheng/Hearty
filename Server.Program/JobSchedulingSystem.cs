@@ -89,7 +89,7 @@ namespace JobBank.Server.Program
                             queue,
                             _timingQueue);
 
-            var job = future.CreateJob();
+            var job = future.CreateJob(queue);
             queue.Enqueue(job);
 
             return ValueTask.CompletedTask;

@@ -116,7 +116,15 @@ namespace JobBank.Scheduling
         /// </summary>
         private long _startTime;
 
-        private readonly ISchedulingAccount _account;
+        /// <summary>
+        /// Charges back elapsed time to implement fair scheduling.
+        /// </summary>
+        /// <remarks>
+        /// Occasionally there may be more than one account
+        /// sharing the charge.  Then this member will be changed
+        /// to an instance of <see cref="SchedulingAccountSplitter" />.
+        /// </remarks>
+        private ISchedulingAccount _account;
 
         /// <summary>
         /// Arranges a timer that periodically fires to 
@@ -203,8 +211,10 @@ namespace JobBank.Scheduling
         /// Can be triggered to cancel the job.
         /// </param>
         /// <param name="account">
-        /// The abstract queue to charge back for the time taken
-        /// to execute the job.
+        /// Where to charge back for the time taken when the job is executed.
+        /// There must be an "original" account, passed as a parameter here.
+        /// More accounts can share the charges by adding them implicitly
+        /// through <see cref="CreateJob(ISchedulingAccount)" />.
         /// </param>
         /// <param name="timingQueue">
         /// Used to periodically fire timers to update the estimate
@@ -234,8 +244,41 @@ namespace JobBank.Scheduling
         /// each time there is a different representative that points to the same
         /// <see cref="SharedFuture{TInput, TOutput}" />.
         /// </remarks>
-        public ScheduledJob<TInput, TOutput> CreateJob()
-            => new ScheduledJob<TInput, TOutput>(this, _account);
+        public ScheduledJob<TInput, TOutput> CreateJob(ISchedulingAccount account)
+        {
+            var existingAccount = _account;
+
+            if (!object.ReferenceEquals(existingAccount, account))
+            {
+                bool success;
+                SchedulingAccountSplitter splitter;
+
+                // Install SchedulingAccountSplitter when there is more than
+                // one account.  There are no locks in this class so we must
+                // do so in a retry loop.
+                do
+                {
+                    if (existingAccount is SchedulingAccountSplitter s)
+                    {
+                        // Reuse any instance that has already been installed.
+                        splitter = s;
+                        break;
+                    }
+
+                    splitter = new SchedulingAccountSplitter(existingAccount, _currentWait);
+
+                    var a = Interlocked.CompareExchange(ref _account, splitter, existingAccount);
+                    success = object.ReferenceEquals(a, existingAccount);
+                    existingAccount = a;
+                } while (!success);
+
+                // N.B. This call re-adjusts charges on all accounts,
+                //      and so cannot be called during the retry loop.
+                splitter.TryAddMember(account);
+            }
+
+            return new ScheduledJob<TInput, TOutput>(this, account);
+        }
 
         /// <summary>
         /// Builds the task in <see cref="OutputTask" />.
