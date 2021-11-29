@@ -110,6 +110,11 @@ namespace JobBank.Scheduling
         private int _currentWait;
 
         /// <summary>
+        /// Set to true when the job finishes.
+        /// </summary>
+        private bool _isDone;
+
+        /// <summary>
         /// The snapshot of current time, as reported by
         /// <see cref="Environment.TickCount64" />, when this
         /// job has started running.
@@ -127,6 +132,20 @@ namespace JobBank.Scheduling
         private ISchedulingAccount _account;
 
         /// <summary>
+        /// Protects <see cref="ISchedulingAccount" />
+        /// <see cref="_currentWait" />, and <see cref="_isDone" />.
+        /// </summary>
+        /// <remarks>
+        /// Those two variables have to be consistent with each other.
+        /// Note that this lock only protects the reference
+        /// itself, in case it changes, not method calls to 
+        /// <see cref="ISchedulingAccount" />, which is expected to 
+        /// have its own internal locking.  A spin lock is used only
+        /// to avoid having to allocate an extra object just for locking.
+        /// </remarks>
+        private SpinLock _accountLock = new SpinLock(enableThreadOwnerTracking: false);
+
+        /// <summary>
         /// Arranges a timer that periodically fires to 
         /// adjust queue balances for the time taken so far to run the job.
         /// </summary>
@@ -138,35 +157,49 @@ namespace JobBank.Scheduling
         /// </summary>
         private bool UpdateCurrentCharge(long now)
         {
-            int currentWait = _currentWait;
-
-            // Do not update charges if job has completed.
-            if (currentWait < 0)
-                return false;
-
             int elapsed = MiscArithmetic.SaturateToInt(now - _startTime);
-            if (elapsed > currentWait)
+
+            ISchedulingAccount? account = null;
+            int currentWait;
+            int roundedCharge = 0;
+
+            bool lockTaken = false;
+            try
             {
-                int resolution = InitialWait >= 100 ? InitialWait : 100;
-                int extraCharge = elapsed - currentWait;
+                _accountLock.Enter(ref lockTaken);
 
-                // Round up extraCharge to closest unit of resolution,
-                // saturating on overflow.
-                int roundedCharge =
-                    (extraCharge <= int.MaxValue - resolution)
-                      ? (extraCharge + (resolution - 1)) / resolution * resolution
-                      : int.MaxValue;
+                currentWait = _currentWait;
 
-                // The value to update _currentWait to
-                int updatedWait = MiscArithmetic.SaturatingAdd(currentWait, roundedCharge);
-
-                // If this last timer firing raced with the job completing,
-                // do not update charges any longer.
-                if (Interlocked.CompareExchange(ref _currentWait, updatedWait, currentWait) != currentWait)
+                // Do not update charges if job has completed.
+                if (_isDone)
                     return false;
 
-                _account.UpdateCurrentItem(currentWait, roundedCharge);
+                if (elapsed > currentWait)
+                {
+                    int resolution = InitialWait >= 100 ? InitialWait : 100;
+                    int extraCharge = elapsed - currentWait;
+
+                    // Round up extraCharge to closest unit of resolution,
+                    // saturating on overflow.
+                    roundedCharge =
+                        (extraCharge <= int.MaxValue - resolution)
+                          ? (extraCharge + (resolution - 1)) / resolution * resolution
+                          : int.MaxValue;
+
+                    // Update to new value
+                    _currentWait = MiscArithmetic.SaturatingAdd(currentWait, 
+                                                                roundedCharge);
+
+                    account = _account;
+                }
             }
+            finally
+            {
+                if (lockTaken)
+                    _accountLock.Exit();
+            }
+
+            account?.UpdateCurrentItem(currentWait, roundedCharge);
 
             // Re-schedule timer as long as job has not completed
             return true;
@@ -178,11 +211,26 @@ namespace JobBank.Scheduling
         /// </summary>
         private void FinalizeCharge(long now)
         {
-            var account = _account;
-
             int elapsed = MiscArithmetic.SaturateToInt(now - _startTime);
-            int currentWait = Interlocked.Exchange(ref _currentWait, -1);
-            Debug.Assert(currentWait >= 0);
+
+            ISchedulingAccount account;
+            int currentWait;
+
+            bool lockTaken = false;
+            try
+            {
+                _accountLock.Enter(ref lockTaken);
+
+                account = _account;
+                currentWait = _currentWait;
+                _currentWait = elapsed;
+                _isDone = true;
+            }
+            finally
+            {
+                if (lockTaken)
+                    _accountLock.Exit();
+            }
 
             account.UpdateCurrentItem(currentWait, elapsed - currentWait);
             account.TabulateCompletedItem(elapsed);
@@ -250,27 +298,41 @@ namespace JobBank.Scheduling
 
             if (!object.ReferenceEquals(existingAccount, account))
             {
-                bool success;
-                SchedulingAccountSplitter splitter;
+                SchedulingAccountSplitter? splitter;
 
                 // Install SchedulingAccountSplitter when there is more than
-                // one account.  There are no locks in this class so we must
-                // do so in a retry loop.
-                do
+                // one account.  We need a retry loop because we do not 
+                // want to hold a spin lock during object allocation and
+                // initialization.
+                while ((splitter = existingAccount as SchedulingAccountSplitter) is null)
                 {
-                    if (existingAccount is SchedulingAccountSplitter s)
+                    int currentWait = _currentWait;
+                    splitter = new SchedulingAccountSplitter(existingAccount, 
+                                                             currentWait);
+
+                    bool lockTaken = false;
+                    try
                     {
-                        // Reuse any instance that has already been installed.
-                        splitter = s;
-                        break;
+                        _accountLock.Enter(ref lockTaken);
+
+                        var a = _account;
+
+                        if (_currentWait == currentWait && 
+                            object.ReferenceEquals(a, existingAccount))
+                        {
+                            // Successful compare-exchange
+                            _account = splitter;
+                            break;
+                        }
+
+                        existingAccount = a;
                     }
-
-                    splitter = new SchedulingAccountSplitter(existingAccount, _currentWait);
-
-                    var a = Interlocked.CompareExchange(ref _account, splitter, existingAccount);
-                    success = object.ReferenceEquals(a, existingAccount);
-                    existingAccount = a;
-                } while (!success);
+                    finally
+                    {
+                        if (lockTaken)
+                            _accountLock.Exit();
+                    }
+                } 
 
                 // N.B. This call re-adjusts charges on all accounts,
                 //      and so cannot be called during the retry loop.
@@ -302,9 +364,23 @@ namespace JobBank.Scheduling
             {
                 var initialCharge = InitialWait;
                 _startTime = Environment.TickCount64;
-                _currentWait = initialCharge;
 
-                _account.UpdateCurrentItem(null, initialCharge);
+                bool lockTaken = false;
+                ISchedulingAccount account;
+
+                try
+                {
+                    _accountLock.Enter(ref lockTaken);
+                    _currentWait = initialCharge;
+                    account = _account;
+                }
+                finally
+                {
+                    if (lockTaken)
+                        _accountLock.Exit();
+                }
+                
+                account.UpdateCurrentItem(null, initialCharge);
 
                 _timingQueue.Enqueue(
                     static (t, s) => Unsafe.As<SharedFuture<TInput, TOutput>>(s!)

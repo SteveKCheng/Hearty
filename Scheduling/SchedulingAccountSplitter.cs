@@ -99,7 +99,7 @@ namespace JobBank.Scheduling
                 int count = _members.Count;
                 int newCharge = _currentCharge / (count + 1);
 
-                if (count != 0)
+                if (count != 0 && _currentCharge != 0)
                 {
                     int oldCharge = _currentCharge / count;
                     int deltaCharge = newCharge - oldCharge;
