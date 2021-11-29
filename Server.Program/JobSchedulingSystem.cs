@@ -82,14 +82,14 @@ namespace JobBank.Server.Program
         {
             var queue = PriorityClasses[priority].GetOrAdd(client);
 
-            var future = new SharedFuture<PromiseOutput, PromiseOutput>(
+            var job = SharedFuture<PromiseOutput, PromiseOutput>.CreateJob(
                             request,
                             charge,
                             queue,
                             CancellationToken.None,
-                            _timingQueue);
+                            _timingQueue,
+                            out var future);
 
-            var job = future.CreateJob(queue, CancellationToken.None);
             queue.Enqueue(job);
 
             return ValueTask.CompletedTask;

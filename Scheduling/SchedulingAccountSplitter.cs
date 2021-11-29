@@ -40,8 +40,17 @@ namespace JobBank.Scheduling
         {
             lock (_members)
             {
+                if (_isCompleted)
+                    return;
+
+                _isCompleted = true;
+                _completedCharge = charge;
+
                 foreach (var member in _members)
+                {
                     member.Account.TabulateCompletedItem(charge);
+                    member.CancellationRegistration.Dispose();
+                }
             }
         }
 
@@ -56,6 +65,18 @@ namespace JobBank.Scheduling
         /// Charges so far that have been propagated out to member accounts.
         /// </summary>
         private int _currentCharge = 0;
+
+        /// <summary>
+        /// True when <see cref="ISchedulingAccount.TabulateCompletedItem" />
+        /// has been called on this instance.
+        /// </summary>
+        private bool _isCompleted;
+
+        /// <summary>
+        /// The argument to <see cref="ISchedulingAccount.TabulateCompletedItem" />
+        /// when it was first called.
+        /// </summary>
+        private int _completedCharge;
 
         /// <summary>
         /// Prepare to replace a single scheduling account with
@@ -88,23 +109,11 @@ namespace JobBank.Scheduling
         /// <param name="account">
         /// A scheduling account to add.
         /// </param>
-        /// <returns>
-        /// True if the account was added; false if it has already
-        /// been registered.
-        /// </returns>
-        public bool TryAddMember(ISchedulingAccount account, 
-                                 CancellationToken cancellationToken,
-                                 Action<object?> cancellationAction,
-                                 object? cancellationState)
+        public void AddMember(ISchedulingAccount account, 
+                              CancellationTokenRegistration cancellationRegistration)
         {
             lock (_members)
             {
-                foreach (var member in _members)
-                {
-                    if (object.ReferenceEquals(member.Account, account))
-                        return false;
-                }
-
                 int count = _members.Count;
                 int newCharge = _currentCharge / (count + 1);
 
@@ -117,25 +126,20 @@ namespace JobBank.Scheduling
                         account.UpdateCurrentItem(oldCharge, deltaCharge);
                 }
 
-                var registration = cancellationToken.Register(cancellationAction, 
-                                                              cancellationState);
-
-                _members.Add((account, registration));
                 account.UpdateCurrentItem(null, newCharge);
 
-                return true;
-            }
-        }
+                // If already completed, act as if the new account had
+                // been present when TabulateCompletedItem on this instance
+                // was first called.
+                if (_isCompleted)
+                {
+                    account.TabulateCompletedItem(_completedCharge);
 
-        /// <summary>
-        /// Cancel registrations on all clients' <see cref="CancellationToken" />.
-        /// </summary>
-        public void DisposeCancellationRegistrations()
-        {
-            lock (_members)
-            {
-                foreach (var member in _members)
-                    member.CancellationRegistration.Dispose();
+                    // Avoid leaking registrations when processing is already complete
+                    cancellationRegistration.Dispose();
+                }
+                
+                _members.Add((account, cancellationRegistration));
             }
         }
     }

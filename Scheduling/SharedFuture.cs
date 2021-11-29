@@ -223,9 +223,6 @@ namespace JobBank.Scheduling
         /// </summary>
         private void FinalizeCharge(long now)
         {
-            lock (_cancellationSourceUse.Source!)
-                _cancellationSourceUse.Dispose();
-
             int elapsed = MiscArithmetic.SaturateToInt(now - _startTime);
 
             ISchedulingAccount account;
@@ -253,10 +250,10 @@ namespace JobBank.Scheduling
             account.UpdateCurrentItem(currentWait, elapsed - currentWait);
             account.TabulateCompletedItem(elapsed);
 
-            if (account is SchedulingAccountSplitter splitter)
-                splitter.DisposeCancellationRegistrations();
-            else
-                cancellationRegistration.Dispose();
+            cancellationRegistration.Dispose();
+
+            lock (_cancellationSourceUse.Source!)
+                _cancellationSourceUse.Dispose();
         }
 
         /// <summary>
@@ -291,11 +288,11 @@ namespace JobBank.Scheduling
         /// Used to periodically fire timers to update the estimate
         /// of the time needed to execute the job.
         /// </param>
-        public SharedFuture(in TInput input, 
-                            int initialCharge, 
-                            ISchedulingAccount account,
-                            CancellationToken cancellationToken,
-                            SimpleExpiryQueue timingQueue)
+        private SharedFuture(in TInput input, 
+                             int initialCharge, 
+                             ISchedulingAccount account,
+                             CancellationToken cancellationToken,
+                             SimpleExpiryQueue timingQueue)
         {
             _account = account;
             _timingQueue = timingQueue;
@@ -305,9 +302,16 @@ namespace JobBank.Scheduling
 
             _cancellationSourceUse = CancellationSourcePool.Rent();
             _cancelCount = 1;
-            _cancellationRegistration = cancellationToken.Register(s => OnCancel(s), 
-                                                                   this);
+            _cancellationRegistration = RegisterCancellationToken(cancellationToken);
         }
+
+        /// <summary>
+        /// Register a callback on a client's cancellation token
+        /// to propagate into <see cref="_cancellationSourceUse" />.
+        /// </summary>
+        private CancellationTokenRegistration 
+            RegisterCancellationToken(CancellationToken cancellationToken)
+            => cancellationToken.Register(s => OnCancel(s), this);
 
         /// <summary>
         /// Propagates cancellation from clients' <see cref="CancellationToken" />
@@ -332,6 +336,43 @@ namespace JobBank.Scheduling
         }
 
         /// <summary>
+        /// Create a new job <see cref="ScheduledJob{TInput, TOutput}" />
+        /// to push into a job-scheduling queue. 
+        /// </summary>
+        /// <param name="input">The input describing the job. </param>
+        /// <param name="initialCharge">The initial estimate of the
+        /// time to execute the job, in milliseconds.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be triggered to cancel the job.
+        /// </param>
+        /// <param name="account">
+        /// Where to charge back for the time taken when the job is executed.
+        /// There must be an "original" account, passed as a parameter here.
+        /// More accounts can share the charges by adding them implicitly
+        /// through <see cref="CreateJob(ISchedulingAccount)" />.
+        /// </param>
+        /// <param name="timingQueue">
+        /// Used to periodically fire timers to update the estimate
+        /// of the time needed to execute the job.
+        /// </param>
+        public static ScheduledJob<TInput, TOutput> 
+            CreateJob(in TInput input,
+                      int initialCharge,
+                      ISchedulingAccount account,
+                      CancellationToken cancellationToken,
+                      SimpleExpiryQueue timingQueue,
+                      out SharedFuture<TInput, TOutput> future)
+        {
+            future = new SharedFuture<TInput, TOutput>(input,
+                                                       initialCharge,
+                                                       account,
+                                                       cancellationToken,
+                                                       timingQueue);
+            return new ScheduledJob<TInput, TOutput>(future, account);
+        }
+
+        /// <summary>
         /// Create a representative of this job 
         /// <see cref="ScheduledJob{TInput, TOutput}" />
         /// to push into a job-scheduling queue. 
@@ -346,51 +387,49 @@ namespace JobBank.Scheduling
         {
             var existingAccount = _account;
 
-            if (!object.ReferenceEquals(existingAccount, account))
+            SchedulingAccountSplitter? splitter;
+
+            // Install SchedulingAccountSplitter when there is more than
+            // one account.  We need a retry loop because we do not 
+            // want to hold a spin lock during object allocation and
+            // initialization.
+            while ((splitter = existingAccount as SchedulingAccountSplitter) is null)
             {
-                SchedulingAccountSplitter? splitter;
+                int currentWait = _currentWait;
+                splitter = new SchedulingAccountSplitter(existingAccount,
+                                                         currentWait,
+                                                         _cancellationRegistration);
 
-                // Install SchedulingAccountSplitter when there is more than
-                // one account.  We need a retry loop because we do not 
-                // want to hold a spin lock during object allocation and
-                // initialization.
-                while ((splitter = existingAccount as SchedulingAccountSplitter) is null)
+                bool lockTaken = false;
+                try
                 {
-                    int currentWait = _currentWait;
-                    splitter = new SchedulingAccountSplitter(existingAccount,
-                                                             currentWait,
-                                                             _cancellationRegistration);
+                    _accountLock.Enter(ref lockTaken);
 
-                    bool lockTaken = false;
-                    try
+                    var a = _account;
+
+                    if (_currentWait == currentWait && 
+                        object.ReferenceEquals(a, existingAccount))
                     {
-                        _accountLock.Enter(ref lockTaken);
-
-                        var a = _account;
-
-                        if (_currentWait == currentWait && 
-                            object.ReferenceEquals(a, existingAccount))
-                        {
-                            // Successful compare-exchange
-                            _account = splitter;
-                            _cancellationRegistration = default;
-                            break;
-                        }
-
-                        existingAccount = a;
+                        // Successful compare-exchange
+                        _account = splitter;
+                        _cancellationRegistration = default;
+                        break;
                     }
-                    finally
-                    {
-                        if (lockTaken)
-                            _accountLock.Exit();
-                    }
+
+                    existingAccount = a;
                 }
-
-                // N.B. This call re-adjusts charges on all accounts,
-                //      and so cannot be called during the retry loop.
-                splitter.TryAddMember(account, cancellationToken,
-                                      s => OnCancel(s), this);
+                finally
+                {
+                    if (lockTaken)
+                        _accountLock.Exit();
+                }
             }
+
+            var cancellationRegistration = RegisterCancellationToken(cancellationToken);
+
+            // N.B. This call re-adjusts charges on all accounts,
+            //      and so cannot be called during the retry loop.
+            splitter.AddMember(account, cancellationRegistration);
 
             return new ScheduledJob<TInput, TOutput>(this, account);
         }
