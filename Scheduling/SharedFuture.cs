@@ -1,4 +1,5 @@
-﻿using System;
+﻿using JobBank.Utilities;
+using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -87,14 +88,25 @@ namespace JobBank.Scheduling
         public TInput Input { get; }
 
         /// <summary>
-        /// Triggered when this job should be cancelled.
+        /// Triggers cancellation for this job when all clients agree to cancel.
+        /// </summary>
+        private CancellationSourcePool.Use _cancellationSourceUse;
+
+        /// <summary>
+        /// Registration on client's original <see cref="CancellationToken" />
+        /// to propagate it to <see cref="_cancellationSourceUse"/>.
         /// </summary>
         /// <remarks>
-        /// This cancellation token is shared among all potential producers.
-        /// It is triggered only when all clients agree to cancel and
-        /// not just one of them.  
+        /// This member is set to its default state if 
+        /// <see cref="_account"/> is <see cref="SchedulingAccountSplitter" />
+        /// which holds the full list of registrations.
         /// </remarks>
-        public CancellationToken CancellationToken { get; }
+        private CancellationTokenRegistration _cancellationRegistration;
+
+        /// <summary>
+        /// Counts how many clients have cancelled.
+        /// </summary>
+        private int _cancelCount;
 
         /// <summary>
         /// The initial estimate of the amount of time the job
@@ -211,10 +223,14 @@ namespace JobBank.Scheduling
         /// </summary>
         private void FinalizeCharge(long now)
         {
+            lock (_cancellationSourceUse.Source!)
+                _cancellationSourceUse.Dispose();
+
             int elapsed = MiscArithmetic.SaturateToInt(now - _startTime);
 
             ISchedulingAccount account;
             int currentWait;
+            CancellationTokenRegistration cancellationRegistration;
 
             bool lockTaken = false;
             try
@@ -224,6 +240,8 @@ namespace JobBank.Scheduling
                 account = _account;
                 currentWait = _currentWait;
                 _currentWait = elapsed;
+                cancellationRegistration = _cancellationRegistration;
+                _cancellationRegistration = default;
                 _isDone = true;
             }
             finally
@@ -234,6 +252,11 @@ namespace JobBank.Scheduling
 
             account.UpdateCurrentItem(currentWait, elapsed - currentWait);
             account.TabulateCompletedItem(elapsed);
+
+            if (account is SchedulingAccountSplitter splitter)
+                splitter.DisposeCancellationRegistrations();
+            else
+                cancellationRegistration.Dispose();
         }
 
         /// <summary>
@@ -270,8 +293,8 @@ namespace JobBank.Scheduling
         /// </param>
         public SharedFuture(in TInput input, 
                             int initialCharge, 
-                            CancellationToken cancellationToken,
                             ISchedulingAccount account,
+                            CancellationToken cancellationToken,
                             SimpleExpiryQueue timingQueue)
         {
             _account = account;
@@ -279,7 +302,33 @@ namespace JobBank.Scheduling
 
             Input = input;
             InitialWait = initialCharge;
-            CancellationToken = cancellationToken;
+
+            _cancellationSourceUse = CancellationSourcePool.Rent();
+            _cancelCount = 1;
+            _cancellationRegistration = cancellationToken.Register(s => OnCancel(s), 
+                                                                   this);
+        }
+
+        /// <summary>
+        /// Propagates cancellation from clients' <see cref="CancellationToken" />
+        /// when all clients cancel.
+        /// </summary>
+        private static void OnCancel(object? state)
+        {
+            var self = (SharedFuture<TInput, TOutput>)state!;
+            
+            if (Interlocked.Decrement(ref self._cancelCount) == 0)
+            {
+                var source = self._cancellationSourceUse.Source;
+                if (source != null)
+                {
+                    lock (source)
+                    {
+                        var s = self._cancellationSourceUse.Source;
+                        s?.Cancel();
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -292,7 +341,8 @@ namespace JobBank.Scheduling
         /// each time there is a different representative that points to the same
         /// <see cref="SharedFuture{TInput, TOutput}" />.
         /// </remarks>
-        public ScheduledJob<TInput, TOutput> CreateJob(ISchedulingAccount account)
+        public ScheduledJob<TInput, TOutput> CreateJob(ISchedulingAccount account,
+                                                       CancellationToken cancellationToken)
         {
             var existingAccount = _account;
 
@@ -307,8 +357,9 @@ namespace JobBank.Scheduling
                 while ((splitter = existingAccount as SchedulingAccountSplitter) is null)
                 {
                     int currentWait = _currentWait;
-                    splitter = new SchedulingAccountSplitter(existingAccount, 
-                                                             currentWait);
+                    splitter = new SchedulingAccountSplitter(existingAccount,
+                                                             currentWait,
+                                                             _cancellationRegistration);
 
                     bool lockTaken = false;
                     try
@@ -322,6 +373,7 @@ namespace JobBank.Scheduling
                         {
                             // Successful compare-exchange
                             _account = splitter;
+                            _cancellationRegistration = default;
                             break;
                         }
 
@@ -332,11 +384,12 @@ namespace JobBank.Scheduling
                         if (lockTaken)
                             _accountLock.Exit();
                     }
-                } 
+                }
 
                 // N.B. This call re-adjusts charges on all accounts,
                 //      and so cannot be called during the retry loop.
-                splitter.TryAddMember(account);
+                splitter.TryAddMember(account, cancellationToken,
+                                      s => OnCancel(s), this);
             }
 
             return new ScheduledJob<TInput, TOutput>(this, account);
@@ -389,7 +442,8 @@ namespace JobBank.Scheduling
 
                 try
                 {
-                    var output = await worker.ExecuteJobAsync(executionId, this, CancellationToken)
+                    var cancellationToken = _cancellationSourceUse.Token;
+                    var output = await worker.ExecuteJobAsync(executionId, this, cancellationToken)
                                              .ConfigureAwait(false);
                     _taskBuilder.SetResult(output);
                 }

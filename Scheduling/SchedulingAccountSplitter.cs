@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace JobBank.Scheduling
 {
@@ -28,7 +29,7 @@ namespace JobBank.Scheduling
                     int oldCharge = _currentCharge / count;
                     int deltaCharge = (change + (current ?? 0) - _currentCharge) / count;
                     foreach (var member in _members)
-                        member.UpdateCurrentItem(oldCharge, deltaCharge);
+                        member.Account.UpdateCurrentItem(oldCharge, deltaCharge);
                 }
 
                 _currentCharge = (current ?? 0) + change;
@@ -40,7 +41,7 @@ namespace JobBank.Scheduling
             lock (_members)
             {
                 foreach (var member in _members)
-                    member.TabulateCompletedItem(charge);
+                    member.Account.TabulateCompletedItem(charge);
             }
         }
 
@@ -48,7 +49,8 @@ namespace JobBank.Scheduling
         /// Set of scheduling accounts that are to share costs for
         /// processing an item.
         /// </summary>
-        private readonly List<ISchedulingAccount> _members;
+        private readonly List<(ISchedulingAccount Account, 
+                               CancellationTokenRegistration CancellationRegistration)> _members;
 
         /// <summary>
         /// Charges so far that have been propagated out to member accounts.
@@ -64,11 +66,12 @@ namespace JobBank.Scheduling
         /// What has been charged to the original scheduling account so far.
         /// </param>
         public SchedulingAccountSplitter(ISchedulingAccount account,
-                                         int currentCharge)
+                                         int currentCharge,
+                                         CancellationTokenRegistration cancellationRegistration)
         {
-            _members = new List<ISchedulingAccount>()
+            _members = new ()
             {
-                account
+                (account, cancellationRegistration)
             };
 
             _currentCharge = currentCharge;
@@ -89,12 +92,18 @@ namespace JobBank.Scheduling
         /// True if the account was added; false if it has already
         /// been registered.
         /// </returns>
-        public bool TryAddMember(ISchedulingAccount account)
+        public bool TryAddMember(ISchedulingAccount account, 
+                                 CancellationToken cancellationToken,
+                                 Action<object?> cancellationAction,
+                                 object? cancellationState)
         {
             lock (_members)
             {
-                if (_members.Contains(account))
-                    return false;
+                foreach (var member in _members)
+                {
+                    if (object.ReferenceEquals(member.Account, account))
+                        return false;
+                }
 
                 int count = _members.Count;
                 int newCharge = _currentCharge / (count + 1);
@@ -108,10 +117,25 @@ namespace JobBank.Scheduling
                         account.UpdateCurrentItem(oldCharge, deltaCharge);
                 }
 
-                _members.Add(account);
+                var registration = cancellationToken.Register(cancellationAction, 
+                                                              cancellationState);
+
+                _members.Add((account, registration));
                 account.UpdateCurrentItem(null, newCharge);
 
                 return true;
+            }
+        }
+
+        /// <summary>
+        /// Cancel registrations on all clients' <see cref="CancellationToken" />.
+        /// </summary>
+        public void DisposeCancellationRegistrations()
+        {
+            lock (_members)
+            {
+                foreach (var member in _members)
+                    member.CancellationRegistration.Dispose();
             }
         }
     }

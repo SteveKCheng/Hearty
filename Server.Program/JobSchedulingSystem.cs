@@ -85,11 +85,11 @@ namespace JobBank.Server.Program
             var future = new SharedFuture<PromiseOutput, PromiseOutput>(
                             request,
                             charge,
-                            CancellationToken.None,
                             queue,
+                            CancellationToken.None,
                             _timingQueue);
 
-            var job = future.CreateJob(queue);
+            var job = future.CreateJob(queue, CancellationToken.None);
             queue.Enqueue(job);
 
             return ValueTask.CompletedTask;
