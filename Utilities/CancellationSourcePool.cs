@@ -2,13 +2,13 @@
 using System.Collections.Concurrent;
 using System.Threading;
 
-namespace JobBank.Server
+namespace JobBank.Utilities
 {
     /// <summary>
     /// Provides instances of <see cref="CancellationTokenSource" />
     /// that are pooled to reduce initialization overhead.
     /// </summary>
-    internal static class CancellationPool
+    public static class CancellationSourcePool
     {
         private static readonly ConcurrentBag<CancellationTokenSource> _bag = new ConcurrentBag<CancellationTokenSource>();
 

@@ -107,7 +107,7 @@ namespace JobBank.Server
 
                 self.CancellationToken = cancellationToken;
                 if (timeout is TimeSpan t)
-                    self._timeoutTrigger = CancellationPool.CancelAfter(t);
+                    self._timeoutTrigger = CancellationSourcePool.CancelAfter(t);
 
                 var stage = self.Poll();
                 self._callbackStage = (int)stage;
@@ -412,7 +412,7 @@ namespace JobBank.Server
             /// <summary>
             /// Triggers timeout if desired by the client.
             /// </summary>
-            private CancellationPool.Use _timeoutTrigger;
+            private CancellationSourcePool.Use _timeoutTrigger;
 
             internal enum CallbackStage : int
             {

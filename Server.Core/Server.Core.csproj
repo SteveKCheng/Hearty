@@ -11,7 +11,6 @@
   
   <ItemGroup>
     <Compile Include="BasicPromiseStorage.cs" />
-    <Compile Include="CancellationPool.cs" />
     <Compile Include="ExpiryQueue.cs" />
     <Compile Include="InMemoryPathsDirectory.cs" />
     <Compile Include="IPromiseClientInfo.cs" />
