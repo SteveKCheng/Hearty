@@ -271,11 +271,9 @@ namespace JobBank.Scheduling
 
             account.UpdateCurrentItem(currentWait, elapsed - currentWait);
             account.TabulateCompletedItem(elapsed);
-
             cancellationRegistration.Dispose();
 
-            lock (_cancellationSourceUse.Source!)
-                _cancellationSourceUse.Dispose();
+            _cancellationSourceUse.Dispose();
         }
 
         /// <summary>
@@ -345,15 +343,11 @@ namespace JobBank.Scheduling
         {
             if (Interlocked.Decrement(ref _activeCount) == 0)
             {
-                var source = _cancellationSourceUse.Source;
-                if (source != null)
-                {
-                    lock (source)
-                    {
-                        var s = _cancellationSourceUse.Source;
-                        s?.Cancel();
-                    }
-                }
+                // N.B. Existing cancellation callbacks are always disposed
+                //      before the rented cancellation source is returned
+                //      in FinalizeCharge.  So the cancellation source is
+                //      guaranteed to be valid to use here.
+                _cancellationSourceUse.Source!.Cancel();
             }
         }
 
