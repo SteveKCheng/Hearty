@@ -441,17 +441,23 @@ namespace JobBank.Scheduling
                 }
             }
 
-            // Increment _activeCount atomically unless it is already <= 0
-            var activeCount = _activeCount;
-            bool success;
-            do
+            int activeCount = 0;
+
+            // Do not bother with cancellations if the future is already done
+            if (!_isDone)
             {
-                var c = activeCount;
-                if (c <= 0)
-                    break;
-                activeCount = Interlocked.CompareExchange(ref _activeCount, c + 1, c);
-                success = (activeCount == c);
-            } while (!success);
+                // Increment _activeCount atomically unless it is already <= 0
+                activeCount = _activeCount;
+                bool success;
+                do
+                {
+                    var c = activeCount;
+                    if (c <= 0)
+                        break;
+                    activeCount = Interlocked.CompareExchange(ref _activeCount, c + 1, c);
+                    success = (activeCount == c);
+                } while (!success);
+            }
 
             var cancellationRegistration =
                 (activeCount > 0) ? RegisterForCancellation(cancellationToken)
