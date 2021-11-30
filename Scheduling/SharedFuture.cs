@@ -88,6 +88,28 @@ namespace JobBank.Scheduling
         public TInput Input { get; }
 
         /// <summary>
+        /// Whether cancellation has been requested by all participating
+        /// clients.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// When all the participating clients at any one time
+        /// have requested cancellation, this flag is set to true
+        /// and remains that way.  The cancellation may not yet
+        /// be processed, i.e.  <see cref="OutputTask" /> may not
+        /// yet be complete.  Nevertheless a new client that wants
+        /// to run the same job can no longer use this instance,
+        /// and must remove it from its cache.
+        /// </para>
+        /// <para>
+        /// Since the <see cref="CancellationTokenSource" /> is internally
+        /// recycled, for safety, the internal <see cref="CancellationToken" /> 
+        /// to trigger the cancellation is not exposed directly.
+        /// </para>
+        /// </remarks>
+        public bool IsCancelled => (_activeCount <= 0);
+
+        /// <summary>
         /// Triggers cancellation for this job when all clients agree to cancel.
         /// </summary>
         private CancellationSourcePool.Use _cancellationSourceUse;
@@ -104,9 +126,9 @@ namespace JobBank.Scheduling
         private CancellationTokenRegistration _cancellationRegistration;
 
         /// <summary>
-        /// Counts how many clients have cancelled.
+        /// Counts how many clients remain that have not cancelled.
         /// </summary>
-        private int _cancelCount;
+        private int _activeCount;
 
         /// <summary>
         /// The initial estimate of the amount of time the job
@@ -301,34 +323,34 @@ namespace JobBank.Scheduling
             InitialWait = initialCharge;
 
             _cancellationSourceUse = CancellationSourcePool.Rent();
-            _cancelCount = 1;
-            _cancellationRegistration = RegisterCancellationToken(cancellationToken);
+            _activeCount = 1;
+            _cancellationRegistration = RegisterForCancellation(cancellationToken);
         }
 
         /// <summary>
         /// Register a callback on a client's cancellation token
         /// to propagate into <see cref="_cancellationSourceUse" />.
         /// </summary>
-        private CancellationTokenRegistration 
-            RegisterCancellationToken(CancellationToken cancellationToken)
-            => cancellationToken.Register(s => OnCancel(s), this);
-
+        private CancellationTokenRegistration
+            RegisterForCancellation(CancellationToken cancellationToken)
+            => cancellationToken.Register(
+                s => Unsafe.As<SharedFuture<TInput, TOutput>>(s!).OnCancel(), 
+                this);
+            
         /// <summary>
         /// Propagates cancellation from clients' <see cref="CancellationToken" />
         /// when all clients cancel.
         /// </summary>
-        private static void OnCancel(object? state)
+        private void OnCancel()
         {
-            var self = (SharedFuture<TInput, TOutput>)state!;
-            
-            if (Interlocked.Decrement(ref self._cancelCount) == 0)
+            if (Interlocked.Decrement(ref _activeCount) == 0)
             {
-                var source = self._cancellationSourceUse.Source;
+                var source = _cancellationSourceUse.Source;
                 if (source != null)
                 {
                     lock (source)
                     {
-                        var s = self._cancellationSourceUse.Source;
+                        var s = _cancellationSourceUse.Source;
                         s?.Cancel();
                     }
                 }
@@ -425,7 +447,21 @@ namespace JobBank.Scheduling
                 }
             }
 
-            var cancellationRegistration = RegisterCancellationToken(cancellationToken);
+            // Increment _activeCount atomically unless it is already <= 0
+            var activeCount = _activeCount;
+            bool success;
+            do
+            {
+                var c = activeCount;
+                if (c <= 0)
+                    break;
+                activeCount = Interlocked.CompareExchange(ref _activeCount, c + 1, c);
+                success = (activeCount == c);
+            } while (!success);
+
+            var cancellationRegistration =
+                (activeCount > 0) ? RegisterForCancellation(cancellationToken)
+                                  : default;
 
             // N.B. This call re-adjusts charges on all accounts,
             //      and so cannot be called during the retry loop.
@@ -482,6 +518,8 @@ namespace JobBank.Scheduling
                 try
                 {
                     var cancellationToken = _cancellationSourceUse.Token;
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     var output = await worker.ExecuteJobAsync(executionId, this, cancellationToken)
                                              .ConfigureAwait(false);
                     _taskBuilder.SetResult(output);
