@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace JobBank.Server
 {
@@ -48,12 +49,13 @@ namespace JobBank.Server
         }
 
         /// <inheritdoc />
-        public override Promise CreatePromise()
+        public override Promise CreatePromise(PromiseOutput request,
+                                              ValueTask<PromiseOutput> outputTask)
         {
             var newId = new PromiseId(Interlocked.Increment(ref _currentId));
 
             var currentTime = DateTime.UtcNow;
-            var promise = new Promise(currentTime, newId);
+            var promise = new Promise(currentTime, newId, request);
             var expiryTime = GetDefaultPromiseExpiryTime(currentTime);
 
             if (!_promisesById.TryAdd(newId, promise))
@@ -62,6 +64,8 @@ namespace JobBank.Server
             InvokeOnStorageEvent(new EventArgs { Type = OperationType.Create, PromiseId = newId });
 
             _expiryQueue.ChangeExpiry(promise, expiryTime, SetPromiseExpiryDelegate);
+
+            promise.AwaitAndPostResult(outputTask);
             return promise;
         }
 

@@ -87,36 +87,17 @@ namespace JobBank.Server
             var httpRequest = httpContext.Request;
             var httpResponse = httpContext.Response;
             var cancellationToken = httpContext.RequestAborted;
-            Promise promise;
             PromiseId promiseId;
 
             try
             {
-                promise = config.PromiseStorage.CreatePromise();
-
                 var jobInput = new JobInput(httpRequest.ContentType,
                                             httpRequest.ContentLength,
                                             httpRequest.BodyReader,
                                             cancellationToken);
 
-                
-                Job job = await executor.Invoke(jobInput, promise.Id)
-                                        .ConfigureAwait(false);
-
-                if (job.PromiseId != null)
-                {
-                    promiseId = job.PromiseId.GetValueOrDefault();
-                    if (promiseId == promise.Id)
-                        throw new InvalidOperationException("Job cannot refer to promise with an ID that is the same as itself. ");
-                    
-                    // FIXME remove the Promise object here
-                }
-                else
-                {
-                    promiseId = promise.Id;
-                    promise.AwaitAndPostResult(job.Task);
-                    await job.RequestReadingDone;
-                }
+                promiseId = await executor.Invoke(jobInput, config.PromiseStorage)
+                                          .ConfigureAwait(false);
             }
             catch (Exception e)
             {

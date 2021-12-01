@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 
 namespace JobBank.Server
 {
@@ -20,10 +21,19 @@ namespace JobBank.Server
     public abstract class PromiseStorage
     {
         /// <summary>
-        /// Create an initially empty promise object that can a
-        /// posted result later.
+        /// Create a promise object with the specified input,
+        /// that is to receive an asynchronous result.
         /// </summary>
-        public abstract Promise CreatePromise();
+        public abstract Promise CreatePromise(PromiseOutput request,
+                                              ValueTask<PromiseOutput> outputTask);
+
+        /// <summary>
+        /// Create a promise object with the specified input,
+        /// that is to receive an asynchronous result.
+        /// </summary>
+        public Promise CreatePromise(PromiseOutput request,
+                                     Task<PromiseOutput> outputTask)
+            => CreatePromise(request, new ValueTask<PromiseOutput>(outputTask));
 
         /// <summary>
         /// Retrieve the promise object that had been assigned

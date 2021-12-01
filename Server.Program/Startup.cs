@@ -89,7 +89,7 @@ namespace JobBank.Server.Program
                 var jobsServerConfig = app.ApplicationServices.GetRequiredService<JobsServerConfiguration>();
                 var jobScheduling = app.ApplicationServices.GetRequiredService<JobSchedulingSystem>();
 
-                endpoints.MapPostJob(jobsServerConfig, "pricing", async (JobInput input, PromiseId promiseId) =>
+                endpoints.MapPostJob(jobsServerConfig, "pricing", async (JobInput input, PromiseStorage promiseStorage) =>
                 {
                     using var stream = input.PipeReader.AsStream();
                     var requestData = await ReadStreamIntoMemorySafelyAsync(stream,
@@ -102,10 +102,7 @@ namespace JobBank.Server.Program
                     
                     var outputTask = jobScheduling.PushJobForClientAsync("testClient", 5, request, 15000);
 
-                    return new Job(outputTask)
-                    {
-                        RequestOutput = request
-                    };
+                    return promiseStorage.CreatePromise(request, outputTask).Id;
                 });
 
                 endpoints.MapGetPromiseById(jobsServerConfig);

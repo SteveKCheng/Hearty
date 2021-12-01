@@ -41,10 +41,11 @@ namespace JobBank.Server
 
         public PromiseId Id { get; }
 
-        public Promise(DateTime creationTime, PromiseId id)
+        public Promise(DateTime creationTime, PromiseId id, PromiseOutput request)
         {
             Id = id;
             CreationTime = creationTime;
+            RequestOutput = request;
         }
 
         public DateTime? Expiry { get; internal set; }
