@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace JobBank.Server
@@ -94,9 +95,18 @@ namespace JobBank.Server
         /// Awaits, in the background, for a job's result object to be published,
         /// and then forwards notifications to waiting subscribers.
         /// </summary>
+        /// <remarks>
+        /// This method should only be called exactly once.  The asynchronous
+        /// output is not expected during construction because, when promises
+        /// and jobs need to be cached, it is often necessary to generate
+        /// the unique <see cref="PromiseId" /> to use as the cache key, 
+        /// before the asynchronous work can start.
+        /// </remarks>
         public void AwaitAndPostResult(in ValueTask<PromiseOutput> task)
         {
-            // FIXME Should this method be internal?
+            if (Interlocked.Exchange(ref _hasAsyncResult, 1) != 0)
+                throw new InvalidOperationException("Cannot post more than one asynchronous output into a promise. ");
+
             _ = PostResultAsync(task);
         }
 
@@ -123,6 +133,12 @@ namespace JobBank.Server
         }
 
         private volatile int _isFulfilled;
+
+        /// <summary>
+        /// Set to one the first time <see cref="AwaitAndPostResult" />
+        /// is called.
+        /// </summary>
+        private int _hasAsyncResult;
 
         // Expiry
 
