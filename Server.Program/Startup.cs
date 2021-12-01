@@ -97,16 +97,12 @@ namespace JobBank.Server.Program
                                                                             16 * 1024 * 1024,
                                                                             8192,
                                                                             input.CancellationToken);
-                    static async ValueTask<PromiseOutput> MockWork()
-                    {
-                        await Task.Delay(TimeSpan.FromSeconds(30));
-                        return new Payload("application/json", Encoding.ASCII.GetBytes(@"{ ""status"": ""completed"" }"));
-                    }
 
                     var request = new Payload(input.ContentType ?? string.Empty, requestData);
-                    await jobScheduling.PushJobForClientAsync("testClient", 5, request, 100);
+                    
+                    var outputTask = jobScheduling.PushJobForClientAsync("testClient", 5, request, 15000);
 
-                    return new Job(MockWork())
+                    return new Job(outputTask)
                     {
                         RequestOutput = request
                     };

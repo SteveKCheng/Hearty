@@ -175,6 +175,15 @@ namespace JobBank.Server
         }
 
         /// <summary>
+        /// Report that an output object will be provided in the
+        /// future for the job.
+        /// </summary>
+        public Job(Task<PromiseOutput> task)
+            : this(new ValueTask<PromiseOutput>(task))
+        {
+        }
+
+        /// <summary>
         /// Report the output object that is synchronously available
         /// for the job.
         /// </summary>

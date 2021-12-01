@@ -22,6 +22,13 @@ namespace JobBank.Server.Program
         public WorkerDistribution<PromiseOutput, PromiseOutput>
             WorkerDistribution { get; }
 
+        /// <summary>
+        /// Cached "future" objects for jobs that have been submitted to at
+        /// least one job queue.
+        /// </summary>
+        private Dictionary<PromiseOutput, SharedFuture<PromiseOutput, PromiseOutput>>
+            _futures = new();
+
         private class DummyWorker : IJobWorker<PromiseOutput, PromiseOutput>
         {
             public string Name => "DummyWorker";
@@ -78,21 +85,59 @@ namespace JobBank.Server.Program
 
         private Task _jobRunnerTask;
 
-        public ValueTask PushJobForClientAsync(string client, int priority, PromiseOutput request, int charge)
+        /// <summary>
+        /// Get a scheduled job entry to push into a client's queue;
+        /// the future object may be shared if the same job
+        /// has been pushed before (for another client).
+        /// </summary>
+        /// <param name="account">Scheduling account corresponding to
+        /// the client's queue. </param>
+        /// <param name="request">Input for the job to execute. 
+        /// This input is also used to de-duplicate jobs.
+        /// </param>
+        /// <param name="charge"></param>
+        /// <returns></returns>
+        private JobMessage
+            GetJobToSchedule(ISchedulingAccount account, 
+                             PromiseOutput request, 
+                             int charge)
+        {
+            JobMessage job;
+
+            lock (_futures)
+            {
+                if (_futures.TryGetValue(request, out var future) && !future.IsCancelled)
+                {
+                    job = future.CreateJob(account, CancellationToken.None);
+
+                    // Check again because cancellation can race with registering
+                    // a new client
+                    if (!future.IsCancelled)
+                        return job;
+                }
+
+                job = SharedFuture<PromiseOutput, PromiseOutput>.CreateJob(
+                        request,
+                        charge,
+                        account,
+                        CancellationToken.None,
+                        _timingQueue,
+                        out future);
+
+                _futures[request] = future;
+            }
+
+            return job;
+        }
+
+        public Task<PromiseOutput> PushJobForClientAsync(string client, int priority, PromiseOutput request, int charge)
         {
             var queue = PriorityClasses[priority].GetOrAdd(client);
 
-            var job = SharedFuture<PromiseOutput, PromiseOutput>.CreateJob(
-                            request,
-                            charge,
-                            queue,
-                            CancellationToken.None,
-                            _timingQueue,
-                            out var future);
-
+            var job = GetJobToSchedule(queue, request, charge);
             queue.Enqueue(job);
 
-            return ValueTask.CompletedTask;
+            return job.Future.OutputTask;
         }
     }
 }
