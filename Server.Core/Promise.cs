@@ -20,7 +20,7 @@ namespace JobBank.Server
     /// </remarks>
     public partial class Promise
     {
-        public PromiseOutput? ResultOutput
+        public PromiseData? ResultOutput
         {
             get
             {
@@ -36,13 +36,13 @@ namespace JobBank.Server
         /// </summary>
         public DateTime CreationTime { get; }
 
-        public PromiseOutput? RequestOutput { get; internal set; }
+        public PromiseData? RequestOutput { get; internal set; }
 
         public bool IsCompleted => _isFulfilled != 0;
 
         public PromiseId Id { get; }
 
-        public Promise(DateTime creationTime, PromiseId id, PromiseOutput request)
+        public Promise(DateTime creationTime, PromiseId id, PromiseData request)
         {
             Id = id;
             CreationTime = creationTime;
@@ -53,7 +53,7 @@ namespace JobBank.Server
 
         public override int GetHashCode() => Id.GetHashCode();
 
-        private PromiseOutput? _resultOutput;
+        private PromiseData? _resultOutput;
 
         /// <summary>
         /// The .NET object that must be locked to safely 
@@ -67,7 +67,7 @@ namespace JobBank.Server
         /// <remarks>
         /// Any subscribers to this promise are notified.
         /// </remarks>
-        internal void PostResult(PromiseOutput result)
+        internal void PostResult(PromiseData result)
         {
             Debug.Assert(_isFulfilled == 0);
 
@@ -102,7 +102,7 @@ namespace JobBank.Server
         /// the unique <see cref="PromiseId" /> to use as the cache key, 
         /// before the asynchronous work can start.
         /// </remarks>
-        public void AwaitAndPostResult(in ValueTask<PromiseOutput> task)
+        public void AwaitAndPostResult(in ValueTask<PromiseData> task)
         {
             if (!TryAwaitAndPostResult(task))
                 throw new InvalidOperationException("Cannot post more than one asynchronous output into a promise. ");
@@ -134,7 +134,7 @@ namespace JobBank.Server
         /// False if this method has already been called; in that case
         /// <paramref name="postAction" /> is ignored.
         /// </returns>
-        public bool TryAwaitAndPostResult(in ValueTask<PromiseOutput> task,
+        public bool TryAwaitAndPostResult(in ValueTask<PromiseData> task,
                                           Action<Promise>? postAction = null)
         {
             if (Interlocked.Exchange(ref _hasAsyncResult, 1) != 0)
@@ -160,7 +160,7 @@ namespace JobBank.Server
         /// method completes synchronously, then the pre-allocated
         /// <see cref="Task.CompletedTask"/> gets returned.
         /// </remarks>
-        private async Task PostResultAsync(ValueTask<PromiseOutput> task,
+        private async Task PostResultAsync(ValueTask<PromiseData> task,
                                            Action<Promise>? postAction)
         {
             var output = await task.ConfigureAwait(false);

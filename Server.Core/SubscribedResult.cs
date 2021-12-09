@@ -28,7 +28,7 @@ namespace JobBank.Server
         /// The result of the promise made available in various forms,
         /// or null if there is some error that makes the output unavailable.
         /// </summary>
-        public PromiseOutput? Output { get; }
+        public PromiseData? Output { get; }
 
         /// <summary>
         /// Status of the promise.
@@ -42,7 +42,7 @@ namespace JobBank.Server
         /// If the normal output is not available because of some error or exception,
         /// accessing this property throws an exception.
         /// </remarks>
-        public PromiseOutput NormalOutput
+        public PromiseData NormalOutput
         {
             get
             {
@@ -62,7 +62,7 @@ namespace JobBank.Server
             }
         }
  
-        internal SubscribedResult(Promise.SubscriptionNode subscription, PromiseOutput output)
+        internal SubscribedResult(Promise.SubscriptionNode subscription, PromiseData output)
         {
             _subscription = subscription;
             Output = output;

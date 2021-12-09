@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 namespace JobBank.Server
 {
     /// <summary>
-    /// Provides (remote) clients with various ways to consume outputs from a (shared) promise.
+    /// Provides (remote) clients with various ways to consume inputs/outputs from a (shared) promise.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -34,7 +34,7 @@ namespace JobBank.Server
     /// that is output by the server when clients query it.
     /// </para>
     /// </remarks>
-    public abstract class PromiseOutput
+    public abstract class PromiseData
     {
         /// <summary>
         /// Called to clean up any resources when the <see cref="Promise"/> owning this result expires.

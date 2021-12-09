@@ -49,7 +49,7 @@ namespace JobBank.Server
         }
 
         /// <inheritdoc />
-        public override Promise CreatePromise(PromiseOutput request)
+        public override Promise CreatePromise(PromiseData request)
         {
             var newId = new PromiseId(Interlocked.Increment(ref _currentId));
 

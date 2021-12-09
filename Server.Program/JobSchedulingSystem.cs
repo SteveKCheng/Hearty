@@ -8,8 +8,8 @@ using Microsoft.Extensions.Logging;
 
 namespace JobBank.Server.Program
 {
-    using JobMessage = ScheduledJob<PromiseOutput, PromiseOutput>;
-    using ClientQueue = SchedulingQueue<ScheduledJob<PromiseOutput, PromiseOutput>>;
+    using JobMessage = ScheduledJob<PromiseData, PromiseData>;
+    using ClientQueue = SchedulingQueue<ScheduledJob<PromiseData, PromiseData>>;
 
     public class JobSchedulingSystem
     {
@@ -18,22 +18,22 @@ namespace JobBank.Server.Program
                 ClientQueueSystem<JobMessage, string, ClientQueue>>
             PriorityClasses { get; }
 
-        public WorkerDistribution<PromiseOutput, PromiseOutput>
+        public WorkerDistribution<PromiseData, PromiseData>
             WorkerDistribution { get; }
 
         /// <summary>
         /// Cached "future" objects for jobs that have been submitted to at
         /// least one job queue.
         /// </summary>
-        private Dictionary<PromiseId, SharedFuture<PromiseOutput, PromiseOutput>>
+        private Dictionary<PromiseId, SharedFuture<PromiseData, PromiseData>>
             _futures = new();
 
-        private class DummyWorker : IJobWorker<PromiseOutput, PromiseOutput>
+        private class DummyWorker : IJobWorker<PromiseData, PromiseData>
         {
             public string Name => "DummyWorker";
 
-            public async ValueTask<PromiseOutput> ExecuteJobAsync(uint executionId, 
-                                                                  IRunningJob<PromiseOutput> runningJob,
+            public async ValueTask<PromiseData> ExecuteJobAsync(uint executionId, 
+                                                                  IRunningJob<PromiseData> runningJob,
                                                                   CancellationToken cancellationToken)
             {
                 _logger.LogInformation("Starting job for execution ID {executionId}", executionId);
@@ -70,7 +70,7 @@ namespace JobBank.Server.Program
             for (int i = 0; i < PriorityClasses.Count; ++i)
                 PriorityClasses.ResetWeight(priority: i, weight: (i + 1) * 10);
 
-            WorkerDistribution = new WorkerDistribution<PromiseOutput, PromiseOutput>();
+            WorkerDistribution = new WorkerDistribution<PromiseData, PromiseData>();
             WorkerDistribution.CreateWorker(new DummyWorker(logger), 10, null);
 
             _jobRunnerTask = JobScheduling.RunJobsAsync(
@@ -99,9 +99,9 @@ namespace JobBank.Server.Program
         private JobMessage
             GetJobToSchedule(ISchedulingAccount account, 
                              PromiseId promiseId,
-                             PromiseOutput request, 
+                             PromiseData request, 
                              int charge,
-                             out Task<PromiseOutput> outputTask)
+                             out Task<PromiseData> outputTask)
         {
             JobMessage job;
 
@@ -118,7 +118,7 @@ namespace JobBank.Server.Program
                         return job;
                 }
 
-                job = SharedFuture<PromiseOutput, PromiseOutput>.CreateJob(
+                job = SharedFuture<PromiseData, PromiseData>.CreateJob(
                         request,
                         charge,
                         account,
@@ -172,7 +172,7 @@ namespace JobBank.Server.Program
 
             var job = GetJobToSchedule(queue, promise.Id, promise.RequestOutput!, charge, out var outputTask);
 
-            promise.TryAwaitAndPostResult(new ValueTask<PromiseOutput>(outputTask),
+            promise.TryAwaitAndPostResult(new ValueTask<PromiseData>(outputTask),
                                           p => RemoveCachedFuture(p.Id));
             queue.Enqueue(job);
         }

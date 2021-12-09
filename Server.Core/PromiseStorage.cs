@@ -23,7 +23,7 @@ namespace JobBank.Server
         /// <summary>
         /// Create a promise object with the specified input.
         /// </summary>
-        public abstract Promise CreatePromise(PromiseOutput request);
+        public abstract Promise CreatePromise(PromiseData request);
 
         /// <summary>
         /// Retrieve the promise object that had been assigned

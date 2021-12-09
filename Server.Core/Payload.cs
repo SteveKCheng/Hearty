@@ -12,7 +12,7 @@ namespace JobBank.Server
     /// A payload, stored in memory that can be uploaded for a new job,
     /// or downloaded from a promise.
     /// </summary>
-    public sealed class Payload : PromiseOutput
+    public sealed class Payload : PromiseData
     {
         /// <summary>
         /// Content (media) type describing the data format of <see cref="Body"/>,

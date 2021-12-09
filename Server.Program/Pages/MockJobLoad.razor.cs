@@ -19,7 +19,7 @@ namespace JobBank.Server.Program.Pages
 
         private void InjectJobs(int client, int priority, int load)
         {
-            PromiseOutput request =
+            PromiseData request =
                 new Payload("application/json", Encoding.ASCII.GetBytes(@"{ ""request"": ""..."" }"));
 
             int howMany = load switch
