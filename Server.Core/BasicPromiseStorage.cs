@@ -49,8 +49,7 @@ namespace JobBank.Server
         }
 
         /// <inheritdoc />
-        public override Promise CreatePromise(PromiseOutput request,
-                                              ValueTask<PromiseOutput> outputTask)
+        public override Promise CreatePromise(PromiseOutput request)
         {
             var newId = new PromiseId(Interlocked.Increment(ref _currentId));
 
@@ -65,7 +64,6 @@ namespace JobBank.Server
 
             _expiryQueue.ChangeExpiry(promise, expiryTime, SetPromiseExpiryDelegate);
 
-            promise.AwaitAndPostResult(outputTask);
             return promise;
         }
 

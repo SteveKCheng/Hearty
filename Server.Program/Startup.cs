@@ -101,8 +101,10 @@ namespace JobBank.Server.Program
                     var request = new Payload(input.ContentType ?? string.Empty, requestData);
                     
                     var outputTask = jobScheduling.PushJobForClientAsync("testClient", 5, request, 15000);
+                    var promise = promiseStorage.CreatePromise(request);
+                    promise.AwaitAndPostResult(outputTask);
+                    return promise.Id;
 
-                    return promiseStorage.CreatePromise(request, outputTask).Id;
                 });
 
                 endpoints.MapGetPromiseById(jobsServerConfig);

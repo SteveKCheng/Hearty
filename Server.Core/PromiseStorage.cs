@@ -21,19 +21,9 @@ namespace JobBank.Server
     public abstract class PromiseStorage
     {
         /// <summary>
-        /// Create a promise object with the specified input,
-        /// that is to receive an asynchronous result.
+        /// Create a promise object with the specified input.
         /// </summary>
-        public abstract Promise CreatePromise(PromiseOutput request,
-                                              ValueTask<PromiseOutput> outputTask);
-
-        /// <summary>
-        /// Create a promise object with the specified input,
-        /// that is to receive an asynchronous result.
-        /// </summary>
-        public Promise CreatePromise(PromiseOutput request,
-                                     Task<PromiseOutput> outputTask)
-            => CreatePromise(request, new ValueTask<PromiseOutput>(outputTask));
+        public abstract Promise CreatePromise(PromiseOutput request);
 
         /// <summary>
         /// Retrieve the promise object that had been assigned
