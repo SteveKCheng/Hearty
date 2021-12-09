@@ -96,7 +96,7 @@ namespace JobBank.Server
         /// and then forwards notifications to waiting subscribers.
         /// </summary>
         /// <remarks>
-        /// This method should only be called exactly once.  The asynchronous
+        /// This method should only be called at most once.  The asynchronous
         /// output is not expected during construction because, when promises
         /// and jobs need to be cached, it is often necessary to generate
         /// the unique <see cref="PromiseId" /> to use as the cache key, 
@@ -104,10 +104,44 @@ namespace JobBank.Server
         /// </remarks>
         public void AwaitAndPostResult(in ValueTask<PromiseOutput> task)
         {
-            if (Interlocked.Exchange(ref _hasAsyncResult, 1) != 0)
+            if (!TryAwaitAndPostResult(task))
                 throw new InvalidOperationException("Cannot post more than one asynchronous output into a promise. ");
+        }
 
-            _ = PostResultAsync(task);
+        /// <summary>
+        /// Awaits, in the background, for a job's result object to be published,
+        /// and then forwards notifications to waiting subscribers.  Does nothing
+        /// if already called.
+        /// </summary>
+        /// <remarks>
+        /// The asynchronous output is not expected during construction 
+        /// of <see cref="Promise" />, because, when promises
+        /// and jobs need to be cached, it is often necessary to generate
+        /// the unique <see cref="PromiseId" /> to use as the cache key, 
+        /// before the asynchronous work can start.
+        /// </remarks>
+        /// <param name="task">
+        /// The .NET asynchronous task that will provide the result.
+        /// </param>
+        /// <param name="postAction">
+        /// A function that is called after this promise receives the result.
+        /// The effect will be similar to <see cref="Task.ContinueWith(Action{Task, object?}, object?)"/>,
+        /// but avoids the race condition where <paramref name="task" /> completes
+        /// but this promise does not.
+        /// </param>
+        /// <returns>
+        /// True if <paramref name="task" /> is successfully registered.
+        /// False if this method has already been called; in that case
+        /// <paramref name="postAction" /> is ignored.
+        /// </returns>
+        public bool TryAwaitAndPostResult(in ValueTask<PromiseOutput> task,
+                                          Action<Promise>? postAction = null)
+        {
+            if (Interlocked.Exchange(ref _hasAsyncResult, 1) != 0)
+                return false;
+
+            _ = PostResultAsync(task, postAction);
+            return true;
         }
 
         /// <summary>
@@ -126,10 +160,12 @@ namespace JobBank.Server
         /// method completes synchronously, then the pre-allocated
         /// <see cref="Task.CompletedTask"/> gets returned.
         /// </remarks>
-        private async Task PostResultAsync(ValueTask<PromiseOutput> task)
+        private async Task PostResultAsync(ValueTask<PromiseOutput> task,
+                                           Action<Promise>? postAction)
         {
             var output = await task.ConfigureAwait(false);
             PostResult(output);
+            postAction?.Invoke(this);
         }
 
         private volatile int _isFulfilled;
