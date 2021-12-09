@@ -99,12 +99,10 @@ namespace JobBank.Server.Program
                                                                             input.CancellationToken);
 
                     var request = new Payload(input.ContentType ?? string.Empty, requestData);
-                    
-                    var outputTask = jobScheduling.PushJobForClientAsync("testClient", 5, request, 15000);
-                    var promise = promiseStorage.CreatePromise(request);
-                    promise.AwaitAndPostResult(outputTask);
-                    return promise.Id;
 
+                    var promise = promiseStorage.CreatePromise(request);
+                    jobScheduling.PushJobForClientAsync("testClient", 5, 15000, promise);
+                    return promise.Id;
                 });
 
                 endpoints.MapGetPromiseById(jobsServerConfig);

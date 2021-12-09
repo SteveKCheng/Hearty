@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Text;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 using JobBank.Scheduling;
 using Microsoft.Extensions.Logging;
@@ -26,7 +25,7 @@ namespace JobBank.Server.Program
         /// Cached "future" objects for jobs that have been submitted to at
         /// least one job queue.
         /// </summary>
-        private Dictionary<PromiseOutput, SharedFuture<PromiseOutput, PromiseOutput>>
+        private Dictionary<PromiseId, SharedFuture<PromiseOutput, PromiseOutput>>
             _futures = new();
 
         private class DummyWorker : IJobWorker<PromiseOutput, PromiseOutput>
@@ -99,16 +98,19 @@ namespace JobBank.Server.Program
         /// <returns></returns>
         private JobMessage
             GetJobToSchedule(ISchedulingAccount account, 
+                             PromiseId promiseId,
                              PromiseOutput request, 
-                             int charge)
+                             int charge,
+                             out Task<PromiseOutput> outputTask)
         {
             JobMessage job;
 
             lock (_futures)
             {
-                if (_futures.TryGetValue(request, out var future) && !future.IsCancelled)
+                if (_futures.TryGetValue(promiseId, out var future) && !future.IsCancelled)
                 {
                     job = future.CreateJob(account, CancellationToken.None);
+                    outputTask = future.OutputTask;
 
                     // Check again because cancellation can race with registering
                     // a new client
@@ -124,20 +126,55 @@ namespace JobBank.Server.Program
                         _timingQueue,
                         out future);
 
-                _futures[request] = future;
+                outputTask = future.OutputTask;
+                _futures[promiseId] = future;
             }
 
             return job;
         }
 
-        public Task<PromiseOutput> PushJobForClientAsync(string client, int priority, PromiseOutput request, int charge)
+        /// <summary>
+        /// Remove the entry mapping a promise ID to a scheduled job.
+        /// </summary>
+        /// <remarks>
+        /// This method is to be called once the job is finished
+        /// to avoid unbounded growth in the mapping table.
+        /// </remarks>
+        private void RemoveCachedFuture(PromiseId promiseId)
         {
+            lock (_futures)
+            {
+                _futures.Remove(promiseId);
+            }
+        }
+
+        /// <summary>
+        /// Create and push a job to complete a promise.
+        /// </summary>
+        /// <param name="client"></param>
+        /// <param name="priority"></param>
+        /// <param name="charge"></param>
+        /// <param name="promise">
+        /// A promise which may be newly created or already existing.
+        /// If newly created, the asynchronous task for the job
+        /// is posted into it.  Otherwise 
+        /// </param>
+        public void PushJobForClientAsync(string client, 
+                                          int priority, 
+                                          int charge,
+                                          Promise promise)
+        {
+            // Enqueue nothing if promise is already completed
+            if (promise.IsCompleted)
+                return;
+
             var queue = PriorityClasses[priority].GetOrAdd(client);
 
-            var job = GetJobToSchedule(queue, request, charge);
-            queue.Enqueue(job);
+            var job = GetJobToSchedule(queue, promise.Id, promise.RequestOutput!, charge, out var outputTask);
 
-            return job.Future.OutputTask;
+            promise.TryAwaitAndPostResult(new ValueTask<PromiseOutput>(outputTask),
+                                          p => RemoveCachedFuture(p.Id));
+            queue.Enqueue(job);
         }
     }
 }

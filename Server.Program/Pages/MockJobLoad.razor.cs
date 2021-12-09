@@ -36,7 +36,9 @@ namespace JobBank.Server.Program.Pages
             for (int i = 0; i < howMany; ++i)
             {
                 int waitingTime = (int)waitingTimeGenerator();
-                _jobScheduling.PushJobForClientAsync(clientName, priority, request, waitingTime);
+
+                var promise = _promiseStorage.CreatePromise(request);
+                _jobScheduling.PushJobForClientAsync(clientName, priority, waitingTime, promise);
             }
         }
 
