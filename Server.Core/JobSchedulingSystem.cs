@@ -6,18 +6,35 @@ using System.Threading.Tasks;
 using JobBank.Scheduling;
 using Microsoft.Extensions.Logging;
 
-namespace JobBank.Server.Program
+namespace JobBank.Server
 {
     using JobMessage = ScheduledJob<PromiseJobFunction, PromiseData>;
     using ClientQueue = SchedulingQueue<ScheduledJob<PromiseJobFunction, PromiseData>>;
 
+    /// <summary>
+    /// Schedules execution of promises using a hierarchy of job queues.
+    /// </summary>
+    /// <remarks>
+    /// The systems for managing job queueing, distributing jobs to 
+    /// (remote) workers, and holding the results as promises are 
+    /// implemented orthogonally.  This class integrates them together 
+    /// into a coherent service for applications to schedule execution 
+    /// of promises.
+    /// </remarks>
     public class JobSchedulingSystem
     {
+        /// <summary>
+        /// The hierarchy of job queues with priority scheduling.
+        /// </summary>
         public PrioritizedQueueSystem<
                 JobMessage, 
                 ClientQueueSystem<JobMessage, string, ClientQueue>>
             PriorityClasses { get; }
 
+        /// <summary>
+        /// The set of workers that can accept jobs to execute
+        /// as they come off the job queues.
+        /// </summary>
         public WorkerDistribution<PromiseJobFunction, PromiseData>
             WorkerDistribution { get; }
 
@@ -25,7 +42,8 @@ namespace JobBank.Server.Program
         /// Cached "future" objects for jobs that have been submitted to at
         /// least one job queue.
         /// </summary>
-        private Dictionary<PromiseId, SharedFuture<PromiseJobFunction, PromiseData>>
+        private readonly Dictionary<PromiseId, 
+                                    SharedFuture<PromiseJobFunction, PromiseData>>
             _futures = new();
 
         private class DummyWorker : IJobWorker<PromiseJobFunction, PromiseData>
@@ -60,17 +78,29 @@ namespace JobBank.Server.Program
 
         private readonly ILogger _logger;
 
-        public JobSchedulingSystem(ILogger<JobSchedulingSystem> logger)
+        /// <summary>
+        /// Prepare the system to schedule jobs and assign them to workers.
+        /// </summary>
+        /// <param name="logger">
+        /// Receives log messages for significant events in the job scheduling
+        /// system.
+        /// </param>
+        /// <param name="countPriorities">
+        /// The number of priority classes for jobs.  This is typically
+        /// a constant for the application.  The actual weights for
+        /// each priority class are dynamically adjustable.
+        /// </param>        
+        public JobSchedulingSystem(ILogger<JobSchedulingSystem> logger, int countPriorities = 10)
         {
             _logger = logger;
 
-            PriorityClasses = new(10, 
+            PriorityClasses = new(countPriorities, 
                 () => new ClientQueueSystem<JobMessage, string, ClientQueue>(
                     EqualityComparer<string>.Default,
                     key => new ClientQueue(),
                     new SimpleExpiryQueue(60000, 20)));
 
-            for (int i = 0; i < PriorityClasses.Count; ++i)
+            for (int i = 0; i < countPriorities; ++i)
                 PriorityClasses.ResetWeight(priority: i, weight: (i + 1) * 10);
 
             WorkerDistribution = new WorkerDistribution<PromiseJobFunction, PromiseData>();
@@ -82,10 +112,17 @@ namespace JobBank.Server.Program
                                 CancellationToken.None);
         }
 
+        /// <summary>
+        /// Expiry queue used to update counters of elapsed time for fair
+        /// job scheduling.
+        /// </summary>
         private readonly SimpleExpiryQueue _timingQueue
             = new SimpleExpiryQueue(1000, 50);
 
-        private Task _jobRunnerTask;
+        /// <summary>
+        /// Task that de-queues jobs and dispatches them to workers.
+        /// </summary>
+        private readonly Task _jobRunnerTask;
 
         /// <summary>
         /// Get a scheduled job entry to push into a client's queue;
@@ -155,7 +192,10 @@ namespace JobBank.Server.Program
         /// Create and push a job to complete a promise.
         /// </summary>
         /// <param name="client"></param>
-        /// <param name="priority"></param>
+        /// <param name="priority">
+        /// The desired priority that the job should be enqueued into.  It is expressed
+        /// using the same integer key as used by <see cref="PriorityClasses" />.
+        /// </param>
         /// <param name="charge"></param>
         /// <param name="promise">
         /// A promise which may be newly created or already existing.

@@ -130,6 +130,16 @@ namespace JobBank.Scheduling
             }
         }
 
+        /// <summary>
+        /// Remove a worker that had previously been added.
+        /// </summary>
+        /// <param name="name">
+        /// The name of the worker as was passed to <see cref="CreateWorker" />.
+        /// </param>
+        /// <returns>
+        /// True if the worker existed with that name and has been removed.
+        /// False if there is no worker with that name.
+        /// </returns>
         public bool RemoveWorker(string name)
         {
             if (!_allWorkers.TryRemove(name, out var worker))

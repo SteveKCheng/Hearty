@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using JobBank.Scheduling;
 
-namespace JobBank.Server.Program
+namespace JobBank.Server
 {
     /// <summary>
     /// Encapsulates the function to execute to generate 

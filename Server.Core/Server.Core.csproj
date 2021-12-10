@@ -14,6 +14,7 @@
     <Compile Include="ExpiryQueue.cs" />
     <Compile Include="InMemoryPathsDirectory.cs" />
     <Compile Include="IPromiseClientInfo.cs" />
+    <Compile Include="JobSchedulingSystem.cs" />
     <Compile Include="PathsDirectory.cs" />
     <Compile Include="Payload.cs" />
     <Compile Include="Promise.cs" />
@@ -21,6 +22,7 @@
     <Compile Include="PromiseException.cs" />
     <Compile Include="PromiseId.cs" />
     <Compile Include="PromiseData.cs" />
+    <Compile Include="PromiseJobFunction.cs" />
     <Compile Include="PromisePath.cs" />
     <Compile Include="PromiseStorage.cs" />
     <Compile Include="SubscribedResult.cs" />
@@ -35,6 +37,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Utilities\Utilities.csproj" />
+    <ProjectReference Include="..\Scheduling\Scheduling.csproj" />
   </ItemGroup>
 
 </Project>
