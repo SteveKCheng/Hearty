@@ -16,6 +16,7 @@ using System.IO;
 using System.Threading;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using JobBank.Scheduling;
 
 namespace JobBank.Server.Program
 {
@@ -28,15 +29,16 @@ namespace JobBank.Server.Program
 
         public IConfiguration Configuration { get; }
 
-        public static async ValueTask<PromiseData> MockWorkAsync(object input, CancellationToken cancellationToken)
+        private static async ValueTask<PromiseData> MockWorkAsync(object input, IRunningJob runningJob, CancellationToken cancellationToken)
         {
-            var initialWait = (int)input;
-
             // Mock work
-            await Task.Delay(initialWait, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(runningJob.InitialWait, cancellationToken).ConfigureAwait(false);
 
             return new Payload("application/json", Encoding.ASCII.GetBytes(@"{ ""status"": ""finished job"" }"));
         }
+
+        public static readonly Func<object, IRunningJob, CancellationToken, ValueTask<PromiseData>>
+            MockWorkAsyncDelegate = MockWorkAsync;
 
         // This method gets called by the runtime. Use this method to add services to the container.
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
@@ -113,7 +115,7 @@ namespace JobBank.Server.Program
                     var promise = promiseStorage.CreatePromise(request);
 
                     jobScheduling.PushJobForClientAsync("testClient", 5, 15000, promise,
-                        new PromiseJobFunction(15000, (input, cancellationToken) => MockWorkAsync(input, cancellationToken)));
+                        new PromiseJobFunction(request, MockWorkAsyncDelegate));
 
                     return promise.Id;
                 });

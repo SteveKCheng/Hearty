@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using JobBank.Scheduling;
 
 namespace JobBank.Server.Program
 {
@@ -24,14 +25,14 @@ namespace JobBank.Server.Program
         /// <summary>
         /// Asynchronous function that processes the input into an output.
         /// </summary>
-        public Func<object, CancellationToken, ValueTask<PromiseData>> 
+        public Func<object, IRunningJob, CancellationToken, ValueTask<PromiseData>> 
             Function { get; }
 
         /// <summary>
         /// Constructor.
         /// </summary>
         public PromiseJobFunction(object input,
-                                  Func<object, CancellationToken, ValueTask<PromiseData>> function)
+                                  Func<object, IRunningJob, CancellationToken, ValueTask<PromiseData>> function)
         {
             Input = input;
             Function = function;
@@ -40,7 +41,7 @@ namespace JobBank.Server.Program
         /// <summary>
         /// Invokes the asynchronous function to process the input.
         /// </summary>
-        public ValueTask<PromiseData> InvokeAsync(CancellationToken cancellationToken)
-            => Function.Invoke(Input, cancellationToken);
+        public ValueTask<PromiseData> InvokeAsync(IRunningJob runningJob, CancellationToken cancellationToken)
+            => Function.Invoke(Input, runningJob, cancellationToken);
     }
 }

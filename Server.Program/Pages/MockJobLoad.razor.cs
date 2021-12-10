@@ -39,9 +39,8 @@ namespace JobBank.Server.Program.Pages
                 int waitingTime = (int)waitingTimeGenerator();
 
                 var promise = _promiseStorage.CreatePromise(request);
-                var jobFunction = new PromiseJobFunction(waitingTime,
-                                    (input, cancellationToken) => 
-                                        Startup.MockWorkAsync(input, cancellationToken));
+                var jobFunction = new PromiseJobFunction(request,
+                                    Startup.MockWorkAsyncDelegate);
                 _jobScheduling.PushJobForClientAsync(clientName,
                                                      priority,
                                                      waitingTime,

@@ -38,7 +38,7 @@ namespace JobBank.Server.Program
             {
                 _logger.LogInformation("Starting job for execution ID {executionId}", executionId);
 
-                var output = await runningJob.Input.InvokeAsync(cancellationToken)
+                var output = await runningJob.Input.InvokeAsync(runningJob, cancellationToken)
                                                    .ConfigureAwait(false);
 
                 _logger.LogInformation("Completing job for execution ID {executionId}", executionId);
