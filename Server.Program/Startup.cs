@@ -98,10 +98,19 @@ namespace JobBank.Server.Program
                                                                             8192,
                                                                             input.CancellationToken);
 
+                    static ValueTask<PromiseData> MockWorkAsync(object input, CancellationToken cancellationToken)
+                    {
+                        PromiseData output = new Payload("application/json", Encoding.ASCII.GetBytes(@"{ ""status"": ""finished job"" }"));
+                        return ValueTask.FromResult(output);
+                    }
+
                     var request = new Payload(input.ContentType ?? string.Empty, requestData);
 
                     var promise = promiseStorage.CreatePromise(request);
-                    jobScheduling.PushJobForClientAsync("testClient", 5, 15000, promise);
+
+                    jobScheduling.PushJobForClientAsync("testClient", 5, 15000, promise,
+                        new PromiseJobFunction(request, (input, cancellationToken) => MockWorkAsync(input, cancellationToken)));
+
                     return promise.Id;
                 });
 

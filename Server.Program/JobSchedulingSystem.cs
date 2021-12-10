@@ -8,8 +8,8 @@ using Microsoft.Extensions.Logging;
 
 namespace JobBank.Server.Program
 {
-    using JobMessage = ScheduledJob<PromiseData, PromiseData>;
-    using ClientQueue = SchedulingQueue<ScheduledJob<PromiseData, PromiseData>>;
+    using JobMessage = ScheduledJob<PromiseJobFunction, PromiseData>;
+    using ClientQueue = SchedulingQueue<ScheduledJob<PromiseJobFunction, PromiseData>>;
 
     public class JobSchedulingSystem
     {
@@ -18,28 +18,34 @@ namespace JobBank.Server.Program
                 ClientQueueSystem<JobMessage, string, ClientQueue>>
             PriorityClasses { get; }
 
-        public WorkerDistribution<PromiseData, PromiseData>
+        public WorkerDistribution<PromiseJobFunction, PromiseData>
             WorkerDistribution { get; }
 
         /// <summary>
         /// Cached "future" objects for jobs that have been submitted to at
         /// least one job queue.
         /// </summary>
-        private Dictionary<PromiseId, SharedFuture<PromiseData, PromiseData>>
+        private Dictionary<PromiseId, SharedFuture<PromiseJobFunction, PromiseData>>
             _futures = new();
 
-        private class DummyWorker : IJobWorker<PromiseData, PromiseData>
+        private class DummyWorker : IJobWorker<PromiseJobFunction, PromiseData>
         {
             public string Name => "DummyWorker";
 
             public async ValueTask<PromiseData> ExecuteJobAsync(uint executionId, 
-                                                                  IRunningJob<PromiseData> runningJob,
-                                                                  CancellationToken cancellationToken)
+                                                                IRunningJob<PromiseJobFunction> runningJob,
+                                                                CancellationToken cancellationToken)
             {
                 _logger.LogInformation("Starting job for execution ID {executionId}", executionId);
+
+                // Mock work
                 await Task.Delay(runningJob.InitialWait, cancellationToken).ConfigureAwait(false);
+
+                var output = await runningJob.Input.InvokeAsync(cancellationToken)
+                                                   .ConfigureAwait(false);
+
                 _logger.LogInformation("Completing job for execution ID {executionId}", executionId);
-                return new Payload("application/json", Encoding.ASCII.GetBytes(@"{ ""status"": ""finished job"" }"));
+                return output;
             }
 
             public void AbandonJob(uint executionId)
@@ -70,7 +76,7 @@ namespace JobBank.Server.Program
             for (int i = 0; i < PriorityClasses.Count; ++i)
                 PriorityClasses.ResetWeight(priority: i, weight: (i + 1) * 10);
 
-            WorkerDistribution = new WorkerDistribution<PromiseData, PromiseData>();
+            WorkerDistribution = new WorkerDistribution<PromiseJobFunction, PromiseData>();
             WorkerDistribution.CreateWorker(new DummyWorker(logger), 10, null);
 
             _jobRunnerTask = JobScheduling.RunJobsAsync(
@@ -99,7 +105,7 @@ namespace JobBank.Server.Program
         private JobMessage
             GetJobToSchedule(ISchedulingAccount account, 
                              PromiseId promiseId,
-                             PromiseData request, 
+                             PromiseJobFunction request, 
                              int charge,
                              out Task<PromiseData> outputTask)
         {
@@ -118,7 +124,7 @@ namespace JobBank.Server.Program
                         return job;
                 }
 
-                job = SharedFuture<PromiseData, PromiseData>.CreateJob(
+                job = SharedFuture<PromiseJobFunction, PromiseData>.CreateJob(
                         request,
                         charge,
                         account,
@@ -157,12 +163,17 @@ namespace JobBank.Server.Program
         /// <param name="promise">
         /// A promise which may be newly created or already existing.
         /// If newly created, the asynchronous task for the job
-        /// is posted into it.  Otherwise 
+        /// is posted into it.  Otherwise the existing asynchronous task
+        /// is consumed, and <paramref name="jobFunction" /> is ignored.
+        /// </param>
+        /// <param name="jobFunction">
+        /// Produces the result output of the promise.
         /// </param>
         public void PushJobForClientAsync(string client, 
                                           int priority, 
                                           int charge,
-                                          Promise promise)
+                                          Promise promise,
+                                          PromiseJobFunction jobFunction)
         {
             // Enqueue nothing if promise is already completed
             if (promise.IsCompleted)
@@ -170,7 +181,11 @@ namespace JobBank.Server.Program
 
             var queue = PriorityClasses[priority].GetOrAdd(client);
 
-            var job = GetJobToSchedule(queue, promise.Id, promise.RequestOutput!, charge, out var outputTask);
+            var job = GetJobToSchedule(queue, 
+                                       promise.Id, 
+                                       jobFunction, 
+                                       charge, 
+                                       out var outputTask);
 
             promise.TryAwaitAndPostResult(new ValueTask<PromiseData>(outputTask),
                                           p => RemoveCachedFuture(p.Id));

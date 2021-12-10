@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace JobBank.Server.Program.Pages
@@ -38,8 +39,21 @@ namespace JobBank.Server.Program.Pages
                 int waitingTime = (int)waitingTimeGenerator();
 
                 var promise = _promiseStorage.CreatePromise(request);
-                _jobScheduling.PushJobForClientAsync(clientName, priority, waitingTime, promise);
+                var jobFunction = new PromiseJobFunction(promise,
+                                    (input, cancellationToken) => 
+                                        MockWorkAsync(input, cancellationToken));
+                _jobScheduling.PushJobForClientAsync(clientName,
+                                                     priority,
+                                                     waitingTime,
+                                                     promise,
+                                                     jobFunction);
             }
+        }
+
+        private static ValueTask<PromiseData> MockWorkAsync(object input, CancellationToken cancellationToken)
+        {
+            PromiseData output = new Payload("application/json", Encoding.ASCII.GetBytes(@"{ ""status"": ""finished job"" }"));
+            return ValueTask.FromResult(output);
         }
 
         private readonly Func<double>[] _waitingTimeGenerators;
