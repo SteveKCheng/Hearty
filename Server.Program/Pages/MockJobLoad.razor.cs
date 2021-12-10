@@ -39,21 +39,15 @@ namespace JobBank.Server.Program.Pages
                 int waitingTime = (int)waitingTimeGenerator();
 
                 var promise = _promiseStorage.CreatePromise(request);
-                var jobFunction = new PromiseJobFunction(promise,
+                var jobFunction = new PromiseJobFunction(waitingTime,
                                     (input, cancellationToken) => 
-                                        MockWorkAsync(input, cancellationToken));
+                                        Startup.MockWorkAsync(input, cancellationToken));
                 _jobScheduling.PushJobForClientAsync(clientName,
                                                      priority,
                                                      waitingTime,
                                                      promise,
                                                      jobFunction);
             }
-        }
-
-        private static ValueTask<PromiseData> MockWorkAsync(object input, CancellationToken cancellationToken)
-        {
-            PromiseData output = new Payload("application/json", Encoding.ASCII.GetBytes(@"{ ""status"": ""finished job"" }"));
-            return ValueTask.FromResult(output);
         }
 
         private readonly Func<double>[] _waitingTimeGenerators;

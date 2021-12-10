@@ -38,9 +38,6 @@ namespace JobBank.Server.Program
             {
                 _logger.LogInformation("Starting job for execution ID {executionId}", executionId);
 
-                // Mock work
-                await Task.Delay(runningJob.InitialWait, cancellationToken).ConfigureAwait(false);
-
                 var output = await runningJob.Input.InvokeAsync(cancellationToken)
                                                    .ConfigureAwait(false);
 

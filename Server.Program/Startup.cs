@@ -28,6 +28,16 @@ namespace JobBank.Server.Program
 
         public IConfiguration Configuration { get; }
 
+        public static async ValueTask<PromiseData> MockWorkAsync(object input, CancellationToken cancellationToken)
+        {
+            var initialWait = (int)input;
+
+            // Mock work
+            await Task.Delay(initialWait, cancellationToken).ConfigureAwait(false);
+
+            return new Payload("application/json", Encoding.ASCII.GetBytes(@"{ ""status"": ""finished job"" }"));
+        }
+
         // This method gets called by the runtime. Use this method to add services to the container.
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
@@ -98,18 +108,12 @@ namespace JobBank.Server.Program
                                                                             8192,
                                                                             input.CancellationToken);
 
-                    static ValueTask<PromiseData> MockWorkAsync(object input, CancellationToken cancellationToken)
-                    {
-                        PromiseData output = new Payload("application/json", Encoding.ASCII.GetBytes(@"{ ""status"": ""finished job"" }"));
-                        return ValueTask.FromResult(output);
-                    }
-
                     var request = new Payload(input.ContentType ?? string.Empty, requestData);
 
                     var promise = promiseStorage.CreatePromise(request);
 
                     jobScheduling.PushJobForClientAsync("testClient", 5, 15000, promise,
-                        new PromiseJobFunction(request, (input, cancellationToken) => MockWorkAsync(input, cancellationToken)));
+                        new PromiseJobFunction(15000, (input, cancellationToken) => MockWorkAsync(input, cancellationToken)));
 
                     return promise.Id;
                 });
