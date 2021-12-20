@@ -74,6 +74,9 @@ namespace JobBank.Server.Program
             services.AddSingleton<TimeoutProvider, SimpleTimeoutProvider>();
         }
 
+        private static readonly IJobQueueOwner _dummyQueueOwner =
+            new SimpleQueueOwner("testClient");
+
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
@@ -114,7 +117,7 @@ namespace JobBank.Server.Program
 
                     var promise = promiseStorage.CreatePromise(request);
 
-                    jobScheduling.PushJobForClientAsync("testClient", 5, 15000, promise,
+                    jobScheduling.PushJobForClientAsync(_dummyQueueOwner, 5, 15000, promise,
                         new PromiseJobFunction(request, MockWorkAsyncDelegate));
 
                     return promise.Id;

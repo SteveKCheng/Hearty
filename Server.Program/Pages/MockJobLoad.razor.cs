@@ -9,14 +9,14 @@ namespace JobBank.Server.Program.Pages
 {
     public partial class MockJobLoad
     {
-        private string GetClientName(int index)
-            => index switch
-            {
-                0 => "Alice",
-                1 => "Bobby",
-                2 => "Charlie",
-                _ => $"Client {(char)((int)'A' + index)}"
-            };
+        private readonly IJobQueueOwner[] _clients = new IJobQueueOwner[3]
+        {
+            new SimpleQueueOwner("Alice"),
+            new SimpleQueueOwner("Bobby"),
+            new SimpleQueueOwner("Charlie")
+        };
+
+        private IJobQueueOwner GetClient(int index) => _clients[index];
 
         private void InjectJobs(int client, int priority, int load)
         {
@@ -30,8 +30,6 @@ namespace JobBank.Server.Program.Pages
                 _ => 20
             };
 
-            var clientName = GetClientName(client);
-
             var waitingTimeGenerator = _waitingTimeGenerators[load];
 
             for (int i = 0; i < howMany; ++i)
@@ -41,7 +39,7 @@ namespace JobBank.Server.Program.Pages
                 var promise = _promiseStorage.CreatePromise(request);
                 var jobFunction = new PromiseJobFunction(request,
                                     Startup.MockWorkAsyncDelegate);
-                _jobScheduling.PushJobForClientAsync(clientName,
+                _jobScheduling.PushJobForClientAsync(GetClient(client),
                                                      priority,
                                                      waitingTime,
                                                      promise,

@@ -56,6 +56,12 @@ namespace JobBank.Scheduling
         private readonly Dictionary<TKey, Entry> _members;
         private readonly SimpleExpiryQueue _expiryQueue;
 
+        public ClientQueueSystem(Func<TKey, TQueue> factory,
+                                 SimpleExpiryQueue expiryQueue)
+            : this(EqualityComparer<TKey>.Default, factory, expiryQueue)
+        {
+        }
+
         public ClientQueueSystem(IEqualityComparer<TKey> comparer,
                                  Func<TKey, TQueue> factory,
                                  SimpleExpiryQueue expiryQueue)

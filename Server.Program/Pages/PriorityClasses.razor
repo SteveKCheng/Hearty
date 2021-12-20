@@ -32,7 +32,7 @@
                 <th><i>(label)</i></th>
             </tr>
 
-            @foreach (var (key, client) in classe.ListMembers().OrderBy(item => item.Key))
+            @foreach (var (key, client) in classe.ListMembers().OrderBy(item => item.Key.Title))
             {
                 var stats = client.CompletionStatistics;
                 var seconds = (double)stats.CumulativeCharge / 1000.0;

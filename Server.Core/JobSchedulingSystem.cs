@@ -28,7 +28,7 @@ namespace JobBank.Server
         /// </summary>
         public PrioritizedQueueSystem<
                 JobMessage, 
-                ClientQueueSystem<JobMessage, string, ClientQueue>>
+                ClientQueueSystem<JobMessage, IJobQueueOwner, ClientQueue>>
             PriorityClasses { get; }
 
         /// <summary>
@@ -95,8 +95,7 @@ namespace JobBank.Server
             _logger = logger;
 
             PriorityClasses = new(countPriorities, 
-                () => new ClientQueueSystem<JobMessage, string, ClientQueue>(
-                    EqualityComparer<string>.Default,
+                () => new ClientQueueSystem<JobMessage, IJobQueueOwner, ClientQueue>(
                     key => new ClientQueue(),
                     new SimpleExpiryQueue(60000, 20)));
 
@@ -191,7 +190,9 @@ namespace JobBank.Server
         /// <summary>
         /// Create and push a job to complete a promise.
         /// </summary>
-        /// <param name="client"></param>
+        /// <param name="owner">
+        /// Owner of the queue.
+        /// </param>
         /// <param name="priority">
         /// The desired priority that the job should be enqueued into.  It is expressed
         /// using the same integer key as used by <see cref="PriorityClasses" />.
@@ -206,7 +207,7 @@ namespace JobBank.Server
         /// <param name="jobFunction">
         /// Produces the result output of the promise.
         /// </param>
-        public void PushJobForClientAsync(string client, 
+        public void PushJobForClientAsync(IJobQueueOwner owner,
                                           int priority, 
                                           int charge,
                                           Promise promise,
@@ -216,7 +217,7 @@ namespace JobBank.Server
             if (promise.IsCompleted)
                 return;
 
-            var queue = PriorityClasses[priority].GetOrAdd(client);
+            var queue = PriorityClasses[priority].GetOrAdd(owner);
 
             var job = GetJobToSchedule(queue, 
                                        promise.Id, 
