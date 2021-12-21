@@ -198,6 +198,11 @@ namespace JobBank.Scheduling
                     return await _executor.ExecuteJobAsync(executionId, runningJob, cancellationToken)
                                           .ConfigureAwait(false);
                 }
+                catch (Exception e) when (_failedJobFallback != null)
+                {
+                    return await _failedJobFallback.Invoke(e, runningJob, cancellationToken)
+                                                   .ConfigureAwait(false);
+                }
                 finally
                 {
                     RemoveCurrentJob(executionId);
@@ -221,20 +226,26 @@ namespace JobBank.Scheduling
         /// <param name="name">
         /// The name of the worker.
         /// </param>
-        /// <param name="executor">
-        /// Implements the actual job action.
-        /// </param>
         /// <param name="totalResources">
         /// The count of abstract resources this worker is assumed to have.
         /// It is usually the number of CPUs, though there may be overcommit.
         /// </param>
+        /// <param name="executor">
+        /// Implements the actual job action.
+        /// </param>
+        /// <param name="failedJobFallback">
+        /// User-specified fallback to invoke whenever any job fails on
+        /// this worker.
+        /// </param>
         public DistributedWorker(string name,
+                                 int totalResources,
                                  IJobWorker<TInput, TOutput> executor,
-                                 int totalResources)
+                                 FailedJobFallback<TInput, TOutput>? failedJobFallback)
         {
             Name = name;
 
             _executor = executor;
+            _failedJobFallback = failedJobFallback;
 
             if (totalResources <= 0 || totalResources > 100000)
                 throw new ArgumentOutOfRangeException(nameof(totalResources));
@@ -251,5 +262,11 @@ namespace JobBank.Scheduling
             // FIXME cancel in transient manner all jobs being processed by the worker
             LeaveParent();
         }
+
+        /// <summary>
+        /// User-specified fallback when a job fails, 
+        /// inherited from <see cref="WorkerDistribution{TInput, TOutput}" />.
+        /// </summary>
+        private readonly FailedJobFallback<TInput, TOutput>? _failedJobFallback;
     }
 }

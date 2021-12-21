@@ -3,7 +3,9 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading;
 using System.Threading.Channels;
+using System.Threading.Tasks;
 
 namespace JobBank.Scheduling
 {
@@ -115,7 +117,10 @@ namespace JobBank.Scheduling
                                  IWorkerNotification? notification)
         {
             var name = executor.Name;
-            var worker = new DistributedWorker<TInput, TOutput>(name, executor, concurrency);
+            var worker = new DistributedWorker<TInput, TOutput>(name, 
+                                                                concurrency,
+                                                                executor,
+                                                                FailedJobFallback);
             _allWorkers.TryAdd(name, worker);
 
             _schedulingGroup.AdmitChild(worker, activate: true);
@@ -182,5 +187,35 @@ namespace JobBank.Scheduling
         /// </summary>
         public ChannelReader<JobVacancy<TInput, TOutput>> AsChannel()
             => _schedulingGroup.AsChannelReader();
+
+        /// <summary>
+        /// User-specified fallback when a distributed worker fails to execute
+        /// a job.
+        /// </summary>
+        public FailedJobFallback<TInput, TOutput>? FailedJobFallback { get; set; }
     }
+
+    /// <summary>
+    /// User-specified fallback when a distributed worker fails to execute
+    /// a job.
+    /// </summary>
+    /// <remarks>
+    /// The failing job may be logged, and optionally re-tried,
+    /// by inserting a (new) representative of it into some queue.
+    /// </remarks>
+    /// <param name="exception">Reports the failure from the original job. </param>
+    /// <param name="originalJob">The job that has failed. </param>
+    /// <param name="cancellationToken">The cancellation token
+    /// used to execute the job. 
+    /// </param>
+    /// <returns>
+    /// Provides the result of the job, usually asynchronously 
+    /// if the job is to be re-tried.  If the job is to be failed
+    /// right away, the exception to report back can be wrapped
+    /// synchronously.
+    /// </returns>
+    public delegate ValueTask<TOutput>
+        FailedJobFallback<TInput, TOutput>(Exception exception,
+                                           IRunningJob<TInput> originalJob,
+                                           CancellationToken cancellationToken);
 }
