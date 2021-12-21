@@ -38,4 +38,54 @@ namespace JobBank.Scheduling
         /// </remarks>
         TInput Input { get; }
     }
+
+    /// <summary>
+    /// Represents a job that can be launched by a worker.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This interface abstracts out what is common between a normally
+    /// enqueued job and a job that needs to be re-queued for retrying.
+    /// </para>
+    /// <para>
+    /// It is assumed possible that the same "launchable job" may be
+    /// queued multiple times.  But of course the exact same work
+    /// should not be repeated if it has already started.  So 
+    /// "launching" the job is one-shot, and all consumers read
+    /// from the same task source object.  This design helps
+    /// with thread safety but complicates matters when the job
+    /// needs to be re-tried on failure. 
+    /// </para>
+    /// </remarks>
+    /// <typeparam name="TInput">
+    /// The inputs to execute the job.
+    /// </typeparam>
+    /// <typeparam name="TOutput">
+    /// The outputs from executing the job.
+    /// </typeparam>
+    public interface ILaunchableJob<out TInput, TOutput> : IRunningJob<TInput>
+    {
+        /// <summary>
+        /// Have a worker launch this job, but only if it has not been
+        /// launched before.
+        /// </summary>
+        /// <param name="worker">
+        /// The worker that would execute the job.
+        /// </param>
+        /// <param name="executionId">
+        /// ID to identify the job execution for the worker, assigned by convention.
+        /// </param>
+        /// <returns>
+        /// True if this job has been launched on <paramref name="worker" />;
+        /// false if it was already launched (on another worker).
+        /// </returns>
+        bool TryLaunchJob(IJobWorker<TInput, TOutput> worker,
+                          uint executionId);
+
+        /// <summary>
+        /// Asynchronous task that furnishes the result
+        /// when the job finishes executing.
+        /// </summary>
+        Task<TOutput> OutputTask { get; }
+    }
 }

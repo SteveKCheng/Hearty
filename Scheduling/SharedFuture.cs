@@ -75,7 +75,7 @@ namespace JobBank.Scheduling
     /// <typeparam name="TOutput">
     /// The outputs from executing the job.
     /// </typeparam>
-    public class SharedFuture<TInput, TOutput> : IRunningJob<TInput>
+    public class SharedFuture<TInput, TOutput> : ILaunchableJob<TInput, TOutput>
     {
         /// <summary>
         /// The inputs to execute the job.
@@ -546,22 +546,8 @@ namespace JobBank.Scheduling
             }
         }
 
-        /// <summary>
-        /// Have a worker launch this job, but only if it has not been
-        /// launched before.
-        /// </summary>
-        /// <param name="worker">
-        /// The worker that would execute the job.
-        /// </param>
-        /// <param name="executionId">
-        /// ID to identify the job execution for the worker, assigned by convention.
-        /// </param>
-        /// <returns>
-        /// True if this job has been launched on <paramref name="worker" />;
-        /// false if it was already launched (on another worker).
-        /// </returns>
-        internal bool TryLaunchJob(IJobWorker<TInput, TOutput> worker,
-                                   uint executionId)
+        bool ILaunchableJob<TInput, TOutput>.TryLaunchJob(IJobWorker<TInput, TOutput> worker, 
+                                                          uint executionId)
         {
             if (Interlocked.Exchange(ref _jobLaunched, 1) != 0)
             {

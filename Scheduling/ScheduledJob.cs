@@ -31,8 +31,8 @@ namespace JobBank.Scheduling
         /// The underlying "job" object that may be shared across multiple queues
         /// because it has been enqueued more than once.
         /// </summary>
-        public SharedFuture<TInput, TOutput> Future { get; }
-
+        public ILaunchableJob<TInput, TOutput> Future { get; }
+            
         /// <summary>
         /// The queue that has this instance enqueued, needed for adjusting
         /// its debit balance.
@@ -45,7 +45,7 @@ namespace JobBank.Scheduling
         /// <summary>
         /// Instantiates a representative of <see cref="SharedFuture{TInput, TOutput}" />.
         /// </summary>
-        internal ScheduledJob(SharedFuture<TInput, TOutput> future,
+        internal ScheduledJob(ILaunchableJob<TInput, TOutput> future,
                               ISchedulingAccount account)
         {
             Future = future;
