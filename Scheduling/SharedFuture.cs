@@ -136,6 +136,9 @@ namespace JobBank.Scheduling
         /// </summary>
         public int InitialWait { get; }
 
+        /// <inheritdoc cref="IRunningJob.LaunchStartTime" />
+        public long LaunchStartTime => _startTime;
+
         /// <summary>
         /// The amount of time for the currently running job,
         /// in milliseconds, that have been charged to all 

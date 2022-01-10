@@ -51,11 +51,15 @@ namespace JobBank.Scheduling
         /// <inheritdoc cref="IRunningJob.InitialWait" />
         public int InitialWait => OriginalJob.InitialWait;
 
+        /// <inheritdoc cref="IRunningJob.LaunchStartTime" />
+        public long LaunchStartTime { get; private set; }
+
         public JobRetrial(IRunningJob<TInput> originalJob, 
-                              CancellationToken cancellationToken)
+                          CancellationToken cancellationToken)
         {
             OriginalJob = originalJob;
             CancellationToken = cancellationToken;
+            LaunchStartTime = long.MinValue;
         }
 
         /// <summary>
@@ -91,6 +95,8 @@ namespace JobBank.Scheduling
         {
             try
             {
+                LaunchStartTime = Environment.TickCount64;
+
                 var output = await worker.ExecuteJobAsync(executionId, this, CancellationToken)
                                          .ConfigureAwait(false);
                 _taskBuilder.SetResult(output);

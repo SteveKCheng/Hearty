@@ -17,6 +17,12 @@ namespace JobBank.Scheduling
         /// would take, in milliseconds.
         /// </summary>
         int InitialWait { get; }
+
+        /// <summary>
+        /// The approximate time that the job was launched,
+        /// measured in the same convention as <see cref="Environment.TickCount64" />.
+        /// </summary>
+        long LaunchStartTime { get; }
     }
 
     /// <summary>
