@@ -46,6 +46,8 @@ namespace JobBank.Scheduling
         /// <remarks>
         /// For each job (with reserved resources), there must be only one
         /// call to either this method or <see cref="ExecuteJobAsync" />.
+        /// This method essentially represents a job to execute 
+        /// that is "null".
         /// </remarks>
         /// <param name="executionId">
         /// An arbitrary integer, assigned by some convention, that may 
