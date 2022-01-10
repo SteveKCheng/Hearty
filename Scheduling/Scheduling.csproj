@@ -16,6 +16,7 @@
     <Compile Include="IJobWorker.cs" />
     <Compile Include="IWorkerNotification.cs" />
     <Compile Include="JobRetrial.cs" />
+    <Compile Include="Quarantine.cs" />
     <Compile Include="JobLaunchStartTimeComparer.cs" />
     <Compile Include="SchedulingAccountSplitter.cs" />
     <Compile Include="WorkerDistribution.cs" />
