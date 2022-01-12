@@ -214,6 +214,8 @@ namespace JobBank.Scheduling
             }
         }
 
+        bool IJobWorker<TInput, TOutput>.IsAlive => _executor.IsAlive;
+
         /// <summary>
         /// Implements the actual job action.
         /// </summary>

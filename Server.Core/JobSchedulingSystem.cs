@@ -67,6 +67,8 @@ namespace JobBank.Server
             {
             }
 
+            public bool IsAlive => true;
+
 
             public DummyWorker(ILogger logger)
             {
