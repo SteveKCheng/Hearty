@@ -120,7 +120,7 @@ namespace JobBank.Scheduling
 
             _schedulingGroup.AdmitChild(worker, activate: true);
 
-            worker.EventHandler += (object? sender, WorkerEventArgs e) =>
+            worker.OnEvent += (object? sender, WorkerEventArgs e) =>
             {
                 if (e.Kind == WorkerEventKind.Shutdown)
                     RemoveWorker(name);

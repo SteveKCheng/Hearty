@@ -273,13 +273,13 @@ namespace JobBank.Scheduling
 
         /// <summary>
         /// Forwards events from 
-        /// <see cref="IWorkerNotification.EventHandler" />
+        /// <see cref="IWorkerNotification.OnEvent" />
         /// of the original job executor.
         /// </summary>
-        public event EventHandler<WorkerEventArgs>? EventHandler
+        public event EventHandler<WorkerEventArgs>? OnEvent
         {
-            add => _executor.EventHandler += value;
-            remove => _executor.EventHandler -= value;
+            add => _executor.OnEvent += value;
+            remove => _executor.OnEvent -= value;
         }
     }
 }

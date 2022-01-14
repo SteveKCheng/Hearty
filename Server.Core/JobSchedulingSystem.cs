@@ -77,7 +77,7 @@ namespace JobBank.Server
 
             private readonly ILogger _logger;
 
-            public event EventHandler<WorkerEventArgs>? EventHandler;
+            public event EventHandler<WorkerEventArgs>? OnEvent;
         }
 
         private readonly ILogger _logger;

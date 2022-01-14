@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace JobBank.Scheduling
 {
@@ -14,7 +10,7 @@ namespace JobBank.Scheduling
         /// <summary>
         /// Event that fires when the status of a remote worker changes.
         /// </summary>
-        event EventHandler<WorkerEventArgs>? EventHandler;
+        event EventHandler<WorkerEventArgs>? OnEvent;
 
         /// <summary>
         /// Name that identifies this worker, for debugging and monitoring.
