@@ -76,6 +76,8 @@ namespace JobBank.Server
             }
 
             private readonly ILogger _logger;
+
+            public event EventHandler<WorkerEventArgs>? EventHandler;
         }
 
         private readonly ILogger _logger;
@@ -105,7 +107,7 @@ namespace JobBank.Server
                 PriorityClasses.ResetWeight(priority: i, weight: (i + 1) * 10);
 
             WorkerDistribution = new WorkerDistribution<PromiseJobFunction, PromiseData>();
-            WorkerDistribution.CreateWorker(new DummyWorker(logger), 10, null);
+            WorkerDistribution.CreateWorker(new DummyWorker(logger), 10);
 
             _jobRunnerTask = JobScheduling.RunJobsAsync(
                                 PriorityClasses.AsChannel(),

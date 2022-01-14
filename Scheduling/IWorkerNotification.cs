@@ -14,7 +14,43 @@ namespace JobBank.Scheduling
         /// <summary>
         /// Event that fires when the status of a remote worker changes.
         /// </summary>
-        event EventHandler<WorkerEventArgs> EventHandler;
+        event EventHandler<WorkerEventArgs>? EventHandler;
+
+        /// <summary>
+        /// Name that identifies this worker, for debugging and monitoring.
+        /// </summary>
+        string Name { get; }
+
+        /// <summary>
+        /// Whether this worker is working normally and
+        /// accepting jobs.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// If this worker represents a separate process, it may fail
+        /// without the entire scheduling system failing. 
+        /// When that happens the scheduling system should avoid
+        /// submitting further jobs to the worker which would only
+        /// fail.
+        /// </para>
+        /// <para>
+        /// When this flag becomes false, the condition is 
+        /// irreversible for the same object.  That is, the
+        /// same object cannot be revived.  Doing so avoids 
+        /// tricky and complicated coordination for revival
+        /// between the object and and its consuming client, 
+        /// whose implementations may execute concurrently.
+        /// </para>
+        /// <para>
+        /// If this worker is detected to fail, this flag should be set to
+        /// false before reporting the exception from any task returned
+        /// by <see cref="ExecuteJobAsync" />.  Thus, a client can check
+        /// for a failed worker by consulting this flag after awaiting
+        /// the completion of <see cref="ExecuteJobAsync" />,
+        /// without risk of false negatives. 
+        /// </para>
+        /// </remarks>
+        bool IsAlive { get; }
     }
 
     /// <summary>

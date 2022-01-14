@@ -107,14 +107,9 @@ namespace JobBank.Scheduling
         /// The degree of concurrency of the new worker, i.e. how many
         /// jobs it can run simultaneously.
         /// </param>
-        /// <param name="notification">
-        /// If non-null, this instance can listen for events from
-        /// the (remote) worker and adjust scheduling parameters
-        /// appropriately.
-        /// </param>
         public void CreateWorker(IJobWorker<TInput, TOutput> executor,
-                                 int concurrency,
-                                 IWorkerNotification? notification)
+                                 int concurrency)
+                                 
         {
             var name = executor.Name;
             var worker = new DistributedWorker<TInput, TOutput>(name, 
@@ -124,15 +119,12 @@ namespace JobBank.Scheduling
             _allWorkers.TryAdd(name, worker);
 
             _schedulingGroup.AdmitChild(worker, activate: true);
-            
-            if (notification != null)
+
+            worker.EventHandler += (object? sender, WorkerEventArgs e) =>
             {
-                notification.EventHandler += (object? sender, WorkerEventArgs e) =>
-                {
-                    if (e.Kind == WorkerEventKind.Shutdown)
-                        RemoveWorker(name);
-                };
-            }
+                if (e.Kind == WorkerEventKind.Shutdown)
+                    RemoveWorker(name);
+            };
         }
 
         /// <summary>

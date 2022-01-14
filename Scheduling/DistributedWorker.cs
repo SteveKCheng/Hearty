@@ -214,7 +214,7 @@ namespace JobBank.Scheduling
             }
         }
 
-        bool IJobWorker<TInput, TOutput>.IsAlive => _executor.IsAlive;
+        bool IWorkerNotification.IsAlive => _executor.IsAlive;
 
         /// <summary>
         /// Implements the actual job action.
@@ -270,5 +270,16 @@ namespace JobBank.Scheduling
         /// inherited from <see cref="WorkerDistribution{TInput, TOutput}" />.
         /// </summary>
         private readonly FailedJobFallback<TInput, TOutput>? _failedJobFallback;
+
+        /// <summary>
+        /// Forwards events from 
+        /// <see cref="IWorkerNotification.EventHandler" />
+        /// of the original job executor.
+        /// </summary>
+        public event EventHandler<WorkerEventArgs>? EventHandler
+        {
+            add => _executor.EventHandler += value;
+            remove => _executor.EventHandler -= value;
+        }
     }
 }
