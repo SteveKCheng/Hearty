@@ -142,6 +142,12 @@ namespace JobBank.Scheduling
         /// </summary>
         private void ReplenishResource()
         {
+            // Do not relinquish resources if the executor is dead.
+            // Let this worker be stuck so that no additional jobs
+            // get queued to it.
+            if (!_executor.IsAlive)
+                return;
+
             AdjustBalance(_inverseResourceTotal);
 
             // That this logic can work without a lock around the whole
