@@ -17,6 +17,8 @@ using System.Threading;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using JobBank.Scheduling;
+using Microsoft.AspNetCore.Http;
+using System.Net.WebSockets;
 
 namespace JobBank.Server.Program
 {
@@ -77,6 +79,31 @@ namespace JobBank.Server.Program
         private static readonly IJobQueueOwner _dummyQueueOwner =
             new SimpleQueueOwner("testClient");
 
+        private async Task WebSocketEchoAsync(HttpContext context, WebSocket webSocket)
+        {
+            var buffer = new byte[1024 * 4];
+
+            WebSocketReceiveResult result;
+            while (true)
+            {
+                result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None)
+                                        .ConfigureAwait(false);
+
+                if (result.CloseStatus != null)
+                    break;
+
+                await webSocket.SendAsync(new ArraySegment<byte>(buffer, 0, result.Count),
+                                          result.MessageType,
+                                          result.EndOfMessage, CancellationToken.None)
+                               .ConfigureAwait(false);
+            }
+
+            await webSocket.CloseAsync(result.CloseStatus.GetValueOrDefault(), 
+                                       result.CloseStatusDescription, 
+                                       CancellationToken.None)
+                           .ConfigureAwait(false);
+        }
+
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
@@ -95,6 +122,27 @@ namespace JobBank.Server.Program
             app.UseStaticFiles();
 
             app.UseRouting();
+
+            app.UseWebSockets();
+
+            app.Use(async (context, next) =>
+            {
+                if (context.Request.Path != "/ws")
+                {
+                    await next();
+                }
+                else if (!context.WebSockets.IsWebSocketRequest)
+                {
+                    context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                }
+                else
+                {
+                    var logger = app.ApplicationServices.GetRequiredService<ILogger<Startup>>();
+                    logger.LogInformation("Incoming WebSocket connection");
+                    using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
+                    await WebSocketEchoAsync(context, webSocket);
+                }
+            });
            
             app.UseEndpoints(endpoints =>
             {
