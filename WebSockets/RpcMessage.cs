@@ -22,15 +22,10 @@ namespace JobBank.WebSockets
 
         public uint ReplyId { get; }
 
-        protected RpcMessage(ushort typeCode, RpcMessageKind kind)
+        protected RpcMessage(ushort typeCode, RpcMessageKind kind, uint replyId)
         {
             TypeCode = typeCode;
             Kind = kind;
-        }
-
-        protected RpcMessage(ushort typeCode, RpcMessageKind kind, uint replyId)
-            : this(typeCode, kind)
-        {
             ReplyId = replyId;
         }
     }

@@ -54,6 +54,12 @@ namespace JobBank.WebSockets
         private readonly Task _writePendingMessagesTask;
         private readonly Task _readPendingMessagesTask;
 
+        /// <summary>
+        /// ID (sequence number) for sending the next request message;
+        /// atomically incremented each time.
+        /// </summary>
+        private uint _nextRequestId;
+
         public Task Completion => _writePendingMessagesTask;
 
         public void RequestCompletion()
@@ -106,12 +112,20 @@ namespace JobBank.WebSockets
         /// <returns>
         /// Asynchronous task for the reply outputs.
         /// </returns>
-        public async ValueTask<TReply> InvokeRemotelyAsync<TRequest, TReply>(ushort typeCode, TRequest message, CancellationToken cancellationToken)
+        public async ValueTask<TReply> InvokeRemotelyAsync<TRequest, TReply>(
+            ushort typeCode, 
+            TRequest message, 
+            CancellationToken cancellationToken)
         {
-            var impl = new RequestMessage<TRequest, TReply>(typeCode, message);
-            await _channel.Writer.WriteAsync(impl, cancellationToken)
+            var id = Interlocked.Increment(ref _nextRequestId);
+            var item = new RequestMessage<TRequest, TReply>(typeCode, 
+                                                            id, 
+                                                            message, 
+                                                            this, 
+                                                            cancellationToken);
+            await _channel.Writer.WriteAsync(item, cancellationToken)
                                  .ConfigureAwait(false);
-            return await impl.ReplyTask.ConfigureAwait(false);
+            return await item.ReplyTask.ConfigureAwait(false);
         }
 
         /// <summary>
@@ -123,13 +137,12 @@ namespace JobBank.WebSockets
             try
             {
                 var channelReader = _channel.Reader;
-                uint id = 0;
 
                 while (await channelReader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
                 {
                     while (channelReader.TryRead(out var item))
                     {
-                        await WriteMessageAsync(ref id, item, cancellationToken)
+                        await WriteMessageAsync(item, cancellationToken)
                                 .ConfigureAwait(false);
                     }
                 }
@@ -290,10 +303,6 @@ namespace JobBank.WebSockets
         /// Writes one message into the WebSocket connection after
         /// serializing it.
         /// </summary>
-        /// <param name="currentId">
-        /// The sequence number to label the next message with
-        /// if it is a request.
-        /// </param>
         /// <param name="item">
         /// State object for serializing the message and
         /// de-serializing its reply, if any.
@@ -301,25 +310,30 @@ namespace JobBank.WebSockets
         /// <param name="cancellationToken">
         /// Can be used to cancel the sending of the message.
         /// </param>
-        private ValueTask WriteMessageAsync(ref uint currentId, 
-                                            RpcMessage item, 
-                                            CancellationToken cancellationToken = default)
+        private ValueTask WriteMessageAsync(RpcMessage item, 
+                                            CancellationToken cancellationToken)
         {
             var writer = _writeBuffers;
             writer.Clear();
 
-            bool isReply = IsReplyMessageKind(item.Kind);
-
-            var id = isReply ? item.ReplyId : unchecked(currentId++);
-            var header = new RpcMessageHeader(item.Kind, item.TypeCode, id);
-
-            WriteHeader(writer, header);
+            WriteHeader(writer, new RpcMessageHeader(item.Kind, item.TypeCode, item.ReplyId));
             item.PackMessage(writer);
 
             if (item.Kind == RpcMessageKind.Request)
             {
                 lock (_pendingReplies)
-                    _pendingReplies.Add(id, item);
+                    _pendingReplies.Add(item.ReplyId, item);
+            }
+            else if (item.Kind == RpcMessageKind.Cancellation)
+            {
+                bool success;
+                lock (_pendingReplies)
+                    success = _pendingReplies.Remove(item.ReplyId);
+
+                // Do not send cancellation message more than once
+                // or if the reply has already been received
+                if (!success)
+                    return ValueTask.CompletedTask;
             }
 
             return _webSocket.SendAsync(_writeBuffers.WrittenMemory,

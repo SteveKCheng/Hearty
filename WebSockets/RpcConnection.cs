@@ -18,6 +18,9 @@ namespace JobBank.WebSockets
         internal ValueTask SendExceptionAsync(ushort typeCode, uint id, Exception e)
             => SendMessageAsync(new ExceptionMessage(typeCode, e, id));
 
+        internal ValueTask SendCancellationAsync(ushort typeCode, uint id)
+            => SendMessageAsync(new CancellationMessage(typeCode, id));
+
         private protected abstract ValueTask SendMessageAsync(RpcMessage message);
     }
 }

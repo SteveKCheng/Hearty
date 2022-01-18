@@ -20,7 +20,7 @@ namespace JobBank.WebSockets
         public string? StackTrace { get; set; }
     }
 
-    internal class ExceptionMessage : RpcMessage
+    internal sealed class ExceptionMessage : RpcMessage
     {
         public ExceptionMessagePayload Body { get; }
 

@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Buffers;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Sources;
 using MessagePack;
@@ -12,23 +14,63 @@ namespace JobBank.WebSockets
     /// </summary>
     /// <typeparam name="TRequest">User-defined type for the request inputs. </typeparam>
     /// <typeparam name="TReply">User-defined type for the reply outputs. </typeparam>
-    internal class RequestMessage<TRequest, TReply> : RpcMessage, IValueTaskSource<TReply>
+    internal sealed class RequestMessage<TRequest, TReply> : RpcMessage, IValueTaskSource<TReply>
     {
         /// <summary>
         /// The user-defined inputs to the remote procedure call.
         /// </summary>
         public TRequest Body { get; }
 
-        public RequestMessage(ushort typeCode, TRequest body)
-            : base(typeCode, RpcMessageKind.Request)
+        public RequestMessage(ushort typeCode, 
+                              uint id,
+                              TRequest body, 
+                              RpcConnection connection,
+                              CancellationToken cancellationToken)
+            : base(typeCode, RpcMessageKind.Request, id)
         {
             Body = body;
             _taskSource.RunContinuationsAsynchronously = true;
+            _connection = connection;
+
+            if (cancellationToken.CanBeCanceled)
+            {
+                _cancellationToken = cancellationToken;
+                _cancelRegistration = cancellationToken.UnsafeRegister(
+                    static s => Unsafe.As<RequestMessage<TRequest, TReply>>(s!)
+                                      .PropagateCancellation(),
+                    this);
+            }
         }
+
+        #region Cancellation
+
+        private async void PropagateCancellation()
+        {
+            try
+            {
+                _cancellationToken.ThrowIfCancellationRequested();
+            }
+            catch (OperationCanceledException e)
+            {
+                TrySetException(e);
+                await _connection.SendCancellationAsync(TypeCode, ReplyId)
+                                 .ConfigureAwait(false);
+            }
+        }
+
+        private readonly CancellationTokenRegistration _cancelRegistration;
+        private readonly CancellationToken _cancellationToken;
+
+        private readonly RpcConnection _connection;
+
+        #endregion
 
         #region Implementation of ValueTask for the reply message
 
         private ManualResetValueTaskSourceCore<TReply> _taskSource;
+
+        private bool TaskCompleted => 
+            _taskSource.GetStatus(_taskSource.Version) != ValueTaskSourceStatus.Pending;
 
         /// <summary>
         /// The asynchronous task that completes with the reply
@@ -42,6 +84,32 @@ namespace JobBank.WebSockets
 
         void IValueTaskSource<TReply>.OnCompleted(Action<object?> continuation, object? state, short token, ValueTaskSourceOnCompletedFlags flags)
             => _taskSource.OnCompleted(continuation, state, token, flags);
+
+        private bool TrySetException(Exception e)
+        {
+            lock (this)
+            {
+                if (TaskCompleted)
+                    return false;
+
+                _taskSource.SetException(e);
+                _cancelRegistration.Dispose();
+                return true;
+            }
+        }
+
+        private bool TrySetResult(TReply result)
+        {
+            lock (this)
+            {
+                if (TaskCompleted)
+                    return false;
+
+                _taskSource.SetResult(result);
+                _cancelRegistration.Dispose();
+                return true;
+            }
+        }
 
         #endregion
 
@@ -57,18 +125,18 @@ namespace JobBank.WebSockets
                 if (!isException)
                 {
                     var reply = MessagePackSerializer.Deserialize<TReply>(payload, options: null);
-                    _taskSource.SetResult(reply);
+                    TrySetResult(reply);
                 }
                 else
                 {
                     var body = MessagePackSerializer.Deserialize<ExceptionMessagePayload>(payload, options: null);
                     var exception = new Exception(body.Description);
-                    _taskSource.SetException(exception);
+                    TrySetException(exception);
                 }
             }
             catch (Exception e)
             {
-                _taskSource.SetException(e);
+                TrySetException(e);
             }
         }
     }

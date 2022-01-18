@@ -8,7 +8,7 @@ namespace JobBank.WebSockets
     /// Holds a reply before it gets sent over WebSockets.
     /// </summary>
     /// <typeparam name="TReply"></typeparam>
-    internal class ReplyMessage<TReply> : RpcMessage
+    internal sealed class ReplyMessage<TReply> : RpcMessage
     {
         public ReplyMessage(ushort typeCode, TReply body, uint replyId)
             : base(typeCode, RpcMessageKind.NormalReply, replyId)
