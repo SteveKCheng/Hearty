@@ -13,6 +13,7 @@
     <Compile Include="ReplyMessage.cs" />
     <Compile Include="RequestMessage.cs" />
     <Compile Include="RpcMessage.cs" />
+    <Compile Include="RpcMessageProcessor.cs" />
     <Compile Include="RpcRequestRegistry.cs" />
     <Compile Include="WebSocketRpc.cs" />
   </ItemGroup>

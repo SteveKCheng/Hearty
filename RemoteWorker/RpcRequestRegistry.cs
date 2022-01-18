@@ -3,23 +3,22 @@ using System;
 using System.Buffers;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
 namespace JobBank.WebSockets
 {
-    internal delegate void RequestMessageProcessor(in ReadOnlySequence<byte> payload,
-                                                   uint id,
-                                                   ushort typeCode,
-                                                   object state,
-                                                   ChannelWriter<RpcMessage> channelWriter);
+    public delegate ValueTask<TReply> RpcFunction<TRequest, TReply>(
+        TRequest request, 
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// Collection of callbacks to process incoming remote procedure calls.
     /// </summary>
     public class RpcRequestRegistry
     {
-        private readonly Dictionary<ushort, (RequestMessageProcessor, object)> _entries
+        private readonly Dictionary<ushort, RpcMessageProcessor> _entries
             = new();
 
         private bool _isFrozen;
@@ -53,14 +52,14 @@ namespace JobBank.WebSockets
         /// type and emits its reply.
         /// </param>
         public void Add<TRequest, TReply>(ushort typeCode, 
-                                          Func<TRequest, ValueTask<TReply>> func)
+                                          RpcFunction<TRequest, TReply> func)
         {
             ThrowIfFrozen();
 
             lock (_entries)
             {
                 ThrowIfFrozen();
-                _entries.Add(typeCode, (ProcessMessage<TRequest, TReply>, (object)func));
+                _entries.Add(typeCode, new RpcRequestProcessor<TRequest, TReply>(func));
             }
         }
 
@@ -68,7 +67,7 @@ namespace JobBank.WebSockets
         /// Get a reference to the mapping of callbacks that is guaranteed
         /// to be immutable.
         /// </summary>
-        internal Dictionary<ushort, (RequestMessageProcessor, object)> Capture()
+        internal Dictionary<ushort, RpcMessageProcessor> Capture()
         {
             Freeze();
             return _entries;
@@ -87,35 +86,6 @@ namespace JobBank.WebSockets
             {
                 _isFrozen = true;
             }
-        }
-
-        private static async Task SendReplyAsync<TReply>(ValueTask<TReply> replyTask,
-                                                         uint id,
-                                                         ushort typeCode,
-                                                         ChannelWriter<RpcMessage> channelWriter)
-        {
-            try
-            {
-                var replyMessage = await replyTask.ConfigureAwait(false);
-                var item = new ReplyMessage<TReply>(typeCode, replyMessage, id);
-                await channelWriter.WriteAsync(item).ConfigureAwait(false);
-            }
-            catch
-            {
-            }
-        }
-
-        private static void ProcessMessage<TRequest, TReply>(in ReadOnlySequence<byte> payload,
-                                                             uint id,
-                                                             ushort typeCode,
-                                                             object state,
-                                                             ChannelWriter<RpcMessage> channelWriter)
-        {
-            var func = (Func<TRequest, ValueTask<TReply>>)state;
-            var requestMessage = MessagePackSerializer.Deserialize<TRequest>(
-                                    payload, options: null);
-            var replyTask = func(requestMessage);
-            _ = SendReplyAsync(replyTask, id, typeCode, channelWriter);
         }
     }
 }

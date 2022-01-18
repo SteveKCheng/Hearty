@@ -44,8 +44,7 @@ namespace JobBank.WebSockets
         /// User-specified functions to invoke to
         /// handle each incoming type of request message.
         /// </summary>
-        private readonly Dictionary<ushort, (RequestMessageProcessor Processor, object State)>
-            _requestDispatch;
+        private readonly Dictionary<ushort, RpcMessageProcessor> _requestDispatch;
 
         private readonly Task _writePendingMessagesTask;
         private readonly Task _readPendingMessagesTask;
@@ -244,13 +243,9 @@ namespace JobBank.WebSockets
             }
             else
             {
-                if (_requestDispatch.TryGetValue(header.TypeCode, out var dispatch))
+                if (_requestDispatch.TryGetValue(header.TypeCode, out var processor))
                 {
-                    dispatch.Processor(payload, 
-                                       header.Id, 
-                                       header.TypeCode, 
-                                       dispatch.State, 
-                                       _channel.Writer);
+                    processor.ProcessMessage(payload, header, _channel.Writer);
                 }
             }
         }
