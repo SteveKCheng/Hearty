@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Sources;
 using MessagePack;
@@ -18,8 +19,8 @@ namespace JobBank.WebSockets
         /// </summary>
         public TRequest Body { get; }
 
-        public RequestMessage(short typeCode, TRequest body)
-            : base(typeCode)
+        public RequestMessage(ushort typeCode, TRequest body)
+            : base(typeCode, RpcMessageKind.Request)
         {
             Body = body;
             _taskSource.RunContinuationsAsynchronously = true;
@@ -44,16 +45,16 @@ namespace JobBank.WebSockets
 
         #endregion
 
-        public override void PackMessage(ref MessagePackWriter writer, uint id)
+        public override void PackMessage(IBufferWriter<byte> writer)
         {
-            MessagePackSerializer.Serialize(ref writer, Body, options: null);
+            MessagePackSerializer.Serialize(writer, Body, options: null);
         }
 
-        public override void ProcessReplyMessage(ref MessagePackReader reader, short typeCode)
+        public override void ProcessReplyMessage(in ReadOnlySequence<byte> payload)
         {
             try
             {
-                var replyMessage = MessagePackSerializer.Deserialize<TReply>(ref reader, options: null);
+                var replyMessage = MessagePackSerializer.Deserialize<TReply>(payload, options: null);
                 _taskSource.SetResult(replyMessage);
             }
             catch (Exception e)

@@ -1,6 +1,7 @@
 ﻿using MessagePack;
 using System;
 using System.Buffers;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Net.WebSockets;
 using System.Threading;
@@ -43,7 +44,7 @@ namespace JobBank.WebSockets
         /// User-specified functions to invoke to
         /// handle each incoming type of request message.
         /// </summary>
-        private readonly Dictionary<short, (RequestMessageProcessor Processor, object State)>
+        private readonly Dictionary<ushort, (RequestMessageProcessor Processor, object State)>
             _requestDispatch;
 
         private readonly Task _writePendingMessagesTask;
@@ -101,7 +102,7 @@ namespace JobBank.WebSockets
         /// <returns>
         /// Asynchronous task for the reply outputs.
         /// </returns>
-        public async ValueTask<TReply> InvokeRemotelyAsync<TRequest, TReply>(short typeCode, TRequest message, CancellationToken cancellationToken)
+        public async ValueTask<TReply> InvokeRemotelyAsync<TRequest, TReply>(ushort typeCode, TRequest message, CancellationToken cancellationToken)
         {
             var impl = new RequestMessage<TRequest, TReply>(typeCode, message);
             await _channel.Writer.WriteAsync(impl, cancellationToken)
@@ -173,41 +174,93 @@ namespace JobBank.WebSockets
         }
 
         /// <summary>
+        /// Read and decode the header bytes introducing an RPC message.
+        /// </summary>
+        /// <param name="buffer">
+        /// Buffer positioned at the start of the RPC message including its header.
+        /// On successful return, its position is advanced past the header
+        /// to the start of the payload.
+        /// </param>
+        private static RpcMessageHeader ReadHeader(ref ReadOnlySequence<byte> buffer)
+        {
+            ulong v;
+            var firstSpan = buffer.FirstSpan;
+            if (firstSpan.Length >= sizeof(ulong))
+            {
+                v = BinaryPrimitives.ReadUInt64LittleEndian(firstSpan);
+            }
+            else
+            {
+                // Slow path for pathological buffer sizes
+                Span<byte> span = stackalloc byte[sizeof(ulong)];
+                buffer.Slice(0, sizeof(ulong)).CopyTo(span);
+                v = BinaryPrimitives.ReadUInt64LittleEndian(span);
+            }
+
+            var h = RpcMessageHeader.Unpack(v);
+            buffer = buffer.Slice(sizeof(ulong));
+            return h;
+        }
+
+        /// <summary>
+        /// Write the header bytes introducing an RPC message.
+        /// </summary>
+        /// <param name="writer">
+        /// Writer prepared to start the RPC message.
+        /// </param>
+        /// <param name="header">
+        /// The header information to encode and write.
+        /// </param>
+        private static void WriteHeader(IBufferWriter<byte> writer, RpcMessageHeader header)
+        {
+            ulong v = header.Pack();
+            var span = writer.GetSpan(sizeof(ulong));
+            BinaryPrimitives.WriteUInt64LittleEndian(span, v);
+            writer.Advance(sizeof(ulong));
+        }
+
+        /// <summary>
         /// De-serialize and process one message after it has been 
         /// read into in-memory buffers.
         /// </summary>
-        private void IngestMessage(in ReadOnlySequence<byte> message)
+        private void IngestMessage(ReadOnlySequence<byte> payload)
         {
-            var reader = new MessagePackReader(message);
-
-            uint id = reader.ReadUInt32();
-            ushort messageCode = reader.ReadUInt16();
-            bool isReply = (messageCode & 0x8000) != 0;
-            short typeCode = (short)(messageCode & 0x7FFF);
+            var header = ReadHeader(ref payload);
+            bool isReply = IsReplyMessageKind(header.Kind);
 
             if (isReply)
             {
                 RpcMessage? item;
                 lock (_pendingReplies)
                 {
-                    _pendingReplies.Remove(id, out item);
+                    _pendingReplies.Remove(header.Id, out item);
                 }
 
                 if (item != null)
                 {
                     // FIXME check typeCode against item.TypeCode
-                    item.ProcessReplyMessage(ref reader, typeCode);
+                    item.ProcessReplyMessage(payload);
                 }
             }
             else
             {
-                if (_requestDispatch.TryGetValue(typeCode, out var dispatch))
+                if (_requestDispatch.TryGetValue(header.TypeCode, out var dispatch))
                 {
-                    dispatch.Processor(ref reader, id, typeCode, dispatch.State, _channel.Writer);
+                    dispatch.Processor(payload, 
+                                       header.Id, 
+                                       header.TypeCode, 
+                                       dispatch.State, 
+                                       _channel.Writer);
                 }
             }
         }
 
+        /// <summary>
+        /// Whether the RPC message is a reply to an earlier request.
+        /// </summary>
+        private static bool IsReplyMessageKind(RpcMessageKind kind)
+            => (kind & RpcMessageKind.NormalReply) != 0;
+            
         /// <summary>
         /// Writes one message into the WebSocket connection after
         /// serializing it.
@@ -227,20 +280,18 @@ namespace JobBank.WebSockets
                                             RpcMessage item, 
                                             CancellationToken cancellationToken = default)
         {
-            _writeBuffers.Clear();
-            var writer = new MessagePackWriter(_writeBuffers);
+            var writer = _writeBuffers;
+            writer.Clear();
 
-            var id = item.IsReply ? item.ReplyMessageId : unchecked(currentId++);
-            var messageCode = ((ushort)item.TypeCode) | (item.IsReply ? (ushort)0x8000 : 0);
+            bool isReply = IsReplyMessageKind(item.Kind);
 
-            writer.Write(id);
-            writer.Write(messageCode);
+            var id = isReply ? item.ReplyId : unchecked(currentId++);
+            var header = new RpcMessageHeader(item.Kind, item.TypeCode, id);
 
-            item.PackMessage(ref writer, id);
+            WriteHeader(writer, header);
+            item.PackMessage(writer);
 
-            writer.Flush();
-
-            if (!item.IsReply)
+            if (item.Kind == RpcMessageKind.Request)
             {
                 lock (_pendingReplies)
                 {

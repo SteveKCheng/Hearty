@@ -1,5 +1,6 @@
 ﻿using MessagePack;
 using System;
+using System.Buffers;
 using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Channels;
@@ -7,9 +8,9 @@ using System.Threading.Tasks;
 
 namespace JobBank.WebSockets
 {
-    internal delegate void RequestMessageProcessor(ref MessagePackReader reader,
+    internal delegate void RequestMessageProcessor(in ReadOnlySequence<byte> payload,
                                                    uint id,
-                                                   short typeCode,
+                                                   ushort typeCode,
                                                    object state,
                                                    ChannelWriter<RpcMessage> channelWriter);
 
@@ -18,7 +19,7 @@ namespace JobBank.WebSockets
     /// </summary>
     public class RpcRequestRegistry
     {
-        private readonly Dictionary<short, (RequestMessageProcessor, object)> _entries
+        private readonly Dictionary<ushort, (RequestMessageProcessor, object)> _entries
             = new();
 
         private bool _isFrozen;
@@ -51,7 +52,7 @@ namespace JobBank.WebSockets
         /// The asynchronous function that processes a request of the specified
         /// type and emits its reply.
         /// </param>
-        public void Add<TRequest, TReply>(short typeCode, 
+        public void Add<TRequest, TReply>(ushort typeCode, 
                                           Func<TRequest, ValueTask<TReply>> func)
         {
             ThrowIfFrozen();
@@ -67,7 +68,7 @@ namespace JobBank.WebSockets
         /// Get a reference to the mapping of callbacks that is guaranteed
         /// to be immutable.
         /// </summary>
-        internal Dictionary<short, (RequestMessageProcessor, object)> Capture()
+        internal Dictionary<ushort, (RequestMessageProcessor, object)> Capture()
         {
             Freeze();
             return _entries;
@@ -90,7 +91,7 @@ namespace JobBank.WebSockets
 
         private static async Task SendReplyAsync<TReply>(ValueTask<TReply> replyTask,
                                                          uint id,
-                                                         short typeCode,
+                                                         ushort typeCode,
                                                          ChannelWriter<RpcMessage> channelWriter)
         {
             try
@@ -104,14 +105,15 @@ namespace JobBank.WebSockets
             }
         }
 
-        private static void ProcessMessage<TRequest, TReply>(ref MessagePackReader reader,
+        private static void ProcessMessage<TRequest, TReply>(in ReadOnlySequence<byte> payload,
                                                              uint id,
-                                                             short typeCode,
+                                                             ushort typeCode,
                                                              object state,
                                                              ChannelWriter<RpcMessage> channelWriter)
         {
             var func = (Func<TRequest, ValueTask<TReply>>)state;
-            var requestMessage = MessagePackSerializer.Deserialize<TRequest>(ref reader, options: null);
+            var requestMessage = MessagePackSerializer.Deserialize<TRequest>(
+                                    payload, options: null);
             var replyTask = func(requestMessage);
             _ = SendReplyAsync(replyTask, id, typeCode, channelWriter);
         }

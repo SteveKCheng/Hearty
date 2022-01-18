@@ -1,5 +1,6 @@
 ﻿using MessagePack;
 using System;
+using System.Buffers;
 
 namespace JobBank.WebSockets
 {
@@ -9,20 +10,20 @@ namespace JobBank.WebSockets
     /// <typeparam name="TReply"></typeparam>
     internal class ReplyMessage<TReply> : RpcMessage
     {
-        public ReplyMessage(short typeCode, TReply body, uint replyMessageId)
-            : base(typeCode, replyMessageId)
+        public ReplyMessage(ushort typeCode, TReply body, uint replyId)
+            : base(typeCode, RpcMessageKind.NormalReply, replyId)
         {
             Body = body;
         }
 
         public TReply Body { get; }
 
-        public override void PackMessage(ref MessagePackWriter writer, uint id)
+        public override void PackMessage(IBufferWriter<byte> writer)
         {
-            MessagePackSerializer.Serialize(ref writer, Body, options: null);
+            MessagePackSerializer.Serialize(writer, Body, options: null);
         }
 
-        public override void ProcessReplyMessage(ref MessagePackReader reader, short typeCode)
+        public override void ProcessReplyMessage(in ReadOnlySequence<byte> payload)
              => throw new InvalidOperationException();
     }
 }
