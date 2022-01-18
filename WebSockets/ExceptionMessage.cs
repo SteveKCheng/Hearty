@@ -24,8 +24,8 @@ namespace JobBank.WebSockets
     {
         public ExceptionMessagePayload Body { get; }
 
-        public ExceptionMessage(ushort typeCode, Exception exception, uint replyId)
-            : base(typeCode, RpcMessageKind.ExceptionalReply, replyId)
+        public ExceptionMessage(ushort typeCode, uint replyId, Exception exception)
+            : base(RpcMessageKind.ExceptionalReply, typeCode, replyId)
         {
             Body = new ExceptionMessagePayload
             {

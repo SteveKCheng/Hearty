@@ -26,7 +26,7 @@ namespace JobBank.WebSockets
                               TRequest body, 
                               RpcConnection connection,
                               CancellationToken cancellationToken)
-            : base(typeCode, RpcMessageKind.Request, id)
+            : base(RpcMessageKind.Request, typeCode, id)
         {
             Body = body;
             _taskSource.RunContinuationsAsynchronously = true;

@@ -52,24 +52,27 @@ namespace JobBank.WebSockets
         /// i.e. replies or cancellations, must be assigned the
         /// same type code as the request.
         /// </remarks>
-        public ushort TypeCode { get; }
+        public ushort TypeCode => Header.TypeCode;
 
         /// <summary>
         /// The category of RPC message this instance represents.
         /// </summary>
-        public RpcMessageKind Kind { get; }
+        public RpcMessageKind Kind => Header.Kind;
 
         /// <summary>
         /// The ID assigned to the message to identify messages
         /// related to their originating requests messages.
         /// </summary>
-        public uint ReplyId { get; }
+        public uint ReplyId => Header.Id;
 
-        protected RpcMessage(ushort typeCode, RpcMessageKind kind, uint replyId)
+        /// <summary>
+        /// The header of the RPC message to send.
+        /// </summary>
+        public RpcMessageHeader Header { get; }
+
+        protected RpcMessage(RpcMessageKind kind, ushort typeCode, uint id)
         {
-            TypeCode = typeCode;
-            Kind = kind;
-            ReplyId = replyId;
+            Header = new RpcMessageHeader(kind, typeCode, id);
         }
     }
 

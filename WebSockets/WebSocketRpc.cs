@@ -316,7 +316,7 @@ namespace JobBank.WebSockets
             var writer = _writeBuffers;
             writer.Clear();
 
-            WriteHeader(writer, new RpcMessageHeader(item.Kind, item.TypeCode, item.ReplyId));
+            WriteHeader(writer, item.Header);
             item.PackPayload(writer);
 
             if (item.Kind == RpcMessageKind.Request)

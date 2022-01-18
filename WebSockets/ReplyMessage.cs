@@ -10,8 +10,8 @@ namespace JobBank.WebSockets
     /// <typeparam name="TReply">User-defined type for the reply outputs. </typeparam>
     internal sealed class ReplyMessage<TReply> : RpcMessage
     {
-        public ReplyMessage(ushort typeCode, TReply body, uint replyId)
-            : base(typeCode, RpcMessageKind.NormalReply, replyId)
+        public ReplyMessage(ushort typeCode, uint replyId, TReply body)
+            : base(RpcMessageKind.NormalReply, typeCode, replyId)
         {
             Body = body;
         }
