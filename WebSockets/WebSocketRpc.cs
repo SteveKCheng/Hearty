@@ -257,7 +257,7 @@ namespace JobBank.WebSockets
                     {
                         // FIXME check typeCode against item.TypeCode
                         bool isException = (header.Kind == RpcMessageKind.ExceptionalReply);
-                        item.ProcessReplyMessage(payload, isException);
+                        item.ProcessReply(payload, isException);
                     }
                     break;
 
@@ -317,7 +317,7 @@ namespace JobBank.WebSockets
             writer.Clear();
 
             WriteHeader(writer, new RpcMessageHeader(item.Kind, item.TypeCode, item.ReplyId));
-            item.PackMessage(writer);
+            item.PackPayload(writer);
 
             if (item.Kind == RpcMessageKind.Request)
             {

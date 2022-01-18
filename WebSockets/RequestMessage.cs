@@ -113,12 +113,12 @@ namespace JobBank.WebSockets
 
         #endregion
 
-        public override void PackMessage(IBufferWriter<byte> writer)
+        public override void PackPayload(IBufferWriter<byte> writer)
         {
             MessagePackSerializer.Serialize(writer, Body, options: null);
         }
 
-        public override void ProcessReplyMessage(in ReadOnlySequence<byte> payload, bool isException)
+        public override void ProcessReply(in ReadOnlySequence<byte> payload, bool isException)
         {
             try
             {

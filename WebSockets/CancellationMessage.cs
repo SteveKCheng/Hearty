@@ -14,11 +14,11 @@ namespace JobBank.WebSockets
         {
         }
 
-        public override void PackMessage(IBufferWriter<byte> writer)
+        public override void PackPayload(IBufferWriter<byte> writer)
         {
         }
 
-        public override void ProcessReplyMessage(in ReadOnlySequence<byte> payload, bool isException)
+        public override void ProcessReply(in ReadOnlySequence<byte> payload, bool isException)
             => throw new InvalidOperationException();
     }
 }

@@ -8,18 +8,61 @@ namespace JobBank.WebSockets
     /// Represents a pending message in <see cref="WebSocketRpc"/>'s internal
     /// channel.
     /// </summary>
-    /// <typeparam name="TReply">User-defined type for the reply outputs. </typeparam>
     internal abstract class RpcMessage
     {
-        public abstract void PackMessage(IBufferWriter<byte> writer);
+        /// <summary>
+        /// Serializes the payload of the message into buffers
+        /// for transmission.
+        /// </summary>
+        /// <remarks>
+        /// The header of the message is written by the caller
+        /// and must not be written by this method.
+        /// </remarks>
+        /// <param name="writer">
+        /// Provides buffers to write the payload into.
+        /// </param>
+        public abstract void PackPayload(IBufferWriter<byte> writer);
 
-        public abstract void ProcessReplyMessage(in ReadOnlySequence<byte> payload, 
-                                                 bool isException);
+        /// <summary>
+        /// Accepts and processes the reply message when
+        /// it is received, if this instance represents a request message.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">
+        /// This instance does not represent a RPC request, i.e.
+        /// <see cref="Kind" /> is not <see cref="RpcMessageKind.Request" />.
+        /// </exception>
+        /// <param name="payload">
+        /// The payload of the reply message that this method
+        /// would de-serialize.
+        /// </param>
+        /// <param name="isException">
+        /// Whether the payload is for an exceptional result.
+        /// The payload for exception results is, by convention,
+        /// the MessagePack serialization of <see cref="ExceptionMessagePayload" />.
+        /// </param>
+        public abstract void ProcessReply(in ReadOnlySequence<byte> payload, 
+                                          bool isException);
 
+        /// <summary>
+        /// The type code assigned to the message to distinguish 
+        /// different types of requests.
+        /// </summary>
+        /// <remarks>
+        /// Any messages related to the original request message,
+        /// i.e. replies or cancellations, must be assigned the
+        /// same type code as the request.
+        /// </remarks>
         public ushort TypeCode { get; }
 
+        /// <summary>
+        /// The category of RPC message this instance represents.
+        /// </summary>
         public RpcMessageKind Kind { get; }
 
+        /// <summary>
+        /// The ID assigned to the message to identify messages
+        /// related to their originating requests messages.
+        /// </summary>
         public uint ReplyId { get; }
 
         protected RpcMessage(ushort typeCode, RpcMessageKind kind, uint replyId)
@@ -32,6 +75,9 @@ namespace JobBank.WebSockets
 
     internal readonly struct RpcMessageHeader
     {
+        /// <summary>
+        /// The general category of RPC message.
+        /// </summary>
         public RpcMessageKind Kind { get; }
 
         /// <summary>
@@ -80,12 +126,37 @@ namespace JobBank.WebSockets
         }
     }
 
+    /// <summary>
+    /// Categorizes the major kinds of messages that can arrive
+    /// on a channel in the RPC framework of this library.
+    /// </summary>
     internal enum RpcMessageKind : ushort
     {
+        /// <summary>
+        /// A remote function is to be invoked.
+        /// </summary>
         Request = 0x0,
+
+        /// <summary>
+        /// An earlier invocation of a remote function is to be cancelled.
+        /// </summary>
         Cancellation = 0x1,
+
+        /// <summary>
+        /// An earlier invocation of a remote function returns a non-exceptional
+        /// result.
+        /// </summary>
         NormalReply = 0x2,
+
+        /// <summary>
+        /// An earlier invocation of a remote function failed and
+        /// is reporting an exception.
+        /// </summary>
         ExceptionalReply = 0x3,
+
+        /// <summary>
+        /// Not a valid entry; used to mark the end of the range of valid values.
+        /// </summary>
         Invalid
     }
 }
