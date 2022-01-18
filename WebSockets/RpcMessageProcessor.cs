@@ -1,6 +1,7 @@
 ﻿using MessagePack;
 using System;
 using System.Buffers;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace JobBank.WebSockets
@@ -10,7 +11,8 @@ namespace JobBank.WebSockets
         public abstract void ProcessMessage(
             in ReadOnlySequence<byte> payload,
             RpcMessageHeader header,
-            RpcConnection connection);
+            RpcConnection connection, 
+            CancellationToken cancellationToken);
     }
 
     internal class RpcRequestProcessor<TRequest, TReply> : RpcMessageProcessor
@@ -24,14 +26,15 @@ namespace JobBank.WebSockets
 
         private async Task ProcessMessageAsync(ReadOnlySequence<byte> payload,
                                                RpcMessageHeader header,
-                                               RpcConnection connection)
+                                               RpcConnection connection,
+                                               CancellationToken cancellationToken)
         {
             try
             {
                 var request = MessagePackSerializer.Deserialize<TRequest>(
                                         payload, options: null);
 
-                var replyTask = _func.Invoke(request, default);
+                var replyTask = _func.Invoke(request, cancellationToken);
                 var reply = await replyTask.ConfigureAwait(false);
                 await connection.SendReplyAsync(header.TypeCode, header.Id, reply)
                                 .ConfigureAwait(false);
@@ -44,11 +47,12 @@ namespace JobBank.WebSockets
         }
 
         public override void ProcessMessage(
-            in ReadOnlySequence<byte> payload, 
+            in ReadOnlySequence<byte> payload,
             RpcMessageHeader header,
-            RpcConnection connection)
+            RpcConnection connection, 
+            CancellationToken cancellationToken)
         {
-            _ = ProcessMessageAsync(payload, header, connection);
+            _ = ProcessMessageAsync(payload, header, connection, cancellationToken);
         }
     }
 }

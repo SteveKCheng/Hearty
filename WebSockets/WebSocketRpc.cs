@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Generic;
@@ -6,6 +6,7 @@ using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using JobBank.Utilities;
 
 namespace JobBank.WebSockets
 {
@@ -38,6 +39,11 @@ namespace JobBank.WebSockets
         /// Tracks the state of procedure calls made from this client.
         /// </summary>
         private readonly Dictionary<uint, RpcMessage> _pendingReplies = new();
+
+        /// <summary>
+        /// Manages cancellation tokens of received but unfinished requests.
+        /// </summary>
+        private readonly Dictionary<uint, CancellationSourcePool.Use> _cancellations = new();
 
         /// <summary>
         /// User-specified functions to invoke to
@@ -224,29 +230,53 @@ namespace JobBank.WebSockets
         private void IngestMessage(ReadOnlySequence<byte> payload)
         {
             var header = ReadHeader(ref payload);
-            bool isReply = IsReplyMessageKind(header.Kind);
+            CancellationSourcePool.Use cancellationUse;
 
-            if (isReply)
+            switch (header.Kind)
             {
-                RpcMessage? item;
-                lock (_pendingReplies)
-                {
-                    _pendingReplies.Remove(header.Id, out item);
-                }
+                case RpcMessageKind.NormalReply:
+                case RpcMessageKind.ExceptionalReply:
+                    RpcMessage? item;
+                    lock (_pendingReplies)
+                        _pendingReplies.Remove(header.Id, out item);
 
-                if (item != null)
-                {
-                    // FIXME check typeCode against item.TypeCode
-                    bool isException = (header.Kind == RpcMessageKind.ExceptionalReply);
-                    item.ProcessReplyMessage(payload, isException);
-                }
-            }
-            else
-            {
-                if (_requestDispatch.TryGetValue(header.TypeCode, out var processor))
-                {
-                    processor.ProcessMessage(payload, header, this);
-                }
+                    if (item != null)
+                    {
+                        // FIXME check typeCode against item.TypeCode
+                        bool isException = (header.Kind == RpcMessageKind.ExceptionalReply);
+                        item.ProcessReplyMessage(payload, isException);
+                    }
+                    break;
+
+                case RpcMessageKind.Request:
+                    if (!_requestDispatch.TryGetValue(header.TypeCode, out var processor))
+                        return;
+
+                    cancellationUse = CancellationSourcePool.Rent();
+                    try
+                    {
+                        lock (_cancellations)
+                            _cancellations.Add(header.Id, cancellationUse);
+                    }
+                    catch
+                    {
+                        cancellationUse.Dispose();
+                        throw;
+                    }
+
+                    processor.ProcessMessage(payload, header, this, cancellationUse.Token);
+                    break;
+
+                case RpcMessageKind.Cancellation:
+                    lock (_cancellations)
+                        _cancellations.Remove(header.Id, out cancellationUse);
+
+                    cancellationUse.Source?.Cancel();
+                    break;
+
+                default:
+                    // FIXME report error
+                    break;
             }
         }
 
@@ -289,9 +319,7 @@ namespace JobBank.WebSockets
             if (item.Kind == RpcMessageKind.Request)
             {
                 lock (_pendingReplies)
-                {
                     _pendingReplies.Add(id, item);
-                }
             }
 
             return _webSocket.SendAsync(_writeBuffers.WrittenMemory,
@@ -302,6 +330,20 @@ namespace JobBank.WebSockets
 
         private protected override ValueTask SendMessageAsync(RpcMessage message)
         {
+            if (IsReplyMessageKind(message.Kind))
+            {
+                CancellationSourcePool.Use cancellationUse;
+                bool success;
+                lock (_cancellations)
+                    success = _cancellations.Remove(message.ReplyId, out cancellationUse);
+
+                // Do not reply if already cancelled
+                if (!success)
+                    return ValueTask.CompletedTask;
+
+                cancellationUse.Dispose();
+            }
+
             return _channel.Writer.WriteAsync(message);
         }
     }
