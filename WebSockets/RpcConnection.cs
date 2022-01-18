@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace JobBank.WebSockets
@@ -37,6 +38,48 @@ namespace JobBank.WebSockets
 
         internal ValueTask SendCancellationAsync(ushort typeCode, uint id)
             => SendMessageAsync(new CancellationMessage(typeCode, id));
+
+        /// <summary>
+        /// Get the ID that is to be assigned to the next request message.
+        /// </summary>
+        /// <returns>
+        /// The ID, which may be provided asynchronously to
+        /// effect flow control.
+        /// </returns>
+        protected abstract ValueTask<uint> GetNextRequestIdAsync();
+
+        /// <summary>
+        /// Send a request message to the other side of the connection
+        /// to invoke a procedure.
+        /// </summary>
+        /// <typeparam name="TRequest">Type of request inputs to be serialized. </typeparam>
+        /// <typeparam name="TReply">Type of reply outputs to be de-serialized when it comes in. </typeparam>
+        /// <param name="typeCode">
+        /// The user-assigned type code of the request message.
+        /// </param>
+        /// <param name="request">
+        /// Holds any parameters needed for the request.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be used to cancel the request.
+        /// </param>
+        /// <returns>
+        /// Asynchronous task for the reply outputs.
+        /// </returns>
+        public async ValueTask<TReply> InvokeRemotelyAsync<TRequest, TReply>(
+            ushort typeCode,
+            TRequest request,
+            CancellationToken cancellationToken)
+        {
+            var id = await GetNextRequestIdAsync().ConfigureAwait(false);
+            var item = new RequestMessage<TRequest, TReply>(typeCode,
+                                                            id,
+                                                            request,
+                                                            this,
+                                                            cancellationToken);
+            await SendMessageAsync(item).ConfigureAwait(false);
+            return await item.ReplyTask.ConfigureAwait(false);
+        }
 
         private protected abstract ValueTask SendMessageAsync(RpcMessage message);
 

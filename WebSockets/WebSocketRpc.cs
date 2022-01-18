@@ -98,39 +98,8 @@ namespace JobBank.WebSockets
             _readPendingMessagesTask = ReadPendingMessagesAsync(CancellationToken.None);
         }
 
-        /// <summary>
-        /// Send a request message to the other side of the connection
-        /// to invoke a procedure.
-        /// </summary>
-        /// <typeparam name="TRequest">Type of request inputs to be serialized. </typeparam>
-        /// <typeparam name="TReply">Type of reply outputs to be de-serialized when it comes in. </typeparam>
-        /// <param name="typeCode">
-        /// The user-assigned type code of the request message.
-        /// </param>
-        /// <param name="message">
-        /// Holds any parameters needed for the request.
-        /// </param>
-        /// <param name="cancellationToken">
-        /// Can be used to cancel the request.
-        /// </param>
-        /// <returns>
-        /// Asynchronous task for the reply outputs.
-        /// </returns>
-        public async ValueTask<TReply> InvokeRemotelyAsync<TRequest, TReply>(
-            ushort typeCode, 
-            TRequest message, 
-            CancellationToken cancellationToken)
-        {
-            var id = Interlocked.Increment(ref _nextRequestId);
-            var item = new RequestMessage<TRequest, TReply>(typeCode, 
-                                                            id, 
-                                                            message, 
-                                                            this, 
-                                                            cancellationToken);
-            await _channel.Writer.WriteAsync(item, cancellationToken)
-                                 .ConfigureAwait(false);
-            return await item.ReplyTask.ConfigureAwait(false);
-        }
+        protected override sealed ValueTask<uint> GetNextRequestIdAsync()
+            => ValueTask.FromResult(Interlocked.Increment(ref _nextRequestId));
 
         /// <summary>
         /// Drain messages from this client's channel and write them
@@ -346,7 +315,7 @@ namespace JobBank.WebSockets
                                         cancellationToken);
         }
 
-        private protected override ValueTask SendMessageAsync(RpcMessage message)
+        private protected override sealed ValueTask SendMessageAsync(RpcMessage message)
         {
             if (IsReplyMessageKind(message.Kind))
             {
