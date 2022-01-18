@@ -66,7 +66,7 @@ namespace JobBank.WebSockets
         {
             _channel.Writer.TryComplete();
         }
-        
+
         /// <summary>
         /// Layer on remote procedure call services on top of a WebSocket connection.
         /// </summary>
@@ -79,8 +79,11 @@ namespace JobBank.WebSockets
         /// to incoming requests on the WebSocket connection.  This collection
         /// gets frozen when it is passed to this constructor.
         /// </param>
-        public WebSocketRpc(WebSocket webSocket, RpcRegistry registry)
-            : base(registry)
+        /// <param name="state">The reference that is assigned
+        /// to <see cref="State" />.
+        /// </param>
+        public WebSocketRpc(WebSocket webSocket, RpcRegistry registry, object? state = null)
+            : base(registry, state)
         {
             _requestDispatch = registry.Capture();
             _webSocket = webSocket;

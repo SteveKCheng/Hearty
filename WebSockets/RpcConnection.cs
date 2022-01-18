@@ -18,6 +18,17 @@ namespace JobBank.WebSockets
         /// </summary>
         public RpcRegistry Registry { get; }
 
+        /// <summary>
+        /// Reference to an arbitrary object that can be associated
+        /// to this connection.
+        /// </summary>
+        /// <remarks>
+        /// This property is provided so that the application can
+        /// look up and store application-specific information
+        /// for this connection.
+        /// </remarks>
+        public object? State { get; }
+
         internal ValueTask SendReplyAsync<TReply>(ushort typeCode, uint id, TReply reply)
             => SendMessageAsync(new ReplyMessage<TReply>(typeCode, id, Registry, reply));
 
@@ -36,9 +47,13 @@ namespace JobBank.WebSockets
         /// <param name="registry">The reference that is stored
         /// in <see cref="Registry" />.
         /// </param>
-        protected RpcConnection(RpcRegistry registry)
+        /// <param name="state">The reference that is assigned
+        /// to <see cref="State" />.
+        /// </param>
+        protected RpcConnection(RpcRegistry registry, object? state)
         {
             Registry = registry;
+            State = state;
         }
     }
 }
