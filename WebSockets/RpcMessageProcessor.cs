@@ -1,7 +1,6 @@
 ﻿using MessagePack;
 using System;
 using System.Buffers;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 
 namespace JobBank.WebSockets
@@ -11,7 +10,7 @@ namespace JobBank.WebSockets
         public abstract void ProcessMessage(
             in ReadOnlySequence<byte> payload,
             RpcMessageHeader header,
-            ChannelWriter<RpcMessage> replyWriter);
+            RpcConnection connection);
     }
 
     internal class RpcRequestProcessor<TRequest, TReply> : RpcMessageProcessor
@@ -25,7 +24,7 @@ namespace JobBank.WebSockets
 
         private async Task ProcessMessageAsync(ReadOnlySequence<byte> payload,
                                                RpcMessageHeader header,
-                                               ChannelWriter<RpcMessage> replyWriter)
+                                               RpcConnection connection)
         {
             try
             {
@@ -34,22 +33,22 @@ namespace JobBank.WebSockets
 
                 var replyTask = _func.Invoke(request, default);
                 var reply = await replyTask.ConfigureAwait(false);
-                var item = new ReplyMessage<TReply>(header.TypeCode, reply, header.Id);
-                await replyWriter.WriteAsync(item).ConfigureAwait(false);
+                await connection.SendReplyAsync(header.TypeCode, header.Id, reply)
+                                .ConfigureAwait(false);
             }
             catch (Exception e)
             {
-                var m = new ExceptionMessage(header.TypeCode, e, header.Id);
-                await replyWriter.WriteAsync(m).ConfigureAwait(false);
+                await connection.SendExceptionAsync(header.TypeCode, header.Id, e)
+                                .ConfigureAwait(false);
             }
         }
 
         public override void ProcessMessage(
             in ReadOnlySequence<byte> payload, 
             RpcMessageHeader header,
-            ChannelWriter<RpcMessage> replyWriter)
+            RpcConnection connection)
         {
-            _ = ProcessMessageAsync(payload, header, replyWriter);
+            _ = ProcessMessageAsync(payload, header, connection);
         }
     }
 }

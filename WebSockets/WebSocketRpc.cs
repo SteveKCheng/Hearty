@@ -1,4 +1,3 @@
-﻿using MessagePack;
 using System;
 using System.Buffers;
 using System.Buffers.Binary;
@@ -13,7 +12,7 @@ namespace JobBank.WebSockets
     /// <summary>
     /// Enables both sides of a WebSocket connection to make remote procedure calls.
     /// </summary>
-    public class WebSocketRpc
+    public class WebSocketRpc : RpcConnection
     {
         /// <summary>
         /// WebSocket connection established externally.
@@ -246,7 +245,7 @@ namespace JobBank.WebSockets
             {
                 if (_requestDispatch.TryGetValue(header.TypeCode, out var processor))
                 {
-                    processor.ProcessMessage(payload, header, _channel.Writer);
+                    processor.ProcessMessage(payload, header, this);
                 }
             }
         }
@@ -299,6 +298,11 @@ namespace JobBank.WebSockets
                                         WebSocketMessageType.Binary,
                                         true,
                                         cancellationToken);
+        }
+
+        private protected override ValueTask SendMessageAsync(RpcMessage message)
+        {
+            return _channel.Writer.WriteAsync(message);
         }
     }
 }
