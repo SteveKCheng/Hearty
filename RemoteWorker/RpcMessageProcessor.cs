@@ -23,19 +23,24 @@ namespace JobBank.WebSockets
             _func = func;
         }
 
-        private static async Task SendReplyAsync(ValueTask<TReply> replyTask,
-                                                 uint id,
-                                                 ushort typeCode,
-                                                 ChannelWriter<RpcMessage> replyWriter)
+        private async Task ProcessMessageAsync(ReadOnlySequence<byte> payload,
+                                               RpcMessageHeader header,
+                                               ChannelWriter<RpcMessage> replyWriter)
         {
             try
             {
-                var replyMessage = await replyTask.ConfigureAwait(false);
-                var item = new ReplyMessage<TReply>(typeCode, replyMessage, id);
+                var request = MessagePackSerializer.Deserialize<TRequest>(
+                                        payload, options: null);
+
+                var replyTask = _func.Invoke(request, default);
+                var reply = await replyTask.ConfigureAwait(false);
+                var item = new ReplyMessage<TReply>(header.TypeCode, reply, header.Id);
                 await replyWriter.WriteAsync(item).ConfigureAwait(false);
             }
-            catch
+            catch (Exception e)
             {
+                var m = new ExceptionMessage(header.TypeCode, e, header.Id);
+                await replyWriter.WriteAsync(m).ConfigureAwait(false);
             }
         }
 
@@ -44,10 +49,7 @@ namespace JobBank.WebSockets
             RpcMessageHeader header,
             ChannelWriter<RpcMessage> replyWriter)
         {
-            var request = MessagePackSerializer.Deserialize<TRequest>(
-                                    payload, options: null);
-            var replyTask = _func.Invoke(request, default);
-            _ = SendReplyAsync(replyTask, header.Id, header.TypeCode, replyWriter);
+            _ = ProcessMessageAsync(payload, header, replyWriter);
         }
     }
 }

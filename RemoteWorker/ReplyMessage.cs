@@ -23,7 +23,7 @@ namespace JobBank.WebSockets
             MessagePackSerializer.Serialize(writer, Body, options: null);
         }
 
-        public override void ProcessReplyMessage(in ReadOnlySequence<byte> payload)
+        public override void ProcessReplyMessage(in ReadOnlySequence<byte> payload, bool isException)
              => throw new InvalidOperationException();
     }
 }

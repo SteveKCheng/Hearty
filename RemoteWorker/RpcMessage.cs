@@ -13,7 +13,8 @@ namespace JobBank.WebSockets
     {
         public abstract void PackMessage(IBufferWriter<byte> writer);
 
-        public abstract void ProcessReplyMessage(in ReadOnlySequence<byte> payload);
+        public abstract void ProcessReplyMessage(in ReadOnlySequence<byte> payload, 
+                                                 bool isException);
 
         public ushort TypeCode { get; }
 

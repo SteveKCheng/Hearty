@@ -238,7 +238,8 @@ namespace JobBank.WebSockets
                 if (item != null)
                 {
                     // FIXME check typeCode against item.TypeCode
-                    item.ProcessReplyMessage(payload);
+                    bool isException = (header.Kind == RpcMessageKind.ExceptionalReply);
+                    item.ProcessReplyMessage(payload, isException);
                 }
             }
             else

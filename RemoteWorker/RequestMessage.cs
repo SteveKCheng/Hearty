@@ -50,12 +50,21 @@ namespace JobBank.WebSockets
             MessagePackSerializer.Serialize(writer, Body, options: null);
         }
 
-        public override void ProcessReplyMessage(in ReadOnlySequence<byte> payload)
+        public override void ProcessReplyMessage(in ReadOnlySequence<byte> payload, bool isException)
         {
             try
             {
-                var replyMessage = MessagePackSerializer.Deserialize<TReply>(payload, options: null);
-                _taskSource.SetResult(replyMessage);
+                if (!isException)
+                {
+                    var reply = MessagePackSerializer.Deserialize<TReply>(payload, options: null);
+                    _taskSource.SetResult(reply);
+                }
+                else
+                {
+                    var body = MessagePackSerializer.Deserialize<ExceptionMessagePayload>(payload, options: null);
+                    var exception = new Exception(body.Description);
+                    _taskSource.SetException(exception);
+                }
             }
             catch (Exception e)
             {
