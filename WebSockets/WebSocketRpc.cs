@@ -80,6 +80,7 @@ namespace JobBank.WebSockets
         /// gets frozen when it is passed to this constructor.
         /// </param>
         public WebSocketRpc(WebSocket webSocket, RpcRegistry registry)
+            : base(registry)
         {
             _requestDispatch = registry.Capture();
             _webSocket = webSocket;

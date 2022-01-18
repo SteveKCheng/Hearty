@@ -12,6 +12,12 @@ namespace JobBank.WebSockets
     /// </summary>
     public abstract class RpcConnection
     {
+        /// <summary>
+        /// Directs how payloads and messages on this RPC connection 
+        /// are processed.
+        /// </summary>
+        public RpcRegistry Registry { get; }
+
         internal ValueTask SendReplyAsync<TReply>(ushort typeCode, uint id, TReply reply)
             => SendMessageAsync(new ReplyMessage<TReply>(typeCode, id, reply));
 
@@ -22,5 +28,17 @@ namespace JobBank.WebSockets
             => SendMessageAsync(new CancellationMessage(typeCode, id));
 
         private protected abstract ValueTask SendMessageAsync(RpcMessage message);
+
+        /// <summary>
+        /// Sets basic/common information about the RPC connection
+        /// on construction.
+        /// </summary>
+        /// <param name="registry">The reference that is stored
+        /// in <see cref="Registry" />.
+        /// </param>
+        protected RpcConnection(RpcRegistry registry)
+        {
+            Registry = registry;
+        }
     }
 }
