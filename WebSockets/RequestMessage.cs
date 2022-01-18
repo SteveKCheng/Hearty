@@ -52,9 +52,13 @@ namespace JobBank.WebSockets
             }
             catch (OperationCanceledException e)
             {
-                TrySetException(e);
-                await _connection.SendCancellationAsync(TypeCode, ReplyId)
-                                 .ConfigureAwait(false);
+                if (TrySetException(e))
+                {
+                    // No need to send cancellation message if a result
+                    // already came back
+                    await _connection.SendCancellationAsync(TypeCode, ReplyId)
+                                     .ConfigureAwait(false);
+                }
             }
         }
 
