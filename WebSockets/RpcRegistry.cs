@@ -14,9 +14,10 @@ namespace JobBank.WebSockets
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Collection of callbacks to process incoming remote procedure calls.
+    /// Collects callbacks to process incoming remote procedure calls
+    /// and directs the serialization of payloads.
     /// </summary>
-    public class RpcRequestRegistry
+    public class RpcRegistry
     {
         private readonly Dictionary<ushort, RpcMessageProcessor> _entries
             = new();

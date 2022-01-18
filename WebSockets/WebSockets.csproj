@@ -17,7 +17,7 @@
     <Compile Include="RpcConnection.cs" />
     <Compile Include="RpcMessage.cs" />
     <Compile Include="RpcMessageProcessor.cs" />
-    <Compile Include="RpcRequestRegistry.cs" />
+    <Compile Include="RpcRegistry.cs" />
     <Compile Include="WebSocketRpc.cs" />
   </ItemGroup>
 

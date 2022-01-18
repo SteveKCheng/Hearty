@@ -74,14 +74,14 @@ namespace JobBank.WebSockets
         /// An already established WebSocket connection to run the
         /// protocol for the remote procedure calls.
         /// </param>
-        /// <param name="requestRegistry">
+        /// <param name="registry">
         /// Collection of user-specified functions to invoke in response
         /// to incoming requests on the WebSocket connection.  This collection
         /// gets frozen when it is passed to this constructor.
         /// </param>
-        public WebSocketRpc(WebSocket webSocket, RpcRequestRegistry requestRegistry)
+        public WebSocketRpc(WebSocket webSocket, RpcRegistry registry)
         {
-            _requestDispatch = requestRegistry.Capture();
+            _requestDispatch = registry.Capture();
             _webSocket = webSocket;
             _writeBuffers = new ArrayBufferWriter<byte>(initialCapacity: 4096);
             _readBuffers = new ArrayBufferWriter<byte>(initialCapacity: 4096);
