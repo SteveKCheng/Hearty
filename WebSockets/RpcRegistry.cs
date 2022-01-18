@@ -6,8 +6,27 @@ using MessagePack;
 
 namespace JobBank.WebSockets
 {
+    /// <summary>
+    /// An asynchronous function that can be invoked by the RPC
+    /// framework of this library.
+    /// </summary>
+    /// <typeparam name="TRequest">User-defined type for the request inputs. </typeparam>
+    /// <typeparam name="TReply">User-defined type for the reply outputs. </typeparam>
+    /// <param name="request">De-serialized request inputs.
+    /// </param>
+    /// <param name="connection">
+    /// The RPC connection that caused this function to be invoked.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancellation token that can be from the RPC client. 
+    /// </param>
+    /// <returns>
+    /// Asynchronous task that completes with the results to 
+    /// serialize and send back to the RPC client.
+    /// </returns>
     public delegate ValueTask<TReply> RpcFunction<TRequest, TReply>(
         TRequest request, 
+        RpcConnection connection,
         CancellationToken cancellationToken);
 
     /// <summary>

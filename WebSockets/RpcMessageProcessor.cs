@@ -34,7 +34,7 @@ namespace JobBank.WebSockets
                 var options = connection.Registry.SerializeOptions;
                 var request = MessagePackSerializer.Deserialize<TRequest>(payload, options);
 
-                var replyTask = _func.Invoke(request, cancellationToken);
+                var replyTask = _func.Invoke(request, connection, cancellationToken);
                 var reply = await replyTask.ConfigureAwait(false);
                 await connection.SendReplyAsync(header.TypeCode, header.Id, reply)
                                 .ConfigureAwait(false);
