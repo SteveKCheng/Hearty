@@ -8,6 +8,7 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
     <IsPackable>false</IsPackable>
+    <RollForward>Major</RollForward>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,10 +28,12 @@
     <Compile Include="PriorityHeapTests.cs" />
     <Compile Include="SchedulingTests.Exact.cs" />
     <Compile Include="SchedulingTests.Parallel.cs" />
+    <Compile Include="WebSocketRpcTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Scheduling\Scheduling.csproj" />
+    <ProjectReference Include="..\WebSockets\WebSockets.csproj" />
   </ItemGroup>
 
 </Project>
