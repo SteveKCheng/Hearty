@@ -24,9 +24,13 @@ namespace JobBank.WebSockets
     {
         public ExceptionMessagePayload Body { get; }
 
-        public ExceptionMessage(ushort typeCode, uint replyId, Exception exception)
+        private readonly MessagePackSerializerOptions _serializeOptions;
+
+        public ExceptionMessage(ushort typeCode, uint replyId, RpcRegistry registry, Exception exception)
             : base(RpcMessageKind.ExceptionalReply, typeCode, replyId)
         {
+            _serializeOptions = registry.SerializeOptions;
+
             Body = new ExceptionMessagePayload
             {
                 Class = exception.GetType().FullName,
@@ -38,7 +42,7 @@ namespace JobBank.WebSockets
 
         public override void PackPayload(IBufferWriter<byte> writer)
         {
-            MessagePackSerializer.Serialize(writer, Body, options: null);
+            MessagePackSerializer.Serialize(writer, Body, _serializeOptions);
         }
 
         public override void ProcessReply(in ReadOnlySequence<byte> payload, bool isException)

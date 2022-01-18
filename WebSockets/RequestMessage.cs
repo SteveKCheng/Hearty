@@ -113,23 +113,26 @@ namespace JobBank.WebSockets
 
         #endregion
 
+        private MessagePackSerializerOptions SerializeOptions => _connection.Registry.SerializeOptions;
+
         public override void PackPayload(IBufferWriter<byte> writer)
         {
-            MessagePackSerializer.Serialize(writer, Body, options: null);
+            MessagePackSerializer.Serialize(writer, Body, SerializeOptions);
         }
 
         public override void ProcessReply(in ReadOnlySequence<byte> payload, bool isException)
         {
             try
             {
+                var options = SerializeOptions;
                 if (!isException)
                 {
-                    var reply = MessagePackSerializer.Deserialize<TReply>(payload, options: null);
+                    var reply = MessagePackSerializer.Deserialize<TReply>(payload, options);
                     TrySetResult(reply);
                 }
                 else
                 {
-                    var body = MessagePackSerializer.Deserialize<ExceptionMessagePayload>(payload, options: null);
+                    var body = MessagePackSerializer.Deserialize<ExceptionMessagePayload>(payload, options);
                     var exception = new Exception(body.Description);
                     TrySetException(exception);
                 }

@@ -1,11 +1,8 @@
-﻿using MessagePack;
-using System;
-using System.Buffers;
-using System.Collections;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
+using MessagePack;
 
 namespace JobBank.WebSockets
 {
@@ -23,6 +20,36 @@ namespace JobBank.WebSockets
             = new();
 
         private bool _isFrozen;
+
+        /// <summary>
+        /// Construct with user-specified settings for 
+        /// MessagePack payloads.
+        /// </summary>
+        /// <param name="serializeOptions">
+        /// Settings for serializing and de-serializing .NET types
+        /// as MessagePack payloads.
+        /// </param>
+        public RpcRegistry(MessagePackSerializerOptions serializeOptions)
+        {
+            SerializeOptions = serializeOptions 
+                ?? throw new ArgumentNullException(nameof(serializeOptions));
+        }
+
+        /// <summary>
+        /// Construct with standard MessagePack serialization 
+        /// settings that defend against untrusted paylods.
+        /// </summary>
+        public RpcRegistry()
+            : this(MessagePackSerializerOptions.Standard
+                                               .WithSecurity(MessagePackSecurity.UntrustedData))
+        {
+        }
+
+        /// <summary>
+        /// Settings for serializing and de-serializing .NET types
+        /// as MessagePack payloads.
+        /// </summary>
+        public MessagePackSerializerOptions SerializeOptions { get; }
 
         /// <summary>
         /// Whether the registry has been frozen and no more entries

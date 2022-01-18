@@ -10,17 +10,20 @@ namespace JobBank.WebSockets
     /// <typeparam name="TReply">User-defined type for the reply outputs. </typeparam>
     internal sealed class ReplyMessage<TReply> : RpcMessage
     {
-        public ReplyMessage(ushort typeCode, uint replyId, TReply body)
+        public ReplyMessage(ushort typeCode, uint replyId, RpcRegistry registry, TReply body)
             : base(RpcMessageKind.NormalReply, typeCode, replyId)
         {
+            _serializeOptions = registry.SerializeOptions;
             Body = body;
         }
 
         public TReply Body { get; }
 
+        private readonly MessagePackSerializerOptions _serializeOptions;
+
         public override void PackPayload(IBufferWriter<byte> writer)
         {
-            MessagePackSerializer.Serialize(writer, Body, options: null);
+            MessagePackSerializer.Serialize(writer, Body, _serializeOptions);
         }
 
         public override void ProcessReply(in ReadOnlySequence<byte> payload, bool isException)

@@ -19,10 +19,10 @@ namespace JobBank.WebSockets
         public RpcRegistry Registry { get; }
 
         internal ValueTask SendReplyAsync<TReply>(ushort typeCode, uint id, TReply reply)
-            => SendMessageAsync(new ReplyMessage<TReply>(typeCode, id, reply));
+            => SendMessageAsync(new ReplyMessage<TReply>(typeCode, id, Registry, reply));
 
         internal ValueTask SendExceptionAsync(ushort typeCode, uint id, Exception e)
-            => SendMessageAsync(new ExceptionMessage(typeCode, id, e));
+            => SendMessageAsync(new ExceptionMessage(typeCode, id, Registry, e));
 
         internal ValueTask SendCancellationAsync(ushort typeCode, uint id)
             => SendMessageAsync(new CancellationMessage(typeCode, id));
