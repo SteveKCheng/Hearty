@@ -204,10 +204,10 @@ namespace JobBank.WebSockets
         /// </summary>
         private async Task WritePendingMessagesAsync(CancellationToken cancellationToken)
         {
-            var channelReader = _channel.Reader;
-
             try
             {
+                var channelReader = _channel.Reader;
+
                 while (!_toTerminate && await channelReader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
                 {
                     while (!_toTerminate && channelReader.TryRead(out var item))
@@ -216,6 +216,12 @@ namespace JobBank.WebSockets
                                 .ConfigureAwait(false);
                     }
                 }
+            }
+            catch (Exception e)
+            {
+                var status = (e as WebSocketRpcException)?.CloseStatus ?? WebSocketCloseStatus.InternalServerError;
+                Terminate(status);
+                throw;
             }
             finally
             {
@@ -237,7 +243,7 @@ namespace JobBank.WebSockets
                     status = WebSocketCloseStatus.NormalClosure;
                 }
 
-                await _webSocket.CloseAsync(status, null, cancellationToken)
+                await _webSocket.CloseOutputAsync(status, null, CancellationToken.None)
                                 .ConfigureAwait(false);
 
                 DrainPendingReplies();
@@ -304,10 +310,12 @@ namespace JobBank.WebSockets
         /// </summary>
         private async Task ReadPendingMessagesAsync(CancellationToken cancellationToken)
         {
-            while (_webSocket.CloseStatus == null)
+            try
             {
-                try
+                while (_webSocket.CloseStatus == null)
                 {
+                    _readBuffers.Clear();
+
                     ValueWebSocketReceiveResult result;
 
                     do
@@ -340,14 +348,21 @@ namespace JobBank.WebSockets
 
                     if (result.MessageType == WebSocketMessageType.Binary)
                         IngestMessage(new ReadOnlySequence<byte>(_readBuffers.WrittenMemory));
-                }
-                finally
-                {
-                    _readBuffers.Clear();
+                    else
+                        throw new WebSocketRpcException(WebSocketCloseStatus.InvalidMessageType);
                 }
             }
-
-            DrainCancellations();
+            catch (Exception e)
+            {
+                var status = (e as WebSocketRpcException)?.CloseStatus ?? WebSocketCloseStatus.InternalServerError;
+                Terminate(status);
+                throw;
+            }
+            finally
+            {
+                _readBuffers.Clear();
+                DrainCancellations();
+            }
         }
 
         /// <summary>
@@ -444,7 +459,13 @@ namespace JobBank.WebSockets
 
                     if (item != null)
                     {
-                        // FIXME check typeCode against item.TypeCode
+                        if (header.TypeCode != item.TypeCode)
+                        {
+                            var e = new WebSocketRpcException(WebSocketCloseStatus.InvalidPayloadData);
+                            item.Abort(e);
+                            throw e;
+                        }
+
                         bool isException = (header.Kind == RpcMessageKind.ExceptionalReply);
                         item.ProcessReply(payload, isException);
                     }
@@ -477,8 +498,7 @@ namespace JobBank.WebSockets
                     break;
 
                 default:
-                    // FIXME report error
-                    break;
+                    throw new WebSocketRpcException(WebSocketCloseStatus.InvalidPayloadData);
             }
         }
 
@@ -505,34 +525,42 @@ namespace JobBank.WebSockets
             var writer = _writeBuffers;
             writer.Clear();
 
-            WriteHeader(writer, item.Header);
-            item.PackPayload(writer);
-
-            if (item.Kind == RpcMessageKind.Request)
+            try
             {
-                // If the request got cancelled after the user made it
-                // but before its message got sent, do not send the
-                // message.  If the cancellation message is queued
-                // after then this guard would only be a performance
-                // optimization, but if it is queued before, due to
-                // some multi-thread race, then this guard is critical!
-                if (item.IsCancelled)
-                    return ValueTask.CompletedTask;
+                WriteHeader(writer, item.Header);
+                item.PackPayload(writer);
 
-                lock (_pendingReplies)
-                    _pendingReplies.Add(item.ReplyId, item);
+                if (item.Kind == RpcMessageKind.Request)
+                {
+                    // If the request got cancelled after the user made it
+                    // but before its message got sent, do not send the
+                    // message.  If the cancellation message is queued
+                    // after then this guard would only be a performance
+                    // optimization, but if it is queued before, due to
+                    // some multi-thread race, then this guard is critical!
+                    if (item.IsCancelled)
+                        return ValueTask.CompletedTask;
+
+                    lock (_pendingReplies)
+                        _pendingReplies.Add(item.ReplyId, item);
+                }
+                else if (item.Kind == RpcMessageKind.Cancellation)
+                {
+                    bool success;
+                    lock (_pendingReplies)
+                        success = _pendingReplies.Remove(item.ReplyId);
+
+                    // Do not send cancellation message if it has already
+                    // been sent, or if the reply has already been received,
+                    // or if the original request has not even been sent yet.
+                    if (!success)
+                        return ValueTask.CompletedTask;
+                }
             }
-            else if (item.Kind == RpcMessageKind.Cancellation)
+            catch (Exception e)
             {
-                bool success;
-                lock (_pendingReplies)
-                    success = _pendingReplies.Remove(item.ReplyId);
-
-                // Do not send cancellation message if it has already
-                // been sent, or if the reply has already been received,
-                // or if the original request has not even been sent yet.
-                if (!success)
-                    return ValueTask.CompletedTask;
+                item.Abort(e);
+                throw;
             }
 
             return _webSocket.SendAsync(_writeBuffers.WrittenMemory,
