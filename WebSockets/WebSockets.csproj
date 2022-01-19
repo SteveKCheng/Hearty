@@ -20,6 +20,7 @@
     <Compile Include="RpcMessageProcessor.cs" />
     <Compile Include="RpcRegistry.cs" />
     <Compile Include="WebSocketRpc.cs" />
+    <Compile Include="WebSocketRpcException.cs" />
   </ItemGroup>
 
   <ItemGroup>

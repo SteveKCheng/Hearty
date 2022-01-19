@@ -89,7 +89,7 @@ namespace JobBank.WebSockets
         /// <remarks>
         /// <para>
         /// This method waits gracefully if teardown was
-        /// initiated by a call to <see cref="Terminate" />
+        /// initiated by a call to <see cref="Quit" />
         /// either on this instance or on the remote end
         /// of the connection.
         /// </para>
@@ -119,22 +119,48 @@ namespace JobBank.WebSockets
         /// disposing this instance.
         /// </para>
         /// </remarks>
-        public void Terminate()
+        public void Quit() => Terminate(WebSocketCloseStatus.NormalClosure);
+
+        /// <summary>
+        /// Request that this RPC connection be shut down, possibly because
+        /// of an error.
+        /// </summary>
+        /// <param name="status">
+        /// The status to report as part of WebSocket's close message.
+        /// </param>
+        private void Terminate(WebSocketCloseStatus status)
         {
-            if (_channel.Writer.TryComplete())
+            var e = (status != WebSocketCloseStatus.NormalClosure)
+                        ? new WebSocketRpcException(status)
+                        : null;
+
+            if (_channel.Writer.TryComplete(e))
                 _toTerminate = true;
         }
 
         /// <summary>
-        /// Set to true as soon as <see cref="Terminate" /> has been called.
+        /// Set to true as soon as <see cref="Quit" /> has been called.
         /// </summary>
         /// <remarks>
-        /// <see cref="Terminate" /> will close <see cref="_channel" />, but
+        /// <see cref="Quit" /> will close <see cref="_channel" />, but
         /// there may be still be messages in the queue, which should
         /// be ignored even though they occur before the closing sentinel
         /// item of the channel.
         /// </remarks>
         private bool _toTerminate;
+
+        /// <summary>
+        /// Set to true when the WebSocket connection from this side
+        /// should be closed because the remote closed its end.
+        /// </summary>
+        /// <remarks>
+        /// This flag is stored only for the sake of reporting the
+        /// proper reason for closing the RPC connection.
+        /// It is stored by the message-reading task and 
+        /// read by the message-writing task in a way such that
+        /// races are harmless.
+        /// </remarks>
+        private bool _remoteEndHasTerminated;
 
         /// <summary>
         /// Layer on remote procedure call services on top of a WebSocket connection.
@@ -193,12 +219,27 @@ namespace JobBank.WebSockets
             }
             finally
             {
-                await _webSocket.CloseAsync(WebSocketCloseStatus.EndpointUnavailable,
-                                            "WebSocket RPC channel is being closed. ",
-                                            cancellationToken)
+                // Need to drain _channel first to read status reliably
+                DrainPendingMessages();
+
+                WebSocketCloseStatus status;
+                if (_channel.Reader.Completion.Exception is AggregateException ae)
+                {
+                    var e = ae.InnerException as WebSocketRpcException;
+                    status = e?.CloseStatus ?? WebSocketCloseStatus.InternalServerError;
+                }
+                else if (_remoteEndHasTerminated)
+                {
+                    status = _webSocket.CloseStatus ?? WebSocketCloseStatus.Empty;
+                }
+                else
+                {
+                    status = WebSocketCloseStatus.NormalClosure;
+                }
+
+                await _webSocket.CloseAsync(status, null, cancellationToken)
                                 .ConfigureAwait(false);
 
-                DrainPendingMessages();
                 DrainPendingReplies();
             }
         }
@@ -283,7 +324,11 @@ namespace JobBank.WebSockets
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
                         if (!_toTerminate)
-                            Terminate();
+                        {
+                            _remoteEndHasTerminated = true;
+                            Quit();
+                        }
+
                         break;
                     }
 
