@@ -325,7 +325,7 @@ namespace JobBank.WebSockets
                                         cancellationToken);
         }
 
-        private protected override sealed ValueTask SendMessageAsync(RpcMessage message)
+        private protected override sealed ValueTask<bool> SendMessageAsync(RpcMessage message)
         {
             if (IsReplyMessageKind(message.Kind))
             {
@@ -336,12 +336,12 @@ namespace JobBank.WebSockets
 
                 // Do not reply if already cancelled
                 if (!success)
-                    return ValueTask.CompletedTask;
+                    return ValueTask.FromResult(true);
 
                 cancellationUse.Dispose();
             }
 
-            return _channel.Writer.WriteAsync(message);
+            return _channel.Writer.TryWriteAsync(message);
         }
     }
 }

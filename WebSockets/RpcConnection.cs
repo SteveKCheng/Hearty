@@ -30,13 +30,13 @@ namespace JobBank.WebSockets
         /// </remarks>
         public object? State { get; }
 
-        internal ValueTask SendReplyAsync<TReply>(ushort typeCode, uint id, TReply reply)
+        internal ValueTask<bool> SendReplyAsync<TReply>(ushort typeCode, uint id, TReply reply)
             => SendMessageAsync(new ReplyMessage<TReply>(typeCode, id, Registry, reply));
 
-        internal ValueTask SendExceptionAsync(ushort typeCode, uint id, Exception e)
+        internal ValueTask<bool> SendExceptionAsync(ushort typeCode, uint id, Exception e)
             => SendMessageAsync(new ExceptionMessage(typeCode, id, Registry, e));
 
-        internal ValueTask SendCancellationAsync(ushort typeCode, uint id)
+        internal ValueTask<bool> SendCancellationAsync(ushort typeCode, uint id)
             => SendMessageAsync(new CancellationMessage(typeCode, id));
 
         /// <summary>
@@ -77,11 +77,23 @@ namespace JobBank.WebSockets
                                                             request,
                                                             this,
                                                             cancellationToken);
-            await SendMessageAsync(item).ConfigureAwait(false);
+
+            if (!await SendMessageAsync(item).ConfigureAwait(false))
+                throw new Exception("The RPC connection is already closed. ");
+
             return await item.ReplyTask.ConfigureAwait(false);
         }
 
-        private protected abstract ValueTask SendMessageAsync(RpcMessage message);
+        /// <summary>
+        /// Send (or enqueue to send) a message on the RPC channel.
+        /// </summary>
+        /// <param name="message">The desired message. </param>
+        /// <returns>
+        /// An asynchronous task that completes with true when
+        /// the item has been successfully sent, or false
+        /// if the RPC channel has already been closed.
+        /// </returns>
+        private protected abstract ValueTask<bool> SendMessageAsync(RpcMessage message);
 
         /// <summary>
         /// Sets basic/common information about the RPC connection

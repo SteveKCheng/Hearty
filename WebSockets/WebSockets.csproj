@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <Compile Include="CancellationMessage.cs" />
+    <Compile Include="ChannelExtensions.cs" />
     <Compile Include="ExceptionMessage.cs" />
     <Compile Include="ReplyMessage.cs" />
     <Compile Include="RequestMessage.cs" />
