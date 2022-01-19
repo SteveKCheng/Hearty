@@ -176,7 +176,7 @@ namespace JobBank.Tests
             Assert.Equal(serverRpcCount, _func1InvocationsFromServer);
 
             clientRpc.Quit();
-            serverRpc.Quit();
+            // serverRpc should automatically terminate when clientRpc terminates 
             await clientRpc.WaitForCloseAsync();
             await serverRpc.WaitForCloseAsync();
         }
