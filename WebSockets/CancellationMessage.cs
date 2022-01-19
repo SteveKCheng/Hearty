@@ -9,8 +9,11 @@ namespace JobBank.WebSockets
 {
     internal sealed class CancellationMessage : RpcMessage
     {
-        public CancellationMessage(ushort typeCode, uint id)
-            : base(RpcMessageKind.Cancellation, typeCode, id)
+        public CancellationMessage(ushort typeCode, uint id, bool isAcknowledgement)
+            : base(isAcknowledgement ? RpcMessageKind.AcknowledgedCancellation
+                                     : RpcMessageKind.Cancellation,
+                  typeCode,
+                  id)
         {
         }
 

@@ -37,7 +37,15 @@ namespace JobBank.WebSockets
             => SendMessageAsync(new ExceptionMessage(typeCode, id, Registry, e));
 
         internal ValueTask<bool> SendCancellationAsync(ushort typeCode, uint id)
-            => SendMessageAsync(new CancellationMessage(typeCode, id));
+            => SendMessageAsync(new CancellationMessage(typeCode, id, isAcknowledgement: false));
+
+        internal async void AcknowledgeCancellation(ushort typeCode, uint id)
+        {
+            await SendMessageAsync(new CancellationMessage(typeCode,
+                                                           id,
+                                                           isAcknowledgement: true))
+                .ConfigureAwait(false);
+        }
 
         /// <summary>
         /// Get the ID that is to be assigned to the next request message.

@@ -491,10 +491,21 @@ namespace JobBank.WebSockets
                     break;
 
                 case RpcMessageKind.Cancellation:
+                    bool success;
                     lock (_cancellations)
-                        _cancellations.Remove(header.Id, out cancellationUse);
+                        success = _cancellations.Remove(header.Id, out cancellationUse);
 
-                    cancellationUse.Source?.Cancel();
+                    if (success)
+                    {
+                        AcknowledgeCancellation(header.TypeCode, header.Id);
+                        cancellationUse.Source?.Cancel();
+                    }
+
+                    break;
+
+                case RpcMessageKind.AcknowledgedCancellation:
+                    // Not doing anything for now, but ideally this class
+                    // would keep track of which IDs are currently being used.
                     break;
 
                 default:

@@ -194,6 +194,18 @@ namespace JobBank.WebSockets
         ExceptionalReply = 0x3,
 
         /// <summary>
+        /// Acknowledgement of a cancellation request.
+        /// </summary>
+        /// <remarks>
+        /// Such a message is sent by the receiver of the cancellation
+        /// request only when it has not yet sent any normal or exceptional
+        /// reply.  The acknowledgement or reply allows the requester to 
+        /// free up the message ID and associated resources 
+        /// taken by the request message.
+        /// </remarks>
+        AcknowledgedCancellation = 0x4,
+
+        /// <summary>
         /// Not a valid entry; used to mark the end of the range of valid values.
         /// </summary>
         Invalid
