@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\WebSockets\WebSockets.csproj" />
     <ProjectReference Include="..\Scheduling\Scheduling.csproj" />
     <ProjectReference Include="..\Server.Core\Server.Core.csproj" />
   </ItemGroup>

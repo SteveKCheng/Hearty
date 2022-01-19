@@ -19,6 +19,7 @@ using Microsoft.Extensions.Logging;
 using JobBank.Scheduling;
 using Microsoft.AspNetCore.Http;
 using System.Net.WebSockets;
+using JobBank.WebSockets;
 
 namespace JobBank.Server.Program
 {
@@ -74,6 +75,8 @@ namespace JobBank.Server.Program
             services.AddSingleton<JobsServerConfiguration>();
             services.AddSingleton<JobSchedulingSystem>();
             services.AddSingleton<TimeoutProvider, SimpleTimeoutProvider>();
+
+            services.AddSingleton<WebSocketTest>();
         }
 
         private static readonly IJobQueueOwner _dummyQueueOwner =
@@ -102,6 +105,14 @@ namespace JobBank.Server.Program
                                        result.CloseStatusDescription, 
                                        CancellationToken.None)
                            .ConfigureAwait(false);
+        }
+
+        private async Task ProcessWebSocketRequestAsync(HttpContext context, 
+                                                        WebSocket webSocket,
+                                                        RpcRegistry requestRegistry)
+        {
+            var rpc = new WebSocketRpc(webSocket, requestRegistry);
+            await rpc.WaitForCloseAsync().ConfigureAwait(false);
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -138,9 +149,11 @@ namespace JobBank.Server.Program
                 else
                 {
                     var logger = app.ApplicationServices.GetRequiredService<ILogger<Startup>>();
+                    var requestRegistry = app.ApplicationServices.GetRequiredService<WebSocketTest>()._registry;
                     logger.LogInformation("Incoming WebSocket connection");
                     using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
-                    await WebSocketEchoAsync(context, webSocket);
+                    //await WebSocketEchoAsync(context, webSocket);
+                    await ProcessWebSocketRequestAsync(context, webSocket, requestRegistry);
                 }
             });
            
