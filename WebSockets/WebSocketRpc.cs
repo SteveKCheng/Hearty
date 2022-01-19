@@ -294,6 +294,15 @@ namespace JobBank.WebSockets
 
             if (item.Kind == RpcMessageKind.Request)
             {
+                // If the request got cancelled after the user made it
+                // but before its message got sent, do not send the
+                // message.  If the cancellation message is queued
+                // after then this guard would only be a performance
+                // optimization, but if it is queued before, due to
+                // some multi-thread race, then this guard is critical!
+                if (item.IsCancelled)
+                    return ValueTask.CompletedTask;
+
                 lock (_pendingReplies)
                     _pendingReplies.Add(item.ReplyId, item);
             }
@@ -303,8 +312,9 @@ namespace JobBank.WebSockets
                 lock (_pendingReplies)
                     success = _pendingReplies.Remove(item.ReplyId);
 
-                // Do not send cancellation message more than once
-                // or if the reply has already been received
+                // Do not send cancellation message if it has already
+                // been sent, or if the reply has already been received,
+                // or if the original request has not even been sent yet.
                 if (!success)
                     return ValueTask.CompletedTask;
             }

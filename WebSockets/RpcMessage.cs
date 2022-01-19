@@ -44,6 +44,22 @@ namespace JobBank.WebSockets
                                           bool isException);
 
         /// <summary>
+        /// Whether this request has been cancelled.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This property needs to be consulted to avoid a race
+        /// where a request gets cancelled by the client, entailing
+        /// the sending of the cancellation message, before the
+        /// original the request message is even sent out.  
+        /// </para>
+        /// <para>
+        /// This property is not used for reply messages.
+        /// </para>
+        /// </remarks>
+        public virtual bool IsCancelled => false;
+
+        /// <summary>
         /// The type code assigned to the message to distinguish 
         /// different types of requests.
         /// </summary>

@@ -44,6 +44,8 @@ namespace JobBank.WebSockets
 
         #region Cancellation
 
+        public override bool IsCancelled => _cancellationToken.IsCancellationRequested;
+
         private async void PropagateCancellation()
         {
             try
