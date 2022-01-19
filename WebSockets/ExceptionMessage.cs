@@ -44,8 +44,5 @@ namespace JobBank.WebSockets
         {
             MessagePackSerializer.Serialize(writer, Body, _serializeOptions);
         }
-
-        public override void ProcessReply(in ReadOnlySequence<byte> payload, bool isException)
-             => throw new InvalidOperationException();
     }
 }

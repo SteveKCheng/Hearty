@@ -175,10 +175,10 @@ namespace JobBank.Tests
             Assert.Equal(clientRpcCount, _func1InvocationsFromClient);
             Assert.Equal(serverRpcCount, _func1InvocationsFromServer);
 
-            clientRpc.RequestCompletion();
-            serverRpc.RequestCompletion();
-            await clientRpc.Completion;
-            await serverRpc.Completion;
+            clientRpc.Terminate();
+            serverRpc.Terminate();
+            await clientRpc.WaitForCloseAsync();
+            await serverRpc.WaitForCloseAsync();
         }
     }
 

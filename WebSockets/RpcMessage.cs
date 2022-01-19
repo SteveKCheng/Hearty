@@ -40,8 +40,28 @@ namespace JobBank.WebSockets
         /// The payload for exception results is, by convention,
         /// the MessagePack serialization of <see cref="ExceptionMessagePayload" />.
         /// </param>
-        public abstract void ProcessReply(in ReadOnlySequence<byte> payload, 
-                                          bool isException);
+        public virtual void ProcessReply(in ReadOnlySequence<byte> payload, 
+                                         bool isException)
+            => throw new InvalidOperationException();
+
+        /// <summary>
+        /// Report failure to process or deliver a message, if possible.
+        /// </summary>
+        /// <remarks>
+        /// Implementations of <see cref="RpcMessage" /> that are
+        /// expected to report status back to their originator,
+        /// such as request messages, can propagate the exception 
+        /// passed through here.
+        /// </remarks>
+        /// <param name="e">
+        /// Exception describing the failure. 
+        /// </param>
+        /// <returns>
+        /// True if the exception message has been accepted
+        /// or can be ignored; false if the caller needs to report
+        /// or log the exception in a more global manner.
+        /// </returns>
+        public virtual bool Abort(Exception e) => false;
 
         /// <summary>
         /// Whether this request has been cancelled.

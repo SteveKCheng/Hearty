@@ -18,7 +18,6 @@ namespace JobBank.WebSockets
         {
         }
 
-        public override void ProcessReply(in ReadOnlySequence<byte> payload, bool isException)
-            => throw new InvalidOperationException();
+        public override bool Abort(Exception e) => true;
     }
 }

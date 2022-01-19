@@ -38,11 +38,24 @@ namespace JobBank.WebSockets
         /// <summary>
         /// Tracks the state of procedure calls made from this client.
         /// </summary>
+        /// <remarks>
+        /// This object needs to be accessed by the message-writing
+        /// task as it writes out request messages over the RPC connection,
+        /// and by the message-reading task as it processes reply
+        /// messages from the remote end.  Thus this object
+        /// must be locked on any access.
+        /// </remarks>
         private readonly Dictionary<uint, RpcMessage> _pendingReplies = new();
 
         /// <summary>
         /// Manages cancellation tokens of received but unfinished requests.
         /// </summary>
+        /// <remarks>
+        /// This object needs to be accessed by the message-reading task 
+        /// as it processes request messages, and by any thread that is
+        /// about to enqueue a reply message.  Thus this object
+        /// must be locked on any access.
+        /// </remarks>
         private readonly Dictionary<uint, CancellationSourcePool.Use> _cancellations = new();
 
         /// <summary>
@@ -51,7 +64,17 @@ namespace JobBank.WebSockets
         /// </summary>
         private readonly Dictionary<ushort, RpcMessageProcessor> _requestDispatch;
 
+        /// <summary>
+        /// Internal task that writes out enqueued messages over
+        /// the sending side of the WebSocket connection.
+        /// </summary>
         private readonly Task _writePendingMessagesTask;
+
+        /// <summary>
+        /// Internal task that reads messages over
+        /// the receiving side of the WebSocket connection,
+        /// and invokes processing on them.
+        /// </summary>
         private readonly Task _readPendingMessagesTask;
 
         /// <summary>
@@ -60,19 +83,67 @@ namespace JobBank.WebSockets
         /// </summary>
         private uint _nextRequestId;
 
-        public Task Completion => _writePendingMessagesTask;
-
-        public void RequestCompletion()
+        /// <summary>
+        /// Wait for the RPC connection to be torn down.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This method waits gracefully if teardown was
+        /// initiated by a call to <see cref="Terminate" />
+        /// either on this instance or on the remote end
+        /// of the connection.
+        /// </para>
+        /// <para>
+        /// This method itself does not initiate termination.
+        /// </para>
+        /// </remarks>
+        public async ValueTask WaitForCloseAsync()
         {
-            _channel.Writer.TryComplete();
+            await _writePendingMessagesTask.ConfigureAwait(false);
+            await _readPendingMessagesTask.ConfigureAwait(false);
         }
+
+        /// <summary>
+        /// Request that this RPC connection be gracefully shut down.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Outstanding asynchronous function calls will throw exceptions
+        /// indicating that the RPC connection has been closed.
+        /// </para>
+        /// <para>
+        /// This method only requests the connection be torn down.
+        /// Closing the connection requires a handshake which will
+        /// occur asynchronously; use <see cref="WaitForCloseAsync" />
+        /// to wait for that handshake to complete, before
+        /// disposing this instance.
+        /// </para>
+        /// </remarks>
+        public void Terminate()
+        {
+            if (_channel.Writer.TryComplete())
+                _toTerminate = true;
+        }
+
+        /// <summary>
+        /// Set to true as soon as <see cref="Terminate" /> has been called.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="Terminate" /> will close <see cref="_channel" />, but
+        /// there may be still be messages in the queue, which should
+        /// be ignored even though they occur before the closing sentinel
+        /// item of the channel.
+        /// </remarks>
+        private bool _toTerminate;
 
         /// <summary>
         /// Layer on remote procedure call services on top of a WebSocket connection.
         /// </summary>
         /// <param name="webSocket">
-        /// An already established WebSocket connection to run the
-        /// protocol for the remote procedure calls.
+        /// A (new) WebSocket connection established to run the
+        /// protocol for the remote procedure calls.  Once passed in,
+        /// this instance takes over the WebSocket connection, and
+        /// it must not be used elsewhere anymore.
         /// </param>
         /// <param name="registry">
         /// Collection of user-specified functions to invoke in response
@@ -107,13 +178,13 @@ namespace JobBank.WebSockets
         /// </summary>
         private async Task WritePendingMessagesAsync(CancellationToken cancellationToken)
         {
+            var channelReader = _channel.Reader;
+
             try
             {
-                var channelReader = _channel.Reader;
-
-                while (await channelReader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+                while (!_toTerminate && await channelReader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
                 {
-                    while (channelReader.TryRead(out var item))
+                    while (!_toTerminate && channelReader.TryRead(out var item))
                     {
                         await WriteMessageAsync(item, cancellationToken)
                                 .ConfigureAwait(false);
@@ -126,7 +197,64 @@ namespace JobBank.WebSockets
                                             "WebSocket RPC channel is being closed. ",
                                             cancellationToken)
                                 .ConfigureAwait(false);
+
+                DrainPendingMessages();
+                DrainPendingReplies();
             }
+        }
+
+        /// <summary>
+        /// Drain every message remaining in <see cref="_channel" />,
+        /// to be called when it gets closed.
+        /// </summary>
+        /// <remarks>
+        /// This method ensures the asynchronous tasks associated
+        /// with any request message will complete, 
+        /// with an exception to the effect that the RPC channel
+        /// has closed.
+        /// </remarks>
+        private void DrainPendingMessages()
+        {
+            var channelReader = _channel.Reader;
+            Exception? exception = null; 
+
+            while (channelReader.TryRead(out var item))
+            {
+                exception ??= new Exception("RPC connection has closed. ");
+                item.Abort(exception);
+            }
+        }
+
+        /// <summary>
+        /// Clean up all entries in <see cref="_pendingReplies" />,
+        /// when the RPC channel is to close.
+        /// </summary>
+        /// <remarks>
+        /// This method ensures the asynchronous tasks associated
+        /// with any request message will complete, 
+        /// with an exception to the effect that the RPC channel
+        /// has closed.
+        /// </remarks>
+        private void DrainPendingReplies()
+        {
+            RpcMessage[] items;
+            lock (_pendingReplies)
+            {
+                int count = _pendingReplies.Count;
+                if (count == 0)
+                    return;
+
+                items = new RpcMessage[count];
+                int i = 0;
+                foreach (var (_, item) in _pendingReplies)
+                    items[i++] = item;
+
+                _pendingReplies.Clear();
+            }
+
+            var exception = new Exception("RPC connection has closed. ");
+            foreach (var item in items)
+                item.Abort(exception);
         }
 
         /// <summary>
@@ -150,8 +278,20 @@ namespace JobBank.WebSockets
                         _readBuffers.Advance(result.Count);
                     } while (!result.EndOfMessage);
 
+                    // If the remote side is initiating termination,
+                    // then terminate ourselves too.
                     if (result.MessageType == WebSocketMessageType.Close)
+                    {
+                        if (!_toTerminate)
+                            Terminate();
                         break;
+                    }
+
+                    // Do not process incoming messages if we are
+                    // already terminating; only drain them from the
+                    // WebSocket connection until we see the Close message.
+                    if (_toTerminate)
+                        continue;
 
                     if (result.MessageType == WebSocketMessageType.Binary)
                         IngestMessage(new ReadOnlySequence<byte>(_readBuffers.WrittenMemory));
@@ -161,6 +301,37 @@ namespace JobBank.WebSockets
                     _readBuffers.Clear();
                 }
             }
+
+            DrainCancellations();
+        }
+
+        /// <summary>
+        /// Clean up all entries in <see cref="_cancellations" />,
+        /// when the RPC channel is to close.
+        /// </summary>
+        /// <remarks>
+        /// This method cancels all outstanding invocations 
+        /// of asynchronous functions from earlier RPC requests.
+        /// </remarks>
+        private void DrainCancellations()
+        {
+            CancellationTokenSource?[] sources;
+            lock (_cancellations)
+            {
+                int count = _cancellations.Count;
+                if (count == 0)
+                    return;
+
+                sources = new CancellationTokenSource?[count];
+                int i = 0;
+                foreach (var (_, use) in _cancellations)
+                    sources[i++] = use.Source;
+
+                _cancellations.Clear();
+            }
+
+            foreach (var source in sources)
+                source?.Cancel();
         }
 
         /// <summary>

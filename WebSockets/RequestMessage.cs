@@ -148,5 +148,11 @@ namespace JobBank.WebSockets
                 TrySetException(e);
             }
         }
+
+        public override bool Abort(Exception e)
+        {
+            TrySetException(e);
+            return true;
+        }
     }
 }
