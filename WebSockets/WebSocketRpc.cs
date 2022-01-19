@@ -97,10 +97,37 @@ namespace JobBank.WebSockets
         /// This method itself does not initiate termination.
         /// </para>
         /// </remarks>
-        public async ValueTask WaitForCloseAsync()
+        /// <returns>
+        /// Asynchronous task that completes when the connection is closed.
+        /// If the connection terminated because of an error, that error
+        /// will be thrown as an exception.
+        /// </returns>
+        public async Task WaitForCloseAsync()
         {
-            await _writePendingMessagesTask.ConfigureAwait(false);
-            await _readPendingMessagesTask.ConfigureAwait(false);
+            Exception? e1 = null;
+            Exception? e2 = null;
+
+            try
+            {
+                await _writePendingMessagesTask.ConfigureAwait(false);
+            }
+            catch (Exception e1Temp)
+            {
+                e1 = e1Temp;
+            }
+            
+            try
+            {
+                await _readPendingMessagesTask.ConfigureAwait(false);
+            }
+            catch (Exception e2Temp)
+            {
+                e2 = e2Temp;
+            }
+
+            var e = e1 ?? e2;
+            if (e is not null)
+                throw e;
         }
 
         /// <summary>
