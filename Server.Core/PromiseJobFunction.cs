@@ -6,6 +6,16 @@ using JobBank.Scheduling;
 namespace JobBank.Server
 {
     /// <summary>
+    /// Asynchronous function that processes the input into an output,
+    /// to be executed by a job worker.
+    /// </summary>
+    public delegate ValueTask<PromiseData>
+        PromiseJobFunctionDelegate(object input,
+                                   IRunningJob runningJob,
+                                   IJobWorker<PromiseJobFunction, PromiseData> worker,
+                                   CancellationToken cancellationToken);
+
+    /// <summary>
     /// Encapsulates the function to execute to generate 
     /// the output for a promise.
     /// </summary>
@@ -25,14 +35,13 @@ namespace JobBank.Server
         /// <summary>
         /// Asynchronous function that processes the input into an output.
         /// </summary>
-        public Func<object, IRunningJob, CancellationToken, ValueTask<PromiseData>> 
-            Function { get; }
+        public PromiseJobFunctionDelegate Function { get; }
 
         /// <summary>
         /// Constructor.
         /// </summary>
         public PromiseJobFunction(object input,
-                                  Func<object, IRunningJob, CancellationToken, ValueTask<PromiseData>> function)
+                                  PromiseJobFunctionDelegate function)
         {
             Input = input;
             Function = function;
@@ -41,7 +50,10 @@ namespace JobBank.Server
         /// <summary>
         /// Invokes the asynchronous function to process the input.
         /// </summary>
-        public ValueTask<PromiseData> InvokeAsync(IRunningJob runningJob, CancellationToken cancellationToken)
-            => Function.Invoke(Input, runningJob, cancellationToken);
+        public ValueTask<PromiseData> 
+            InvokeAsync(IRunningJob runningJob, 
+                        IJobWorker<PromiseJobFunction, PromiseData> worker,
+                        CancellationToken cancellationToken)
+            => Function.Invoke(Input, runningJob, worker, cancellationToken);
     }
 }

@@ -31,7 +31,7 @@ namespace JobBank.Server.Program
 
         public IConfiguration Configuration { get; }
 
-        private static async ValueTask<PromiseData> MockWorkAsync(object input, IRunningJob runningJob, CancellationToken cancellationToken)
+        private static async ValueTask<PromiseData> MockWorkAsync(object input, IRunningJob runningJob, IJobWorker<PromiseJobFunction, PromiseData> worker, CancellationToken cancellationToken)
         {
             // Mock work
             await Task.Delay(runningJob.InitialWait, cancellationToken).ConfigureAwait(false);
@@ -39,7 +39,7 @@ namespace JobBank.Server.Program
             return new Payload("application/json", Encoding.ASCII.GetBytes(@"{ ""status"": ""finished job"" }"));
         }
 
-        public static readonly Func<object, IRunningJob, CancellationToken, ValueTask<PromiseData>>
+        public static readonly PromiseJobFunctionDelegate 
             MockWorkAsyncDelegate = MockWorkAsync;
 
         // This method gets called by the runtime. Use this method to add services to the container.
