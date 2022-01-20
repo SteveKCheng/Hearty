@@ -107,7 +107,7 @@ namespace JobBank.Server
                 PriorityClasses.ResetWeight(priority: i, weight: (i + 1) * 10);
 
             WorkerDistribution = new WorkerDistribution<PromiseJobFunction, PromiseData>();
-            WorkerDistribution.CreateWorker(new DummyWorker(logger), 10);
+            WorkerDistribution.TryCreateWorker(new DummyWorker(logger), 10);
 
             _jobRunnerTask = JobScheduling.RunJobsAsync(
                                 PriorityClasses.AsChannel(),

@@ -107,8 +107,12 @@ namespace JobBank.Scheduling
         /// The degree of concurrency of the new worker, i.e. how many
         /// jobs it can run simultaneously.
         /// </param>
-        public void CreateWorker(IJobWorker<TInput, TOutput> executor,
-                                 int concurrency)
+        /// <returns>
+        /// True if the worker has been successfully added;
+        /// false if a worker with the same name already exists.
+        /// </returns>
+        public bool TryCreateWorker(IJobWorker<TInput, TOutput> executor,
+                                    int concurrency)
                                  
         {
             var name = executor.Name;
@@ -116,7 +120,8 @@ namespace JobBank.Scheduling
                                                                 concurrency,
                                                                 executor,
                                                                 FailedJobFallback);
-            _allWorkers.TryAdd(name, worker);
+            if (!_allWorkers.TryAdd(name, worker))
+                return false;
 
             _schedulingGroup.AdmitChild(worker, activate: true);
 
@@ -125,13 +130,15 @@ namespace JobBank.Scheduling
                 if (e.Kind == WorkerEventKind.Shutdown)
                     RemoveWorker(name);
             };
+
+            return true;
         }
 
         /// <summary>
         /// Remove a worker that had previously been added.
         /// </summary>
         /// <param name="name">
-        /// The name of the worker as was passed to <see cref="CreateWorker" />.
+        /// The name of the worker as was passed to <see cref="TryCreateWorker" />.
         /// </param>
         /// <returns>
         /// True if the worker existed with that name and has been removed.
