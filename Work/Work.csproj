@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <RootNamespace>JobBank.Work</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultContentItems>false</EnableDefaultContentItems>
+  </PropertyGroup>
+    
+  <ItemGroup>
+    <Compile Include="IJobSubmission.cs" />
+    <Compile Include="IWorkerRegistration.cs" />
+    <Compile Include="WorkerHost.cs" />
+  </ItemGroup>
+    
+  <ItemGroup>
+    <ProjectReference Include="..\WebSockets\WebSockets.csproj" />
+  </ItemGroup>
+
+</Project>
