@@ -226,6 +226,16 @@ namespace JobBank.WebSockets
             => ValueTask.FromResult(Interlocked.Increment(ref _nextRequestId));
 
         /// <summary>
+        /// Get the exception that may have been stored in <see cref="_channel" />, 
+        /// assuming that it has been marked complete.
+        /// </summary>
+        private Exception? GetSendChannelException()
+        {
+            AggregateException? ae = _channel.Reader.Completion.Exception;
+            return ae?.InnerException;
+        }
+
+        /// <summary>
         /// Drain messages from this client's channel and write them
         /// to the WebSocket connection.
         /// </summary>
@@ -252,14 +262,16 @@ namespace JobBank.WebSockets
             }
             finally
             {
+                Exception? e;
+
                 // Need to drain _channel first to read status reliably
                 DrainPendingMessages();
 
                 WebSocketCloseStatus status;
-                if (_channel.Reader.Completion.Exception is AggregateException ae)
+                if ((e = GetSendChannelException()) is not null)
                 {
-                    var e = ae.InnerException as WebSocketRpcException;
-                    status = e?.CloseStatus ?? WebSocketCloseStatus.InternalServerError;
+                    status = (e as WebSocketRpcException)?.CloseStatus 
+                                ?? WebSocketCloseStatus.InternalServerError;
                 }
                 else if (_remoteEndHasTerminated)
                 {
@@ -274,6 +286,9 @@ namespace JobBank.WebSockets
                                 .ConfigureAwait(false);
 
                 DrainPendingReplies();
+
+                if (_readPendingMessagesTask.IsCompleted)
+                    InvokeOnClose(e);
             }
         }
 
@@ -381,7 +396,8 @@ namespace JobBank.WebSockets
             }
             catch (Exception e)
             {
-                var status = (e as WebSocketRpcException)?.CloseStatus ?? WebSocketCloseStatus.InternalServerError;
+                var status = (e as WebSocketRpcException)?.CloseStatus 
+                                ?? WebSocketCloseStatus.InternalServerError;
                 Terminate(status);
                 throw;
             }
@@ -389,6 +405,9 @@ namespace JobBank.WebSockets
             {
                 _readBuffers.Clear();
                 DrainCancellations();
+
+                if (_writePendingMessagesTask.IsCompleted)
+                    InvokeOnClose(GetSendChannelException());
             }
         }
 

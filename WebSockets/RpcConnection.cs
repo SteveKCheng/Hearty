@@ -8,6 +8,25 @@ using System.Threading.Tasks;
 namespace JobBank.WebSockets
 {
     /// <summary>
+    /// Arguments for the <see cref="RpcConnection.OnClose" /> event.
+    /// </summary>
+    public readonly struct RpcConnectionCloseEventArgs
+    {
+        /// <summary>
+        /// Exceptional condition that caused the connection to close, if any.
+        /// </summary>
+        /// <remarks>
+        /// Graceful closing of the connection initiated from 
+        /// either side is not considered an exceptional condition.  
+        /// In that case this property reports null.
+        /// </remarks>
+        public Exception? Exception { get; }
+
+        public RpcConnectionCloseEventArgs(Exception? exception)
+            => Exception = exception;
+    }
+
+    /// <summary>
     /// An abstract connection capable of bi-directional remote procedure
     /// call as implemented by this library.
     /// </summary>
@@ -29,6 +48,20 @@ namespace JobBank.WebSockets
         /// for this connection.
         /// </remarks>
         public object? State { get; }
+
+        /// <summary>
+        /// Event that fires when the connection closes for any reason.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="HasClosed" /> is guaranteed to be true 
+        /// when the event fires.
+        /// </remarks>
+        public event EventHandler<RpcConnectionCloseEventArgs>? OnClose;
+
+        protected void InvokeOnClose(Exception? exception)
+        {
+            OnClose?.Invoke(this, new RpcConnectionCloseEventArgs(exception));
+        }
 
         internal ValueTask<bool> SendReplyAsync<TReply>(ushort typeCode, uint id, TReply reply)
             => SendMessageAsync(new ReplyMessage<TReply>(typeCode, id, Registry, reply));
