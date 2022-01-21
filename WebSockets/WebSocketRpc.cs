@@ -130,6 +130,11 @@ namespace JobBank.WebSockets
                 throw e;
         }
 
+        private bool _isClosingStarted;
+
+        /// <inheritdoc cref="IsClosingStarted" />
+        public override bool IsClosingStarted => _isClosingStarted;
+
         /// <summary>
         /// Request that this RPC connection be gracefully shut down.
         /// </summary>
@@ -262,6 +267,8 @@ namespace JobBank.WebSockets
             }
             finally
             {
+                _isClosingStarted = true;
+
                 Exception? e;
 
                 // Need to drain _channel first to read status reliably
@@ -403,6 +410,8 @@ namespace JobBank.WebSockets
             }
             finally
             {
+                _isClosingStarted = true;
+
                 _readBuffers.Clear();
                 DrainCancellations();
 
@@ -508,6 +517,7 @@ namespace JobBank.WebSockets
                         if (header.TypeCode != item.TypeCode)
                         {
                             var e = new WebSocketRpcException(WebSocketCloseStatus.InvalidPayloadData);
+                            _isClosingStarted = true;  // assumes the connection cannot recover
                             item.Abort(e);
                             throw e;
                         }
@@ -616,6 +626,7 @@ namespace JobBank.WebSockets
             }
             catch (Exception e)
             {
+                _isClosingStarted = true;  // assumes the connection cannot recover
                 item.Abort(e);
                 throw;
             }

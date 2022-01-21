@@ -58,8 +58,35 @@ namespace JobBank.WebSockets
         /// </remarks>
         public event EventHandler<RpcConnectionCloseEventArgs>? OnClose;
 
+        /// <summary>
+        /// True when the connection started to close or terminate,
+        /// possibly because of an error.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This flag is flipped on before any failed replies are
+        /// dispatched to outstanding asynchronous function calls,
+        /// so they can know that retrying the call on the same
+        /// connection is useless.  
+        /// </para>
+        /// <para>
+        /// <see cref="IsClosingStarted" /> becomes true
+        /// before clean-up actions are started, and only after
+        /// those finish does <see cref="HasClosed" /> become
+        /// true.
+        /// </para>
+        /// </remarks>
+        public abstract bool IsClosingStarted { get; }
+
+        /// <summary>
+        /// True when the connection has completely closed
+        /// and all clean-up actions have occurred.
+        /// </summary>
+        public bool HasClosed { get; private set; }
+
         protected void InvokeOnClose(Exception? exception)
         {
+            HasClosed = true;
             OnClose?.Invoke(this, new RpcConnectionCloseEventArgs(exception));
         }
 
