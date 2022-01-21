@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net5.0;net6.0</TargetFrameworks>
+    <TargetFrameworks>net6.0</TargetFrameworks>
     <Nullable>enable</Nullable>
     <RootNamespace>JobBank.Server</RootNamespace>
     <DisableImplicitNamespaceImports>true</DisableImplicitNamespaceImports>
@@ -26,6 +26,7 @@
     <Compile Include="PromiseJob.cs" />
     <Compile Include="PromisePath.cs" />
     <Compile Include="PromiseStorage.cs" />
+    <Compile Include="RemoteWorkerProxy.cs" />
     <Compile Include="SubscribedResult.cs" />
     <Compile Include="Subscription.cs" />
   </ItemGroup>
@@ -39,6 +40,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Utilities\Utilities.csproj" />
     <ProjectReference Include="..\Scheduling\Scheduling.csproj" />
+    <ProjectReference Include="..\Work\Work.csproj" />
   </ItemGroup>
 
 </Project>
