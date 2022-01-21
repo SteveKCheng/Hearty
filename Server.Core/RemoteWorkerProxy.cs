@@ -24,7 +24,7 @@ namespace JobBank.Server
         public string Name { get; }
 
         /// <inheritdoc cref="IWorkerNotification.IsAlive" />
-        public bool IsAlive => true;
+        public bool IsAlive => !_rpc.IsClosingStarted;
 
         /// <inheritdoc cref="IWorkerNotification.OnEvent" />
         public event EventHandler<WorkerEventArgs>? OnEvent;
@@ -59,6 +59,11 @@ namespace JobBank.Server
         {
             Name = name;
             _rpc = rpc;
+
+            rpc.OnClose += (o, e) => OnEvent?.Invoke(this, new WorkerEventArgs
+            {
+                Kind = WorkerEventKind.Shutdown
+            });
         }
 
         private readonly RpcConnection _rpc;
