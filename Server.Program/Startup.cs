@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Components;
@@ -14,12 +12,11 @@ using JobBank.Utilities;
 using System.Buffers;
 using System.IO;
 using System.Threading;
-using System.Text;
 using Microsoft.Extensions.Logging;
-using JobBank.Scheduling;
 using Microsoft.AspNetCore.Http;
 using System.Net.WebSockets;
 using JobBank.WebSockets;
+using JobBank.Work;
 
 namespace JobBank.Server.Program
 {
@@ -71,31 +68,6 @@ namespace JobBank.Server.Program
         private static readonly IJobQueueOwner _dummyQueueOwner =
             new SimpleQueueOwner("testClient");
 
-        private async Task WebSocketEchoAsync(HttpContext context, WebSocket webSocket)
-        {
-            var buffer = new byte[1024 * 4];
-
-            WebSocketReceiveResult result;
-            while (true)
-            {
-                result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None)
-                                        .ConfigureAwait(false);
-
-                if (result.CloseStatus != null)
-                    break;
-
-                await webSocket.SendAsync(new ArraySegment<byte>(buffer, 0, result.Count),
-                                          result.MessageType,
-                                          result.EndOfMessage, CancellationToken.None)
-                               .ConfigureAwait(false);
-            }
-
-            await webSocket.CloseAsync(result.CloseStatus.GetValueOrDefault(), 
-                                       result.CloseStatusDescription, 
-                                       CancellationToken.None)
-                           .ConfigureAwait(false);
-        }
-
         private async Task ProcessWebSocketRequestAsync(HttpContext context, 
                                                         WebSocket webSocket,
                                                         RpcRegistry requestRegistry)
@@ -127,7 +99,7 @@ namespace JobBank.Server.Program
 
             app.Use(async (context, next) =>
             {
-                if (context.Request.Path != "/ws")
+                if (context.Request.Path != "/ws" && context.Request.Path != "/ws/worker")
                 {
                     await next();
                 }
@@ -138,11 +110,33 @@ namespace JobBank.Server.Program
                 else
                 {
                     var logger = app.ApplicationServices.GetRequiredService<ILogger<Startup>>();
+                    var jobScheduling = app.ApplicationServices.GetRequiredService<JobSchedulingSystem>();
                     var requestRegistry = app.ApplicationServices.GetRequiredService<WebSocketTest>()._registry;
+
                     logger.LogInformation("Incoming WebSocket connection");
-                    using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
-                    //await WebSocketEchoAsync(context, webSocket);
-                    await ProcessWebSocketRequestAsync(context, webSocket, requestRegistry);
+
+                    bool isWorkerService = (context.Request.Path == "/ws/worker");
+
+                    using var webSocket = await context.WebSockets.AcceptWebSocketAsync(
+                        new WebSocketAcceptContext
+                        {
+                            DangerousEnableCompression = true,
+                            DisableServerContextTakeover = true,
+                            SubProtocol = isWorkerService ? WorkerHost.WebSocketsSubProtocol : null
+                        });
+
+                    if (isWorkerService)
+                    {
+                        var (worker, closeTask) = 
+                            await RemoteWorkerService.AcceptHostAsync(jobScheduling.WorkerDistribution,
+                                                                      webSocket,
+                                                                      CancellationToken.None);
+                        await closeTask;
+                    }
+                    else
+                    {
+                        await ProcessWebSocketRequestAsync(context, webSocket, requestRegistry);
+                    }
                 }
             });
            

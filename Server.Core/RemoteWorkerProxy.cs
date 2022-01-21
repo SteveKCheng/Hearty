@@ -17,8 +17,8 @@ namespace JobBank.Server
     /// are serialized and sent to the remote host for
     /// processing, over an asynchronous RPC protocol.
     /// </remarks>
-    public class RemoteWorkerProxy : IJobWorker<PromiseJob, PromiseData>
-                                   , IJobSubmission
+    internal sealed class RemoteWorkerProxy : IJobWorker<PromiseJob, PromiseData>
+                                            , IJobSubmission
     {
         /// <inheritdoc cref="IWorkerNotification.Name" />
         public string Name { get; }

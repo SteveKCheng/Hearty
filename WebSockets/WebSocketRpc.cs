@@ -218,7 +218,7 @@ namespace JobBank.WebSockets
             : base(registry, state)
         {
             _requestDispatch = registry.Capture();
-            _webSocket = webSocket;
+            _webSocket = webSocket ?? throw new ArgumentNullException(nameof(webSocket));
             _writeBuffers = new ArrayBufferWriter<byte>(initialCapacity: 4096);
             _readBuffers = new ArrayBufferWriter<byte>(initialCapacity: 4096);
             _channel = Channel.CreateBounded<RpcMessage>(new BoundedChannelOptions(200)

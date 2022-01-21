@@ -42,9 +42,9 @@ namespace JobBank.Work
     public enum RegisterWorkerReplyStatus
     {
         Ok = 0,
-        NameAlreadyExists = 1
+        NameAlreadyExists = 1,
+        ConcurrentRegistration = 2,
     }
-
 
     [MessagePackObject]
     public struct RegisterWorkerReplyMessage

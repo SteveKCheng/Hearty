@@ -31,7 +31,7 @@ namespace JobBank.Work
             return self._impl.RunJobAsync(request, cancellationToken);
         }
 
-        internal static MessagePackSerializerOptions SerializeOptions { get; }
+        public static MessagePackSerializerOptions SerializeOptions { get; }
             = CreateSerializeOptions();
 
         private static MessagePackSerializerOptions CreateSerializeOptions()
@@ -48,7 +48,7 @@ namespace JobBank.Work
             return serializeOptions;
         }
 
-        private static RpcRegistry CreateServerRpcRegistry()
+        private static RpcRegistry CreateWorkerRpcRegistry()
         {
             var registry = new RpcRegistry(SerializeOptions);
             registry.Add<RunJobRequestMessage, RunJobReplyMessage>(
@@ -57,7 +57,7 @@ namespace JobBank.Work
             return registry;
         }
 
-        public static RpcRegistry RpcRegistry { get; } = CreateServerRpcRegistry();
+        private static readonly RpcRegistry _rpcRegistry = CreateWorkerRpcRegistry();
 
         private readonly WebSocketRpc _rpc;
         private readonly IJobSubmission _impl;
@@ -66,7 +66,7 @@ namespace JobBank.Work
                            WebSocket webSocket,
                            IJobSubmission impl)
         {
-            _rpc = new WebSocketRpc(webSocket, RpcRegistry, this);
+            _rpc = new WebSocketRpc(webSocket, _rpcRegistry, this);
             _impl = impl;
         }
 

@@ -112,25 +112,30 @@ namespace JobBank.Scheduling
         /// false if a worker with the same name already exists.
         /// </returns>
         public bool TryCreateWorker(IJobWorker<TInput, TOutput> executor,
-                                    int concurrency)
+                                    int concurrency,
+                                    [MaybeNullWhen(false)] out IDistributedWorker<TInput> worker)
                                  
         {
             var name = executor.Name;
-            var worker = new DistributedWorker<TInput, TOutput>(name, 
-                                                                concurrency,
-                                                                executor,
-                                                                FailedJobFallback);
-            if (!_allWorkers.TryAdd(name, worker))
+            var workerImpl = new DistributedWorker<TInput, TOutput>(name, 
+                                                                    concurrency,
+                                                                    executor,
+                                                                    FailedJobFallback);
+            if (!_allWorkers.TryAdd(name, workerImpl))
+            {
+                worker = default;
                 return false;
+            }
 
-            _schedulingGroup.AdmitChild(worker, activate: true);
+            _schedulingGroup.AdmitChild(workerImpl, activate: true);
 
-            worker.OnEvent += (object? sender, WorkerEventArgs e) =>
+            workerImpl.OnEvent += (object? sender, WorkerEventArgs e) =>
             {
                 if (e.Kind == WorkerEventKind.Shutdown)
                     RemoveWorker(name);
             };
 
+            worker = workerImpl;
             return true;
         }
 
