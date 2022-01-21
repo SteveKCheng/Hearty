@@ -10,6 +10,7 @@ using System.Security.Cryptography;
 using MessagePack;
 using System.Threading;
 using Xunit;
+using JobBank.Utilities;
 
 namespace JobBank.Tests
 {
@@ -23,7 +24,9 @@ namespace JobBank.Tests
             return BitConverter.ToUInt32(buffer);
         }
 
-        private (WebSocketRpc Client, WebSocketRpc Server) CreateConnections()
+        private static (NamedPipeClientStream ClientStream, 
+                        NamedPipeServerStream ServerStream) 
+            CreateNamedPipeStreamPair()
         {
             var pipeName = $"WebSocketRpcTests-{GetRandomInteger():8X}";
             var pipeOptions = PipeOptions.Asynchronous |
@@ -49,8 +52,19 @@ namespace JobBank.Tests
             clientStream.Connect();
             serverStream.WaitForConnection();
 
+            return (clientStream, serverStream);
+        }
+
+        private (WebSocketRpc Client, WebSocketRpc Server) CreateConnections()
+        {
+            /*
+            var (clientStream, serverStream) = CreateNamedPipeStreamPair();
+
             Assert.True(serverStream.IsConnected);
             Assert.True(clientStream.IsConnected);
+            */
+
+            var (clientStream, serverStream) = DuplexStream.CreatePair();
 
             var keepAliveInterval = TimeSpan.FromSeconds(60);
 

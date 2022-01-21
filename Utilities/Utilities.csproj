@@ -13,10 +13,15 @@
   <ItemGroup>
     <Compile Include="CancellationSourcePool.cs" />
     <Compile Include="CircularListLinks.cs" />
+    <Compile Include="DuplexStream.cs" />
     <Compile Include="IInteriorStruct.cs" />
     <Compile Include="IntPriorityHeap.cs" />
     <Compile Include="SegmentedArrayBufferWriter.cs" />
     <Compile Include="ValueTaskContinuation.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IO.Pipelines" Version="6.0.0-rc.2.21480.5" />
   </ItemGroup>
   
 </Project>
