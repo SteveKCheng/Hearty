@@ -8,8 +8,8 @@ using Microsoft.Extensions.Logging;
 
 namespace JobBank.Server
 {
-    using JobMessage = ScheduledJob<PromiseJobFunction, PromiseData>;
-    using ClientQueue = SchedulingQueue<ScheduledJob<PromiseJobFunction, PromiseData>>;
+    using JobMessage = ScheduledJob<PromiseJob, PromiseData>;
+    using ClientQueue = SchedulingQueue<ScheduledJob<PromiseJob, PromiseData>>;
 
     /// <summary>
     /// Schedules execution of promises using a hierarchy of job queues.
@@ -35,7 +35,7 @@ namespace JobBank.Server
         /// The set of workers that can accept jobs to execute
         /// as they come off the job queues.
         /// </summary>
-        public WorkerDistribution<PromiseJobFunction, PromiseData>
+        public WorkerDistribution<PromiseJob, PromiseData>
             WorkerDistribution { get; }
 
         /// <summary>
@@ -43,23 +43,26 @@ namespace JobBank.Server
         /// least one job queue.
         /// </summary>
         private readonly Dictionary<PromiseId, 
-                                    SharedFuture<PromiseJobFunction, PromiseData>>
+                                    SharedFuture<PromiseJob, PromiseData>>
             _futures = new();
 
-        private class DummyWorker : IJobWorker<PromiseJobFunction, PromiseData>
+        private class DummyWorker : IJobWorker<PromiseJob, PromiseData>
         {
             public string Name => "DummyWorker";
 
             public async ValueTask<PromiseData> ExecuteJobAsync(uint executionId, 
-                                                                IRunningJob<PromiseJobFunction> runningJob,
+                                                                IRunningJob<PromiseJob> runningJob,
                                                                 CancellationToken cancellationToken)
             {
                 _logger.LogInformation("Starting job for execution ID {executionId}", executionId);
 
-                var output = await runningJob.Input.InvokeAsync(runningJob, this, cancellationToken)
-                                                   .ConfigureAwait(false);
+                // Mock work
+                await Task.Delay(runningJob.InitialWait, cancellationToken).ConfigureAwait(false);
+                var output = new Payload("application/json", 
+                                         Encoding.ASCII.GetBytes(@"{ ""status"": ""finished job"" }"));
 
                 _logger.LogInformation("Completing job for execution ID {executionId}", executionId);
+
                 return output;
             }
 
@@ -106,7 +109,7 @@ namespace JobBank.Server
             for (int i = 0; i < countPriorities; ++i)
                 PriorityClasses.ResetWeight(priority: i, weight: (i + 1) * 10);
 
-            WorkerDistribution = new WorkerDistribution<PromiseJobFunction, PromiseData>();
+            WorkerDistribution = new WorkerDistribution<PromiseJob, PromiseData>();
             WorkerDistribution.TryCreateWorker(new DummyWorker(logger), 10);
 
             _jobRunnerTask = JobScheduling.RunJobsAsync(
@@ -142,7 +145,7 @@ namespace JobBank.Server
         private JobMessage
             GetJobToSchedule(ISchedulingAccount account, 
                              PromiseId promiseId,
-                             PromiseJobFunction request, 
+                             PromiseJob request, 
                              int charge,
                              out Task<PromiseData> outputTask)
         {
@@ -161,7 +164,7 @@ namespace JobBank.Server
                         return job;
                 }
 
-                job = SharedFuture<PromiseJobFunction, PromiseData>.CreateJob(
+                job = SharedFuture<PromiseJob, PromiseData>.CreateJob(
                         request,
                         charge,
                         account,
@@ -215,7 +218,7 @@ namespace JobBank.Server
                                           int priority, 
                                           int charge,
                                           Promise promise,
-                                          PromiseJobFunction jobFunction)
+                                          PromiseJob jobFunction)
         {
             // Enqueue nothing if promise is already completed
             if (promise.IsCompleted)

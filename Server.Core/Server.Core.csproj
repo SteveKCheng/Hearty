@@ -23,7 +23,7 @@
     <Compile Include="PromiseException.cs" />
     <Compile Include="PromiseId.cs" />
     <Compile Include="PromiseData.cs" />
-    <Compile Include="PromiseJobFunction.cs" />
+    <Compile Include="PromiseJob.cs" />
     <Compile Include="PromisePath.cs" />
     <Compile Include="PromiseStorage.cs" />
     <Compile Include="SubscribedResult.cs" />
