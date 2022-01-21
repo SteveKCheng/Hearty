@@ -17,7 +17,7 @@ namespace JobBank.Work
     /// interface, and the "client" is the central job server that
     /// distributes the jobs.
     /// </remarks>
-    public sealed class WorkerHost
+    public sealed class WorkerHost : IDisposable, IAsyncDisposable
     {
         public static readonly ushort TypeCode_RegisterWorker = 0x1;
         public static readonly ushort TypeCode_RunJob = 0x2;
@@ -90,7 +90,9 @@ namespace JobBank.Work
         /// </param>
         /// <param name="webSocket">
         /// WebSocket connection to the job server to register the 
-        /// new worker host with.
+        /// new worker host with.  If this method succeeds, the
+        /// new instance of <see cref="WorkerHost" /> will take
+        /// ownership of this connection.
         /// </param>
         /// <param name="impl">
         /// Implementation of the job submission functions (that run from the
@@ -183,5 +185,11 @@ namespace JobBank.Work
                 throw;
             }
         }
+
+        /// <inheritdoc cref="RpcConnection.Dispose" />
+        public void Dispose() => _rpc.Dispose();
+
+        /// <inheritdoc cref="RpcConnection.DisposeAsync" />
+        public ValueTask DisposeAsync() => _rpc.DisposeAsync();
     }
 }

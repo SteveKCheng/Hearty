@@ -102,7 +102,10 @@ namespace JobBank.WebSockets
         /// If the connection terminated because of an error, that error
         /// will be thrown as an exception.
         /// </returns>
-        public async Task WaitForCloseAsync()
+        public Task WaitForCloseAsync()
+            => WaitForCloseAsync(throwException: true);
+
+        private async Task WaitForCloseAsync(bool throwException)
         {
             Exception? e1 = null;
             Exception? e2 = null;
@@ -115,7 +118,7 @@ namespace JobBank.WebSockets
             {
                 e1 = e1Temp;
             }
-            
+
             try
             {
                 await _readPendingMessagesTask.ConfigureAwait(false);
@@ -126,7 +129,7 @@ namespace JobBank.WebSockets
             }
 
             var e = e1 ?? e2;
-            if (e is not null)
+            if (throwException && e is not null)
                 throw e;
         }
 
@@ -654,6 +657,12 @@ namespace JobBank.WebSockets
             }
 
             return _channel.Writer.TryWriteAsync(message);
+        }
+
+        public override ValueTask DisposeAsync()
+        {
+            Quit();
+            return new ValueTask(WaitForCloseAsync(throwException: false));
         }
     }
 }

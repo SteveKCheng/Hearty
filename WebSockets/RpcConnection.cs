@@ -30,7 +30,7 @@ namespace JobBank.WebSockets
     /// An abstract connection capable of bi-directional remote procedure
     /// call as implemented by this library.
     /// </summary>
-    public abstract class RpcConnection
+    public abstract class RpcConnection : IDisposable, IAsyncDisposable
     {
         /// <summary>
         /// Directs how payloads and messages on this RPC connection 
@@ -178,5 +178,38 @@ namespace JobBank.WebSockets
             Registry = registry;
             State = state;
         }
+
+        /// <summary>
+        /// "Dispose pattern" to implement <see cref="IDisposable.Dispose" />.
+        /// </summary>
+        /// <param name="isDisposing">
+        /// True if explicitly disposing; false when being run from 
+        /// a finalizer.
+        /// </param>
+        /// <remarks>
+        /// The default implementation synchronously waits on the
+        /// asynchronous task returned by <see cref="DisposeAsync" />.
+        /// </remarks>
+        protected virtual void DisposeImpl(bool isDisposing)
+        {
+            if (isDisposing)
+                DisposeAsync().AsTask().Wait();
+        }
+
+        /// <summary>
+        /// Terminates the connection and waits for it to close,
+        /// synchronously.
+        /// </summary>
+        public void Dispose()
+        {
+            DisposeImpl(isDisposing: true);
+            GC.SuppressFinalize(this);
+        }
+
+        /// <summary>
+        /// Terminates the connection and waits for it to close,
+        /// asynchronously.
+        /// </summary>
+        public abstract ValueTask DisposeAsync();
     }
 }
