@@ -62,7 +62,7 @@ namespace JobBank.Work
         private readonly WebSocketRpc _rpc;
         private readonly IJobSubmission _impl;
 
-        private WorkerHost(string name, 
+        private WorkerHost(string name,
                            WebSocket webSocket,
                            IJobSubmission impl)
         {
@@ -79,11 +79,14 @@ namespace JobBank.Work
                 WorkerHost.TypeCode_RegisterWorker, request, cancellationToken);
         }
 
-        /// <param name="name">
-        /// The name of this host to report to the job server.
-        /// </param>
-        /// <param name="concurrency">
-        /// The degree of concurrency allowed for the new worker host.
+        /// <summary>
+        /// Register the new worker host and begin accepting work
+        /// over a newly established RPC connection using the
+        /// JobBank protocol over WebSockets.
+        /// </summary>
+        /// <param name="settings">
+        /// Settings that the new worker is registered with in the
+        /// job server.
         /// </param>
         /// <param name="webSocket">
         /// WebSocket connection to the job server to register the 
@@ -93,27 +96,92 @@ namespace JobBank.Work
         /// Implementation of the job submission functions (that run from the
         /// local process).
         /// </param>
-        public static async Task<WorkerHost> StartAsync(string name, 
-                                                        int concurrency,
-                                                        WebSocket webSocket,
-                                                        IJobSubmission impl,
-                                                        CancellationToken cancellationToken)
+        /// <param name="cancellationToken">
+        /// Can be triggered to cancel the operation.
+        /// </param>
+        public static async Task<WorkerHost>
+            StartAsync(IJobSubmission impl,
+                       RegisterWorkerRequestMessage settings,
+                       WebSocket webSocket,
+                       CancellationToken cancellationToken)
         {
-            if (concurrency < 0 || concurrency > ushort.MaxValue)
-                throw new ArgumentOutOfRangeException(nameof(concurrency));
-
-            var self = new WorkerHost(name, webSocket, impl);
-            
-            var reply = await self.RegisterWorkerAsync(new RegisterWorkerRequestMessage
+            if (webSocket.State != WebSocketState.Open)
             {
-                Name = name,
-                Concurrency = (ushort)concurrency
-            }, cancellationToken).ConfigureAwait(false);
+                throw new WebSocketException(WebSocketError.InvalidState,
+                    "The WebSocket connection passed to WorkerHost.StartAsync must be open. ");
+            }
+
+            var self = new WorkerHost(settings.Name, webSocket, impl);
+
+            var reply = await self.RegisterWorkerAsync(settings, cancellationToken)
+                                  .ConfigureAwait(false);
 
             if (reply.Status != RegisterWorkerReplyStatus.Ok)
                 throw new Exception("Failed to register worker host with job server. ");
 
             return self;
+        }
+        
+        /// <summary>
+        /// The string used to distinguish the sub-protocol over
+        /// WebSockets used for worker registration and job submission.
+        /// </summary>
+        public static readonly string WebSocketsSubProtocol = "JobBank.Work";
+
+        /// <summary>
+        /// Register the new worker host and begin accepting work
+        /// by connecting to a JobBank server over WebSockets.
+        /// </summary>
+        /// <param name="settings">
+        /// Settings that the new worker is registered with in the
+        /// job server.
+        /// </param>
+        /// <param name="server">
+        /// WebSocket URL to the JobBank server.
+        /// </param>
+        /// <param name="webSocketOptionsSetter">
+        /// If null, this action is invoked to customize the WebSocket
+        /// connection that is about to be made.  New 
+        /// WebSocket sub-protocols should not be added by this action.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be triggered to stop connecting and cancel the operation.
+        /// </param>
+        public static async Task<WorkerHost> ConnectAndStartAsync
+            (IJobSubmission impl,
+             RegisterWorkerRequestMessage settings,
+             string server,
+             Action<ClientWebSocketOptions>? webSocketOptionsSetter,
+             CancellationToken cancellationToken)
+        {
+            var webSocket = new ClientWebSocket();
+
+            try
+            {
+                webSocket.Options.AddSubProtocol(WebSocketsSubProtocol);
+                webSocketOptionsSetter?.Invoke(webSocket.Options);
+                
+                await webSocket.ConnectAsync(new Uri(server), cancellationToken)
+                               .ConfigureAwait(false);
+
+                // The WebSocket implementation should already check this
+                // but if the user (wrongly) added sub-protocols then
+                // they might get negotiated instead.
+                if (webSocket.SubProtocol != WebSocketsSubProtocol)
+                {
+                    throw new WebSocketException(
+                        WebSocketError.UnsupportedProtocol,
+                        "The WebSocket endpoint being connected to does not speak the expected protocol for job workers. ");
+                }
+
+                return await StartAsync(impl, settings, webSocket, cancellationToken)
+                                .ConfigureAwait(false);
+            }
+            catch
+            {
+                webSocket.Dispose();
+                throw;
+            }
         }
     }
 }
