@@ -12,9 +12,12 @@
 </p>
 
 <p>
-<button class="btn btn-primary" @onclick="DoWebSocketTest">WebSocket test</button>
+<button class="btn btn-primary" @onclick="DoWebSocketTestAsync">WebSocket test</button>
 </p>
 
+<p>
+<button class="btn btn-primary" @onclick="MakeFakeRemoteWorkersAsync">Make fake remote workers</button>
+</p>
 
 @code {
     private int currentCount = 0;
@@ -24,8 +27,9 @@
         currentCount++;
     }
 
-    private async Task DoWebSocketTest()
-    {
-        await _webSocketTest.ExerciseClientSocketAsync();
-    }
+    private Task DoWebSocketTestAsync()
+        => _webSocketTest.ExerciseClientSocketAsync();
+
+    private Task MakeFakeRemoteWorkersAsync()
+        => _webSocketTest.CreateFakeRemoteWorkerHostsAsync();
 }

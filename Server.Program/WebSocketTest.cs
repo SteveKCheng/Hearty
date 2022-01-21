@@ -1,8 +1,11 @@
 ﻿using JobBank.WebSockets;
+using JobBank.Work;
 using MessagePack;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Buffers;
 using System.Net.WebSockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -30,17 +33,11 @@ namespace JobBank.Server.Program
             return new WsEchoReply { Echo = request.Text };
         }
 
-        public async ValueTask<WebSocket> CreateClientSocketAsync()
+        public async Task ExerciseClientSocketAsync()
         {
             var webSocket = new ClientWebSocket();
             await webSocket.ConnectAsync(new Uri("ws://localhost:5000/ws"), default)
                            .ConfigureAwait(false);
-            return webSocket;
-        }
-
-        public async Task ExerciseClientSocketAsync()
-        {
-            var webSocket = await CreateClientSocketAsync();
             var rpc = new WebSocketRpc(webSocket, _registry);
 
             for (int i = 0; i < 10; ++i)
@@ -56,6 +53,62 @@ namespace JobBank.Server.Program
             rpc.Quit();
             await rpc.WaitForCloseAsync();
             webSocket.Dispose();
+        }
+
+        public async Task CreateFakeRemoteWorkerHostsAsync()
+        {
+            for (int i = 0; i < 10; ++i)
+            {
+                var settings = new RegisterWorkerRequestMessage
+                {
+                    Name = $"fake-worker-{i}",
+                    Concurrency = 10
+                };
+
+                _logger.LogInformation("Attempting to start fake worker #{worker}", i);
+
+                await WorkerHost.ConnectAndStartAsync(
+                    new JobSubmissionImpl(_logger, i),
+                    settings,
+                    "ws://localhost:5000/ws/worker",
+                    null,
+                    CancellationToken.None); ;
+
+                _logger.LogInformation("Successfully started fake worker #{worker}", i);
+            }
+        }
+
+        private sealed class JobSubmissionImpl : IJobSubmission
+        {
+            private ILogger _logger;
+            private int _workerId;
+
+            public JobSubmissionImpl(ILogger logger, int id)
+            {
+                _logger = logger;
+                _workerId = id;
+            }
+
+            public async ValueTask<RunJobReplyMessage> RunJobAsync(RunJobRequestMessage request, CancellationToken cancellationToken)
+            {
+                _logger.LogInformation("Starting job for execution ID {executionId} on fake remote worker #{worker}", 
+                                       request.ExecutionId, _workerId);
+
+                // Mock work
+                await Task.Delay(request.InitialWait, cancellationToken)
+                          .ConfigureAwait(false);
+
+                var reply = new RunJobReplyMessage
+                {
+                    ContentType = "application/json",
+                    Data = new ReadOnlySequence<byte>(Encoding.ASCII.GetBytes(@"{ ""status"": ""finished remote job"" }"))
+                };
+
+                _logger.LogInformation("Completing job for execution ID {executionId} on fake remote worker #{worker}", 
+                                       request.ExecutionId, _workerId);
+
+                return reply;
+            }
         }
     }
 

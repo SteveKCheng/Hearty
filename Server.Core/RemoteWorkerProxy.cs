@@ -45,6 +45,8 @@ namespace JobBank.Server
             {
                 Route = runningJob.Input.Route,
                 ContentType = contentType,
+                InitialWait = runningJob.InitialWait,
+                ExecutionId = executionId,
                 Data = await runningJob.Input
                                        .Data
                                        .GetPayloadAsync(contentType, cancellationToken)

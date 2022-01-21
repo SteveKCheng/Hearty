@@ -39,6 +39,12 @@ namespace JobBank.Work
         [Key("t")]
         public string ContentType { get; set; }
 
+        [Key("w")]
+        public int InitialWait { get; set; }
+
+        [Key("#")]
+        public uint ExecutionId { get; set; }
+
         [Key("d")]
         public ReadOnlySequence<byte> Data { get; set; }
     }
