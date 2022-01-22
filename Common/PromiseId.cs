@@ -2,7 +2,7 @@
 using System.Globalization;
 using System.Diagnostics.CodeAnalysis;
 
-namespace JobBank.Server
+namespace JobBank
 {
     /// <summary>
     /// A long-lived identifier for a promise that can refer

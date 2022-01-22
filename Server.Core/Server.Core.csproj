@@ -22,7 +22,6 @@
     <Compile Include="Promise.cs" />
     <Compile Include="Promise.Subscription.cs" />
     <Compile Include="PromiseException.cs" />
-    <Compile Include="PromiseId.cs" />
     <Compile Include="PromiseData.cs" />
     <Compile Include="PromiseJob.cs" />
     <Compile Include="PromisePath.cs" />
@@ -40,6 +39,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Common\Common.csproj" />
     <ProjectReference Include="..\Utilities\Utilities.csproj" />
     <ProjectReference Include="..\Scheduling\Scheduling.csproj" />
     <ProjectReference Include="..\Work\Work.csproj" />
