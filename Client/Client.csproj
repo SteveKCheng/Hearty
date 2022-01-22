@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="EnumerableExtensions.cs" />
     <Compile Include="JobBankClient.cs" />
   </ItemGroup>
 

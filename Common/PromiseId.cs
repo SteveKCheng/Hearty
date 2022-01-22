@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Globalization;
 using System.Diagnostics.CodeAnalysis;
+using static System.FormattableString;
 
 namespace JobBank
 {
@@ -71,7 +72,24 @@ namespace JobBank
         /// </remarks>
         public override string ToString()
         {
-            return $"{ServiceId:X8}/{SequenceNumber}";
+            return Invariant($"{ServiceId:X8}/{SequenceNumber}");
+        }
+
+        /// <summary>
+        /// Attempt to parse a promise ID from its string representation
+        /// as returned by <see cref="ToString" />.
+        /// </summary>
+        public static bool TryParse(ReadOnlySpan<char> input,
+                                    out PromiseId promiseId)
+        {
+            promiseId = default;
+            if (input.Length < 10 || input[8] != '/')
+            {
+                promiseId = default;
+                return false;
+            }
+
+            return TryParse(input[0..8], input[9..], out promiseId);
         }
 
         /// <summary>
