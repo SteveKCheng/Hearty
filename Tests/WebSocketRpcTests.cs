@@ -268,11 +268,14 @@ namespace JobBank.Tests
             await _cancellationSemaphore.WaitAsync(TimeSpan.FromSeconds(10));
 
             clientRpc.Quit();
-            // serverRpc should automatically terminate when clientRpc terminates 
+            Assert.True(clientRpc.IsClosingStarted);
             await clientRpc.WaitForCloseAsync();
+            Assert.True(clientRpc.HasClosed);
+
+            // serverRpc should automatically terminate when clientRpc terminated.
+            Assert.True(serverRpc.IsClosingStarted);
             await serverRpc.WaitForCloseAsync();
+            Assert.True(serverRpc.HasClosed);
         }
     }
-
-
 }

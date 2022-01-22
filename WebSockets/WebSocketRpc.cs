@@ -133,13 +133,8 @@ namespace JobBank.WebSockets
                 throw e;
         }
 
-        /// <summary>
-        /// Backing field for <see cref="IsClosingStarted" />.
-        /// </summary>
-        private bool _isClosingStarted;
-
         /// <inheritdoc cref="IsClosingStarted" />
-        public override bool IsClosingStarted => _isClosingStarted;
+        public override bool IsClosingStarted => _toTerminate;
 
         /// <summary>
         /// Request that this RPC connection be gracefully shut down.
@@ -163,6 +158,12 @@ namespace JobBank.WebSockets
         /// Request that this RPC connection be shut down, possibly because
         /// of an error.
         /// </summary>
+        /// <remarks>
+        /// Note that internally this method must be called at least once
+        /// even when the WebSocket connection is already dead, because
+        /// it causes this class's own clean-up actions to occur, 
+        /// including the closing of <see cref="_channel" />.
+        /// </remarks>
         /// <param name="status">
         /// The status to report as part of WebSocket's close message.
         /// </param>
@@ -172,11 +173,13 @@ namespace JobBank.WebSockets
                         ? new WebSocketRpcException(status)
                         : null;
 
-            if (_channel.Writer.TryComplete(e))
-            {
-                _isClosingStarted = true;
-                _toTerminate = true;
-            }
+            // This assignment is redundant if TryComplete below returns
+            // false, but avoid the theoretical race condition where 
+            // the channel closing is observed but _toTerminate remains
+            // false.
+            _toTerminate = true;
+
+            _channel.Writer.TryComplete(e);
         }
 
         /// <summary>
@@ -188,10 +191,6 @@ namespace JobBank.WebSockets
         /// there may be still be messages in the queue, which should
         /// be ignored even though they occur before the closing sentinel
         /// item of the channel.
-        /// </para>
-        /// <para>
-        /// This flag differs from <see cref="_isClosingStarted" /> only
-        /// in that this flag is set to true only for graceful termination.
         /// </para>
         /// </remarks>
         private bool _toTerminate;
@@ -269,8 +268,16 @@ namespace JobBank.WebSockets
                 {
                     while (!_toTerminate && channelReader.TryRead(out var item))
                     {
-                        await WriteMessageAsync(item, cancellationToken)
-                                .ConfigureAwait(false);
+                        try
+                        {
+                            await WriteMessageAsync(item, cancellationToken)
+                                    .ConfigureAwait(false);
+                        }
+                        catch (Exception e)
+                        {
+                            item.Abort(e);
+                            throw;
+                        }
                     }
                 }
             }
@@ -282,35 +289,66 @@ namespace JobBank.WebSockets
             }
             finally
             {
-                _isClosingStarted = true;
-
-                Exception? e;
-
                 // Need to drain _channel first to read status reliably
                 DrainPendingMessages();
 
-                WebSocketCloseStatus status;
-                if ((e = GetSendChannelException()) is not null)
+                // CloseOutputAsync, i.e. sending the close message,
+                // is not allowed when the WebSocket connection is already
+                // closed or aborted.
+                //
+                // Note that WebSocketState.Closed only means the closing
+                // handshake is successful while a rude closing of the TCP
+                // connection or stream results in WebSocketState.Abort.
+                // WebSocketState.Closed should not happen because this
+                // function is responsible for half of the closing handshake,
+                // when it calls CloseOutputAsync below.)
+                var webSocketState = _webSocket.State;
+                if (webSocketState < WebSocketState.Closed)
                 {
-                    status = (e as WebSocketRpcException)?.CloseStatus 
-                                ?? WebSocketCloseStatus.InternalServerError;
-                }
-                else if (_remoteEndHasTerminated)
-                {
-                    status = _webSocket.CloseStatus ?? WebSocketCloseStatus.Empty;
-                }
-                else
-                {
-                    status = WebSocketCloseStatus.NormalClosure;
+                    WebSocketCloseStatus closeStatus;
+                    Exception? e;
+                    if ((e = GetSendChannelException()) is not null)
+                    {
+                        closeStatus = (e as WebSocketRpcException)?.CloseStatus
+                                    ?? WebSocketCloseStatus.InternalServerError;
+                    }
+                    else if (_remoteEndHasTerminated)
+                    {
+                        closeStatus = _webSocket.CloseStatus ?? WebSocketCloseStatus.Empty;
+                    }
+                    else
+                    {
+                        closeStatus = WebSocketCloseStatus.NormalClosure;
+                    }
+
+                    try
+                    {
+                        await _webSocket.CloseOutputAsync(closeStatus, null, CancellationToken.None)
+                                        .ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        // FIXME: should we retain this exception?
+                        try { _webSocket.Abort(); } catch { }
+                    }
                 }
 
-                await _webSocket.CloseOutputAsync(status, null, CancellationToken.None)
-                                .ConfigureAwait(false);
+                // We should dispose the underlying streams at this point,
+                // WebSocket instance might not do so itself, from reading
+                // the implementation source code from source.dot.net.
+                //
+                // On the other hand, WebSocketState.Close does
+                // automatically cause disposal, i.e. when the
+                // closing handshake was successful.
+                else if (webSocketState == WebSocketState.Aborted)
+                {
+                    _webSocket.Dispose();
+                }
 
                 DrainPendingReplies();
 
                 if (_readPendingMessagesTask.IsCompleted)
-                    InvokeOnClose(e);
+                    InvokeOnClose(GetSendChannelException());
             }
         }
 
@@ -376,7 +414,15 @@ namespace JobBank.WebSockets
         {
             try
             {
-                while (_webSocket.CloseStatus == null)
+                WebSocketState webSocketState;
+
+                // Stop on WebSocketState.Aborted,
+                // WebSocketState.Closed, or WebSocketState.CloseReceived.
+                //
+                // Note that the last two "should" not happen because this
+                // method is responsible for receiving the close message
+                // in the closing handshake, inside the below loop.
+                while ((webSocketState = _webSocket.State) < WebSocketState.CloseReceived)
                 {
                     _readBuffers.Clear();
 
@@ -391,18 +437,9 @@ namespace JobBank.WebSockets
                         _readBuffers.Advance(result.Count);
                     } while (!result.EndOfMessage);
 
-                    // If the remote side is initiating termination,
-                    // then terminate ourselves too.
+                    // Basically we now have WebSocketState.CloseReceived.
                     if (result.MessageType == WebSocketMessageType.Close)
-                    {
-                        if (!_toTerminate)
-                        {
-                            _remoteEndHasTerminated = true;
-                            Quit();
-                        }
-
                         break;
-                    }
 
                     // Do not process incoming messages if we are
                     // already terminating; only drain them from the
@@ -415,6 +452,19 @@ namespace JobBank.WebSockets
                     else
                         throw new WebSocketRpcException(WebSocketCloseStatus.InvalidMessageType);
                 }
+
+                if (webSocketState == WebSocketState.Aborted)
+                {
+                    Terminate(WebSocketCloseStatus.ProtocolError);
+                }
+                    
+                // If the remote side is initiating termination,
+                // then terminate ourselves too.
+                else if (!_toTerminate)
+                {
+                    _remoteEndHasTerminated = true;
+                    Quit();
+                }
             }
             catch (Exception e)
             {
@@ -425,8 +475,6 @@ namespace JobBank.WebSockets
             }
             finally
             {
-                _isClosingStarted = true;
-
                 _readBuffers.Clear();
                 DrainCancellations();
 
@@ -527,19 +575,28 @@ namespace JobBank.WebSockets
                     lock (_pendingReplies)
                         _pendingReplies.Remove(header.Id, out item);
 
-                    if (item != null)
+                    if (item == null)
+                        break;
+
+                    try
                     {
                         if (header.TypeCode != item.TypeCode)
                         {
-                            var e = new WebSocketRpcException(WebSocketCloseStatus.InvalidPayloadData);
-                            _isClosingStarted = true;  // assumes the connection cannot recover
-                            item.Abort(e);
+                            var closeStatus = WebSocketCloseStatus.InvalidPayloadData;
+                            var e = new WebSocketRpcException(closeStatus);
+                            Terminate(closeStatus);
                             throw e;
                         }
 
                         bool isException = (header.Kind == RpcMessageKind.ExceptionalReply);
                         item.ProcessReply(payload, isException);
                     }
+                    catch (Exception e)
+                    {
+                        item.Abort(e);
+                        throw;
+                    }
+
                     break;
 
                 case RpcMessageKind.Request:
@@ -607,43 +664,34 @@ namespace JobBank.WebSockets
             var writer = _writeBuffers;
             writer.Clear();
 
-            try
+            WriteHeader(writer, item.Header);
+            item.PackPayload(writer);
+
+            if (item.Kind == RpcMessageKind.Request)
             {
-                WriteHeader(writer, item.Header);
-                item.PackPayload(writer);
+                // If the request got cancelled after the user made it
+                // but before its message got sent, do not send the
+                // message.  If the cancellation message is queued
+                // after then this guard would only be a performance
+                // optimization, but if it is queued before, due to
+                // some multi-thread race, then this guard is critical!
+                if (item.IsCancelled)
+                    return ValueTask.CompletedTask;
 
-                if (item.Kind == RpcMessageKind.Request)
-                {
-                    // If the request got cancelled after the user made it
-                    // but before its message got sent, do not send the
-                    // message.  If the cancellation message is queued
-                    // after then this guard would only be a performance
-                    // optimization, but if it is queued before, due to
-                    // some multi-thread race, then this guard is critical!
-                    if (item.IsCancelled)
-                        return ValueTask.CompletedTask;
-
-                    lock (_pendingReplies)
-                        _pendingReplies.Add(item.ReplyId, item);
-                }
-                else if (item.Kind == RpcMessageKind.Cancellation)
-                {
-                    bool success;
-                    lock (_pendingReplies)
-                        success = _pendingReplies.Remove(item.ReplyId);
-
-                    // Do not send cancellation message if it has already
-                    // been sent, or if the reply has already been received,
-                    // or if the original request has not even been sent yet.
-                    if (!success)
-                        return ValueTask.CompletedTask;
-                }
+                lock (_pendingReplies)
+                    _pendingReplies.Add(item.ReplyId, item);
             }
-            catch (Exception e)
+            else if (item.Kind == RpcMessageKind.Cancellation)
             {
-                _isClosingStarted = true;  // assumes the connection cannot recover
-                item.Abort(e);
-                throw;
+                bool success;
+                lock (_pendingReplies)
+                    success = _pendingReplies.Remove(item.ReplyId);
+
+                // Do not send cancellation message if it has already
+                // been sent, or if the reply has already been received,
+                // or if the original request has not even been sent yet.
+                if (!success)
+                    return ValueTask.CompletedTask;
             }
 
             return _webSocket.SendAsync(_writeBuffers.WrittenMemory,
