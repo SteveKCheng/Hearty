@@ -133,6 +133,9 @@ namespace JobBank.WebSockets
                 throw e;
         }
 
+        /// <summary>
+        /// Backing field for <see cref="IsClosingStarted" />.
+        /// </summary>
         private bool _isClosingStarted;
 
         /// <inheritdoc cref="IsClosingStarted" />
@@ -170,17 +173,26 @@ namespace JobBank.WebSockets
                         : null;
 
             if (_channel.Writer.TryComplete(e))
+            {
+                _isClosingStarted = true;
                 _toTerminate = true;
+            }
         }
 
         /// <summary>
         /// Set to true as soon as <see cref="Quit" /> has been called.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// <see cref="Quit" /> will close <see cref="_channel" />, but
         /// there may be still be messages in the queue, which should
         /// be ignored even though they occur before the closing sentinel
         /// item of the channel.
+        /// </para>
+        /// <para>
+        /// This flag differs from <see cref="_isClosingStarted" /> only
+        /// in that this flag is set to true only for graceful termination.
+        /// </para>
         /// </remarks>
         private bool _toTerminate;
 
