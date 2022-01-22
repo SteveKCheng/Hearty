@@ -4,6 +4,7 @@
     <TargetFramework>net6.0</TargetFramework>
     <Nullable>enable</Nullable>
     <RootNamespace>JobBank.Work</RootNamespace>
+    <AssemblyName>JobBank.Work</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
   </PropertyGroup>

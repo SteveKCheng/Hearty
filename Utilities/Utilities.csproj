@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>JobBank.Utilities</RootNamespace>
-    <DisableImplicitNamespaceImports>true</DisableImplicitNamespaceImports>
+    <AssemblyName>JobBank.Utilities</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
   </PropertyGroup>

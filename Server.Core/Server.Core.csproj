@@ -4,6 +4,7 @@
     <TargetFrameworks>net6.0</TargetFrameworks>
     <Nullable>enable</Nullable>
     <RootNamespace>JobBank.Server</RootNamespace>
+    <AssemblyName>JobBank.Server</AssemblyName>
     <DisableImplicitNamespaceImports>true</DisableImplicitNamespaceImports>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>

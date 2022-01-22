@@ -4,7 +4,7 @@
     <TargetFramework>net5.0</TargetFramework>
     <Nullable>enable</Nullable>
     <RootNamespace>JobBank.Scheduling</RootNamespace>
-    <DisableImplicitNamespaceImports>true</DisableImplicitNamespaceImports>
+    <AssemblyName>JobBank.Scheduling</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
   </PropertyGroup>
