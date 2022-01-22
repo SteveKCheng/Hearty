@@ -82,6 +82,7 @@ namespace JobBank.Tests
 
             var registry = new RpcRegistry();
             registry.Add(0x1, (RpcFunction<Func1Request, Func1Reply>)this.Func1Async);
+            registry.Add(0x2, (RpcFunction<Func1Request, Func1Reply>)this.Func2Async);
 
             // Finally, apply the RPC protocol on top of the WebSockets.
             var serverRpc = new WebSocketRpc(serverWebSocket, registry, true);
@@ -110,6 +111,14 @@ namespace JobBank.Tests
             };
         }
 
+        private async ValueTask<Func1Reply> Func2Async(Func1Request request, 
+                                                       RpcConnection connection,
+                                                       CancellationToken cancellationToken)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(20), cancellationToken);
+            throw new Exception($"I am throwing an exception to your question: {request.Question}");
+        }
+
         [MessagePackObject(keyAsPropertyName: true)]
         public struct Func1Request
         {
@@ -127,6 +136,13 @@ namespace JobBank.Tests
                                                               CancellationToken cancellationToken)
             => connection.InvokeRemotelyAsync<Func1Request, Func1Reply>(0x1, 
                                                                         request, 
+                                                                        cancellationToken);
+
+        private static ValueTask<Func1Reply> InvokeFunc2Async(WebSocketRpc connection,
+                                                              Func1Request request,
+                                                              CancellationToken cancellationToken)
+            => connection.InvokeRemotelyAsync<Func1Request, Func1Reply>(0x2,
+                                                                        request,
                                                                         cancellationToken);
 
         private static async Task TestFunc1SeriallyAsync(WebSocketRpc connection, int count, bool isServer)
@@ -188,6 +204,21 @@ namespace JobBank.Tests
 
             Assert.Equal(clientRpcCount, _func1InvocationsFromClient);
             Assert.Equal(serverRpcCount, _func1InvocationsFromServer);
+
+            var exceptionQuestion = "do you throw exceptions? ";
+            Exception? caughtException = null;
+            try
+            {
+                await InvokeFunc2Async(clientRpc,
+                                       new Func1Request { Question = exceptionQuestion },
+                                       CancellationToken.None);
+            }
+            catch (Exception e)
+            {
+                caughtException = e;
+            }
+
+            Assert.Contains(exceptionQuestion, caughtException?.Message ?? string.Empty);
 
             clientRpc.Quit();
             // serverRpc should automatically terminate when clientRpc terminates 
