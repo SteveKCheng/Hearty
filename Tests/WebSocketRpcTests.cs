@@ -83,6 +83,7 @@ namespace JobBank.Tests
             var registry = new RpcRegistry();
             registry.Add(0x1, (RpcFunction<Func1Request, Func1Reply>)this.Func1Async);
             registry.Add(0x2, (RpcFunction<Func1Request, Func1Reply>)this.Func2Async);
+            registry.Add(0x3, (RpcFunction<Func1Request, Func1Reply>)this.Func3Async);
 
             // Finally, apply the RPC protocol on top of the WebSockets.
             var serverRpc = new WebSocketRpc(serverWebSocket, registry, true);
@@ -104,7 +105,7 @@ namespace JobBank.Tests
             else
                 _func1InvocationsFromServer++;
 
-            await Task.Delay(TimeSpan.FromMilliseconds(20), cancellationToken);
+            await Task.Delay(TimeSpan.FromMilliseconds(10), cancellationToken);
             return new Func1Reply
             {
                 Answer = $"My answer to the question: {request.Question}"
@@ -115,8 +116,34 @@ namespace JobBank.Tests
                                                        RpcConnection connection,
                                                        CancellationToken cancellationToken)
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(20), cancellationToken);
+            await Task.Yield();
             throw new Exception($"I am throwing an exception to your question: {request.Question}");
+        }
+
+        private SemaphoreSlim _cancellationSemaphore = new SemaphoreSlim(0);
+
+        private async ValueTask<Func1Reply> Func3Async(Func1Request request, 
+                                                       RpcConnection connection,
+                                                       CancellationToken cancellationToken)
+        {
+            await Task.Yield();
+
+            try
+            {
+                // Wait up to one minute for this asynchronous function
+                // invocation to be cancelled.
+                for (int i = 0; i < (60 * 1000 / 20); ++i)
+                    await Task.Delay(TimeSpan.FromMilliseconds(20), cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // Needed to let the caller verify that the remote implementation
+                // did receive the cancellation too, not just its local side.
+                _cancellationSemaphore.Release();
+                throw;
+            }
+
+            return new Func1Reply { Answer = "This function did not get cancelled! " };
         }
 
         [MessagePackObject(keyAsPropertyName: true)]
@@ -142,6 +169,13 @@ namespace JobBank.Tests
                                                               Func1Request request,
                                                               CancellationToken cancellationToken)
             => connection.InvokeRemotelyAsync<Func1Request, Func1Reply>(0x2,
+                                                                        request,
+                                                                        cancellationToken);
+
+        private static ValueTask<Func1Reply> InvokeFunc3Async(WebSocketRpc connection,
+                                                              Func1Request request,
+                                                              CancellationToken cancellationToken)
+            => connection.InvokeRemotelyAsync<Func1Request, Func1Reply>(0x3,
                                                                         request,
                                                                         cancellationToken);
 
@@ -206,19 +240,32 @@ namespace JobBank.Tests
             Assert.Equal(serverRpcCount, _func1InvocationsFromServer);
 
             var exceptionQuestion = "do you throw exceptions? ";
-            Exception? caughtException = null;
-            try
+
+            var caughtException = await Assert.ThrowsAnyAsync<Exception>(async () =>
             {
                 await InvokeFunc2Async(clientRpc,
                                        new Func1Request { Question = exceptionQuestion },
                                        CancellationToken.None);
-            }
-            catch (Exception e)
-            {
-                caughtException = e;
-            }
+            });
+            Assert.Contains(exceptionQuestion, caughtException.Message);
 
-            Assert.Contains(exceptionQuestion, caughtException?.Message ?? string.Empty);
+            await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+                {
+                    var cancelSource = new CancellationTokenSource();
+                    cancelSource.CancelAfter(TimeSpan.FromMilliseconds(30));
+                    await InvokeFunc3Async(clientRpc,
+                                           new Func1Request { Question = exceptionQuestion },
+                                           cancelSource.Token);
+                });
+
+            // The corresponding release of this semaphore should happen once
+            // the remote implementation receives the cancellation trigger.
+            // Note that, for reliability when running on real, fallible
+            // remote hosts, the OperationCanceledException above is thrown
+            // locally without waiting for the remote call to actually be
+            // cancelled.  If the semaphore does not get released then
+            // WaitAsync will timeout and thus fail this unit test.
+            await _cancellationSemaphore.WaitAsync(TimeSpan.FromSeconds(10));
 
             clientRpc.Quit();
             // serverRpc should automatically terminate when clientRpc terminates 
