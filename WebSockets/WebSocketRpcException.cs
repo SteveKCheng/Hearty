@@ -1,12 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net.WebSockets;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace JobBank.WebSockets
 {
+    /// <summary>
+    /// Reports an exceptional or error condition from making
+    /// or receiving a remote procedure call over WebSockets.
+    /// </summary>
     public class WebSocketRpcException : Exception
     {
         public WebSocketCloseStatus CloseStatus { get; }

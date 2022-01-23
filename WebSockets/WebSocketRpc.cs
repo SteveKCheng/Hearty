@@ -289,8 +289,10 @@ namespace JobBank.WebSockets
             }
             finally
             {
+                Exception? exception = GetSendChannelException();
+
                 // Need to drain _channel first to read status reliably
-                DrainPendingMessages();
+                DrainPendingMessages(exception);
 
                 // CloseOutputAsync, i.e. sending the close message,
                 // is not allowed when the WebSocket connection is already
@@ -306,10 +308,9 @@ namespace JobBank.WebSockets
                 if (webSocketState < WebSocketState.Closed)
                 {
                     WebSocketCloseStatus closeStatus;
-                    Exception? e;
-                    if ((e = GetSendChannelException()) is not null)
+                    if (exception is not null)
                     {
-                        closeStatus = (e as WebSocketRpcException)?.CloseStatus
+                        closeStatus = (exception as WebSocketRpcException)?.CloseStatus
                                     ?? WebSocketCloseStatus.InternalServerError;
                     }
                     else if (_remoteEndHasTerminated)
@@ -345,10 +346,10 @@ namespace JobBank.WebSockets
                     _webSocket.Dispose();
                 }
 
-                DrainPendingReplies();
+                DrainPendingReplies(exception);
 
                 if (_readPendingMessagesTask.IsCompleted)
-                    InvokeOnClose(GetSendChannelException());
+                    InvokeOnClose(exception);
             }
         }
 
@@ -362,14 +363,14 @@ namespace JobBank.WebSockets
         /// with an exception to the effect that the RPC channel
         /// has closed.
         /// </remarks>
-        private void DrainPendingMessages()
+        private void DrainPendingMessages(Exception? exception)
         {
             var channelReader = _channel.Reader;
-            Exception? exception = null; 
 
             while (channelReader.TryRead(out var item))
             {
-                exception ??= new Exception("RPC connection has closed. ");
+                exception ??= new WebSocketRpcException(
+                                _webSocket.CloseStatus ?? WebSocketCloseStatus.Empty);
                 item.Abort(exception);
             }
         }
@@ -384,7 +385,7 @@ namespace JobBank.WebSockets
         /// with an exception to the effect that the RPC channel
         /// has closed.
         /// </remarks>
-        private void DrainPendingReplies()
+        private void DrainPendingReplies(Exception? exception)
         {
             RpcMessage[] items;
             lock (_pendingReplies)
@@ -401,9 +402,12 @@ namespace JobBank.WebSockets
                 _pendingReplies.Clear();
             }
 
-            var exception = new Exception("RPC connection has closed. ");
             foreach (var item in items)
+            {
+                exception ??= new WebSocketRpcException(
+                                _webSocket.CloseStatus ?? WebSocketCloseStatus.Empty);
                 item.Abort(exception);
+            }
         }
 
         /// <summary>
