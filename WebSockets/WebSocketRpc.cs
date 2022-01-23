@@ -260,6 +260,9 @@ namespace JobBank.WebSockets
         /// </summary>
         private async Task WritePendingMessagesAsync(CancellationToken cancellationToken)
         {
+            // Do not execute any of the below while still in constructor
+            await Task.Yield();
+
             try
             {
                 var channelReader = _channel.Reader;
@@ -416,6 +419,9 @@ namespace JobBank.WebSockets
         /// </summary>
         private async Task ReadPendingMessagesAsync(CancellationToken cancellationToken)
         {
+            // Do not execute any of the below while still in constructor
+            await Task.Yield();
+
             try
             {
                 WebSocketState webSocketState;

@@ -120,26 +120,29 @@ namespace JobBank.Tests
             throw new Exception($"I am throwing an exception to your question: {request.Question}");
         }
 
-        private SemaphoreSlim _cancellationSemaphore = new SemaphoreSlim(0);
+        private AsyncBarrier _func3Barrier = new AsyncBarrier(2);
+        private SemaphoreSlim _func3Result = new SemaphoreSlim(0);
 
         private async ValueTask<Func1Reply> Func3Async(Func1Request request, 
                                                        RpcConnection connection,
                                                        CancellationToken cancellationToken)
         {
-            await Task.Yield();
+            await _func3Barrier.SignalAndWaitAsync();
 
             try
             {
                 // Wait up to one minute for this asynchronous function
-                // invocation to be cancelled.
+                // invocation to be cancelled.  Unfortunately, this waiting
+                // must be based on time and not on a semaphore, because the
+                // cancellation message in the RPC protocol is "fire and forget".
                 for (int i = 0; i < (60 * 1000 / 20); ++i)
                     await Task.Delay(TimeSpan.FromMilliseconds(20), cancellationToken);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException e) when (e.CancellationToken == cancellationToken)
             {
                 // Needed to let the caller verify that the remote implementation
                 // did receive the cancellation too, not just its local side.
-                _cancellationSemaphore.Release();
+                _func3Result.Release();
                 throw;
             }
 
@@ -253,10 +256,16 @@ namespace JobBank.Tests
             await Assert.ThrowsAsync<OperationCanceledException>(async () =>
                 {
                     var cancelSource = new CancellationTokenSource();
-                    cancelSource.CancelAfter(TimeSpan.FromMilliseconds(30));
-                    await InvokeFunc3Async(clientRpc,
-                                           new Func1Request { Question = exceptionQuestion },
-                                           cancelSource.Token);
+                    var func3Task = InvokeFunc3Async(
+                                     clientRpc,
+                                     new Func1Request { Question = exceptionQuestion },
+                                     cancelSource.Token);
+
+                    // Ensure Func3Async is executing when we cancel
+                    await _func3Barrier.SignalAndWaitAsync();
+                    cancelSource.Cancel();
+
+                    await func3Task;
                 });
 
             // The corresponding release of this semaphore should happen once
@@ -266,7 +275,7 @@ namespace JobBank.Tests
             // locally without waiting for the remote call to actually be
             // cancelled.  If the semaphore does not get released then
             // WaitAsync will timeout and thus fail this unit test.
-            await _cancellationSemaphore.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.True(await _func3Result.WaitAsync(TimeSpan.FromSeconds(10)));
 
             clientRpc.Quit();
             Assert.True(clientRpc.IsClosingStarted);
@@ -290,10 +299,13 @@ namespace JobBank.Tests
                                               new Func1Request { Question = exceptionQuestion },
                                               CancellationToken.None);
 
+            // Ensure Func3Async is executing when we close the stream
+            await _func3Barrier.SignalAndWaitAsync();
             serverStream.Close();
+
             // FIXME Should throw WebSocketRpcException but currently does not
             await Assert.ThrowsAnyAsync<Exception>(async () => await invokeTask);
-
+            
             Assert.True(serverRpc.IsClosingStarted);
             await Assert.ThrowsAsync<WebSocketRpcException>(
                 async () => await serverRpc.WaitForCloseAsync());
@@ -303,6 +315,9 @@ namespace JobBank.Tests
             await Assert.ThrowsAnyAsync<Exception>(
                 async () => await clientRpc.WaitForCloseAsync());
             Assert.True(clientRpc.HasClosed);
+
+            // The remote implementation should get cancelled too
+            await _func3Result.WaitAsync(TimeSpan.FromSeconds(10));
         }
     }
 }
