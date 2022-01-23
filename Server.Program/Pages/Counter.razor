@@ -3,9 +3,17 @@
 @using JobBank.Server.Program.Data
 @inject WebSocketTest _webSocketTest
 
+@code {
+    [CascadingParameter]
+    public BlazorConnectionInfo ConnectionInfo { get; set; } = null!;
+}
+
 <h1>Counter</h1>
 
 <p>Current count: @currentCount</p>
+
+<p>User agent: @ConnectionInfo.UserAgent</p>
+<p>IP address: @ConnectionInfo.IpAddress</p>
 
 <p>
 <button class="btn btn-primary" @onclick="IncrementCount">Click me</button>

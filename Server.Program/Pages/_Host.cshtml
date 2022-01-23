@@ -1,5 +1,6 @@
 ﻿@page "/"
 @namespace JobBank.Server.Program.Pages
+@model JobBank.Server.Program.Pages.HostPageModel
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 @{
     Layout = null;
@@ -17,7 +18,9 @@
     <link href="JobBank.Server.Program.styles.css" rel="stylesheet" />
 </head>
 <body>
-    <component type="typeof(App)" render-mode="ServerPrerendered" />
+    <component type="typeof(App)" 
+               render-mode="ServerPrerendered" 
+               param-ConnectionInfo="@Model.ConnectionInfo" />
 
     <div id="blazor-error-ui">
         <environment include="Staging,Production">
