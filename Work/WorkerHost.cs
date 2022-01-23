@@ -152,7 +152,7 @@ namespace JobBank.Work
         public static async Task<WorkerHost> ConnectAndStartAsync
             (IJobSubmission impl,
              RegisterWorkerRequestMessage settings,
-             string server,
+             Uri server,
              Action<ClientWebSocketOptions>? webSocketOptionsSetter,
              CancellationToken cancellationToken)
         {
@@ -162,8 +162,8 @@ namespace JobBank.Work
             {
                 webSocket.Options.AddSubProtocol(WebSocketsSubProtocol);
                 webSocketOptionsSetter?.Invoke(webSocket.Options);
-                
-                await webSocket.ConnectAsync(new Uri(server), cancellationToken)
+
+                await webSocket.ConnectAsync(server, cancellationToken)
                                .ConfigureAwait(false);
 
                 // The WebSocket implementation should already check this
@@ -185,6 +185,37 @@ namespace JobBank.Work
                 throw;
             }
         }
+
+        /// <summary>
+        /// Register the new worker host and begin accepting work
+        /// by connecting to a JobBank server over WebSockets.
+        /// </summary>
+        /// <param name="settings">
+        /// Settings that the new worker is registered with in the
+        /// job server.
+        /// </param>
+        /// <param name="server">
+        /// WebSocket URL to the JobBank server.
+        /// </param>
+        /// <param name="webSocketOptionsSetter">
+        /// If null, this action is invoked to customize the WebSocket
+        /// connection that is about to be made.  New 
+        /// WebSocket sub-protocols should not be added by this action.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be triggered to stop connecting and cancel the operation.
+        /// </param>
+        public static Task<WorkerHost> ConnectAndStartAsync
+            (IJobSubmission impl,
+             RegisterWorkerRequestMessage settings,
+             string server,
+             Action<ClientWebSocketOptions>? webSocketOptionsSetter,
+             CancellationToken cancellationToken)
+            => ConnectAndStartAsync(impl,
+                                    settings,
+                                    new Uri(server),
+                                    webSocketOptionsSetter,
+                                    cancellationToken);
 
         /// <inheritdoc cref="RpcConnection.Dispose" />
         public void Dispose() => _rpc.Dispose();

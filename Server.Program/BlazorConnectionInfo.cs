@@ -11,12 +11,23 @@ namespace JobBank.Server.Program
         public string? UserAgent { get; set; }
         public string? IpAddress { get; set; }
 
+        public string ServerHost { get; set; } = null!;
+
+        public int? ServerPort { get; set; }
+
+        public bool IsSecure { get; set; }
+
         public BlazorConnectionInfo()
         {
         }
 
         public BlazorConnectionInfo(HttpContext httpContext)
         {
+            var host = httpContext.Request.Host;
+            ServerHost = host.Host;
+            ServerPort = host.Port;
+            IsSecure = httpContext.Request.IsHttps;
+
             UserAgent = httpContext.Request.Headers["User-Agent"];
             IpAddress = httpContext.Connection.RemoteIpAddress?.ToString();
         }

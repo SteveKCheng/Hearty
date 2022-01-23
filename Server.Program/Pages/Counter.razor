@@ -12,6 +12,8 @@
 
 <p>Current count: @currentCount</p>
 
+<p>Server host: @ConnectionInfo.ServerHost</p>
+<p>Server port: @ConnectionInfo.ServerPort</p>
 <p>User agent: @ConnectionInfo.UserAgent</p>
 <p>IP address: @ConnectionInfo.IpAddress</p>
 
@@ -39,5 +41,7 @@
         => _webSocketTest.ExerciseClientSocketAsync();
 
     private Task MakeFakeRemoteWorkersAsync()
-        => _webSocketTest.CreateFakeRemoteWorkerHostsAsync();
+        => _webSocketTest.CreateFakeRemoteWorkerHostsAsync(ConnectionInfo.ServerHost,
+                                                           ConnectionInfo.ServerPort,
+                                                           ConnectionInfo.IsSecure);
 }

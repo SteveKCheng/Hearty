@@ -55,8 +55,15 @@ namespace JobBank.Server.Program
             webSocket.Dispose();
         }
 
-        public async Task CreateFakeRemoteWorkerHostsAsync()
+        public async Task CreateFakeRemoteWorkerHostsAsync(string host, int? port, bool secure)
         {
+            var uri = new UriBuilder(scheme: secure ? "wss" : "ws",
+                                     host: host,
+                                     port: port ?? -1,
+                                     pathValue: "ws/worker").Uri;
+
+            _logger.LogInformation("Fake workers will connect by WebSockets on URL: {uri}", uri);
+
             for (int i = 0; i < 10; ++i)
             {
                 var settings = new RegisterWorkerRequestMessage
@@ -67,14 +74,20 @@ namespace JobBank.Server.Program
 
                 _logger.LogInformation("Attempting to start fake worker #{worker}", i);
 
-                await WorkerHost.ConnectAndStartAsync(
-                    new JobSubmissionImpl(_logger, i),
-                    settings,
-                    "ws://localhost:5000/ws/worker",
-                    null,
-                    CancellationToken.None); ;
-
-                _logger.LogInformation("Successfully started fake worker #{worker}", i);
+                try
+                {
+                    await WorkerHost.ConnectAndStartAsync(
+                        new JobSubmissionImpl(_logger, i),
+                        settings,
+                        uri,
+                        null,
+                        CancellationToken.None);
+                    _logger.LogInformation("Successfully started fake worker #{worker}", i);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError(e, "Failed to start fake worker #{worker}", i);
+                }
             }
         }
 
