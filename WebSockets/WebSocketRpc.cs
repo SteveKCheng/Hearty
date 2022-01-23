@@ -728,5 +728,8 @@ namespace JobBank.WebSockets
             Quit();
             return new ValueTask(WaitForCloseAsync(throwException: false));
         }
+
+        /// <inheritdoc cref="RpcConnection.Abort" />
+        public override void Abort() => _webSocket.Abort();
     }
 }

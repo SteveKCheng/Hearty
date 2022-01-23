@@ -87,6 +87,12 @@ namespace JobBank.WebSockets
             OnClose?.Invoke(this, new RpcConnectionCloseEventArgs(exception));
         }
 
+        /// <summary>
+        /// Abruptly and ungracefully terminate the connection 
+        /// unless it is already terminated.
+        /// </summary>
+        public abstract void Abort();
+
         internal ValueTask<bool> SendReplyAsync<TReply>(ushort typeCode, uint id, TReply reply)
             => SendMessageAsync(new ReplyMessage<TReply>(typeCode, id, Registry, reply));
 
