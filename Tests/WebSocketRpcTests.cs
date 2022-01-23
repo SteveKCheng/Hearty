@@ -11,6 +11,7 @@ using MessagePack;
 using System.Threading;
 using Xunit;
 using JobBank.Utilities;
+using System.IO;
 
 namespace JobBank.Tests
 {
@@ -55,7 +56,8 @@ namespace JobBank.Tests
             return (clientStream, serverStream);
         }
 
-        private (WebSocketRpc Client, WebSocketRpc Server) CreateConnections()
+        private (WebSocketRpc Client, WebSocketRpc Server) 
+            CreateRpcConnections(Stream clientStream, Stream serverStream)
         {
             /*
             var (clientStream, serverStream) = CreateNamedPipeStreamPair();
@@ -63,8 +65,6 @@ namespace JobBank.Tests
             Assert.True(serverStream.IsConnected);
             Assert.True(clientStream.IsConnected);
             */
-
-            var (clientStream, serverStream) = DuplexStream.CreatePair();
 
             var keepAliveInterval = TimeSpan.FromSeconds(60);
 
@@ -215,7 +215,8 @@ namespace JobBank.Tests
         [Fact]
         public async Task InvokeCalls()
         {
-            var (clientRpc, serverRpc) = CreateConnections();
+            var (clientStream, serverStream) = DuplexStream.CreatePair();
+            var (clientRpc, serverRpc) = CreateRpcConnections(clientStream, serverStream);
 
             // Run requests for Func1 in serial individually
             // on server and client, but server and client submit
@@ -276,6 +277,32 @@ namespace JobBank.Tests
             Assert.True(serverRpc.IsClosingStarted);
             await serverRpc.WaitForCloseAsync();
             Assert.True(serverRpc.HasClosed);
+        }
+
+        [Fact]
+        public async Task AbruptClose()
+        {
+            var (clientStream, serverStream) = DuplexStream.CreatePair();
+            var (clientRpc, serverRpc) = CreateRpcConnections(clientStream, serverStream);
+
+            var exceptionQuestion = "Testing abrupt closes of RPC connections";
+            var invokeTask = InvokeFunc3Async(clientRpc,
+                                              new Func1Request { Question = exceptionQuestion },
+                                              CancellationToken.None);
+
+            serverStream.Close();
+            // FIXME Should throw WebSocketRpcException but currently does not
+            await Assert.ThrowsAnyAsync<Exception>(async () => await invokeTask);
+
+            Assert.True(serverRpc.IsClosingStarted);
+            await Assert.ThrowsAsync<WebSocketRpcException>(
+                async () => await serverRpc.WaitForCloseAsync());
+            Assert.True(serverRpc.HasClosed);
+
+            Assert.True(clientRpc.IsClosingStarted);
+            await Assert.ThrowsAnyAsync<Exception>(
+                async () => await clientRpc.WaitForCloseAsync());
+            Assert.True(clientRpc.HasClosed);
         }
     }
 }
