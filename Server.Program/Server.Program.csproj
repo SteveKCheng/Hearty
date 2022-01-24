@@ -5,6 +5,8 @@
     <RootNamespace>JobBank.Server.Program</RootNamespace>
     <AssemblyName>JobBank.Server.Program</AssemblyName>
     <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RollForward>Major</RollForward>
   </PropertyGroup>
 
   <ItemGroup>

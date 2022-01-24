@@ -8,6 +8,9 @@
     <AssemblyName>JobBank.Utilities</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
+    <Authors>Steve Cheng</Authors>
+    <Company>​​</Company>
+    <Description>Library of utilities used by all components in JobBank</Description>
   </PropertyGroup>
 
   <ItemGroup>

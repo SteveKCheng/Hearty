@@ -7,6 +7,9 @@
     <AssemblyName>JobBank.WebSockets</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
+    <Authors>Steve Cheng</Authors>
+    <Company>​​</Company>
+    <Description>Library for lightweight remote procedure calls based on WebSockets and MessagePack</Description>
   </PropertyGroup>
 
   <ItemGroup>

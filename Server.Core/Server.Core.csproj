@@ -8,6 +8,9 @@
     <DisableImplicitNamespaceImports>true</DisableImplicitNamespaceImports>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
+    <Authors>Steve Cheng</Authors>
+    <Company>​​</Company>
+    <Description>Library of core functionality implemented by a JobBank server</Description>
   </PropertyGroup>
   
   <ItemGroup>

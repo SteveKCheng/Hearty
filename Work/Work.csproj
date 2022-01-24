@@ -7,6 +7,9 @@
     <AssemblyName>JobBank.Work</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
+    <Authors>Steve Cheng</Authors>
+    <Company>​​</Company>
+    <Description>Library for implementing worker hosts in JobBank, and interfaces common to the job server and worker hosts</Description>
   </PropertyGroup>
     
   <ItemGroup>

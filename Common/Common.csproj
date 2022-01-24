@@ -7,6 +7,9 @@
     <AssemblyName>JobBank.Common</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
+    <Authors>Steve Cheng</Authors>
+    <Company>​​</Company>
+    <Description>Library of code common to clients and servers in JobBank</Description>
   </PropertyGroup>
 
   <ItemGroup>

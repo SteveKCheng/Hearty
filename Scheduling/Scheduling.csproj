@@ -7,6 +7,9 @@
     <AssemblyName>JobBank.Scheduling</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
+    <Authors>Steve Cheng</Authors>
+    <Company>​​</Company>
+    <Description>Library for prioritized fair scheduling of jobs</Description>
   </PropertyGroup>
 
   <ItemGroup>
