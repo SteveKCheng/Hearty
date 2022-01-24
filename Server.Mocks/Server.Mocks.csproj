@@ -13,6 +13,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="MathFunctions.cs" />
+    <Compile Include="MockPricingInput.cs" />
+    <Compile Include="MockPricingOutput.cs" />
+    <Compile Include="MockPricingWorker.cs" />
     <Compile Include="WebSocketTest.cs" />
   </ItemGroup>
 
