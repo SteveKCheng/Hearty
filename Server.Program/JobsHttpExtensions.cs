@@ -1,5 +1,5 @@
-﻿using Microsoft.AspNetCore.Builder;
 ﻿using JobBank.Common;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Primitives;
@@ -187,7 +187,7 @@ namespace JobBank.Server
                 timeoutString = StringValues.Empty;
             var timeout = TimeSpan.Zero;
             if (timeoutString.Count == 1 && !string.IsNullOrEmpty(timeoutString[0]))
-                ExpiryTimeSpan.TryParse(timeoutString[0], out timeout);
+                RestApiUtilities.TryParseTimespan(timeoutString[0], out timeout);
             return timeout;
         }
 
