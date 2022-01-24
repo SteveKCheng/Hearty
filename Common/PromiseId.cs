@@ -22,6 +22,9 @@ namespace JobBank
     /// </remarks>
     public readonly struct PromiseId : IComparable<PromiseId>
                                      , IEquatable<PromiseId>
+#if NET6_0_OR_GREATER
+                                     , ISpanFormattable
+#endif
     {
         /// <summary>
         /// The 64-bit integer representing the promise ID.
@@ -146,5 +149,13 @@ namespace JobBank
 
         public static bool operator >=(PromiseId left, PromiseId right)
             => left.CompareTo(right) >= 0;
+
+#if NET6_0_OR_GREATER
+        public bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format, IFormatProvider? provider)
+            => destination.TryWrite(provider, $"{ServiceId:X8}/{SequenceNumber}", out charsWritten);
+
+        public string ToString(string? format, IFormatProvider? formatProvider)
+            => ToString();
+#endif
     }
 }

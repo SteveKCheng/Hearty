@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Builder;
+﻿using JobBank.Common;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Primitives;
@@ -109,7 +110,7 @@ namespace JobBank.Server
             httpResponse.StatusCode = StatusCodes.Status303SeeOther;
             httpResponse.Headers.Add("x-promise-id", promiseId.ToString());
 
-            httpResponse.Headers.Add("location", $"/jobs/v1/id/{promiseId.ServiceId:X8}/{promiseId.SequenceNumber}");
+            httpResponse.Headers.Add("location", $"/jobs/v1/id/{promiseId}");
         }
 
         /// <summary>
