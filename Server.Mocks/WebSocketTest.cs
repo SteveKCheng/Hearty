@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Server.Program
+namespace JobBank.Server.Mocks
 {
     public class WebSocketTest
     {
