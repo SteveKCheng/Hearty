@@ -103,7 +103,7 @@ namespace JobBank.Server.Program
 
             app.Use(async (context, next) =>
             {
-                if (context.Request.Path != "/ws" && context.Request.Path != "/ws/worker")
+                if (context.Request.Path != "/ws/worker")
                 {
                     await next();
                 }
@@ -115,32 +115,22 @@ namespace JobBank.Server.Program
                 {
                     var logger = app.ApplicationServices.GetRequiredService<ILogger<Startup>>();
                     var jobScheduling = app.ApplicationServices.GetRequiredService<JobSchedulingSystem>();
-                    var requestRegistry = app.ApplicationServices.GetRequiredService<WebSocketTest>()._registry;
 
                     logger.LogInformation("Incoming WebSocket connection");
-
-                    bool isWorkerService = (context.Request.Path == "/ws/worker");
 
                     using var webSocket = await context.WebSockets.AcceptWebSocketAsync(
                         new WebSocketAcceptContext
                         {
                             DangerousEnableCompression = true,
                             DisableServerContextTakeover = true,
-                            SubProtocol = isWorkerService ? WorkerHost.WebSocketsSubProtocol : null
+                            SubProtocol = WorkerHost.WebSocketsSubProtocol
                         });
 
-                    if (isWorkerService)
-                    {
-                        var (worker, closeTask) = 
-                            await RemoteWorkerService.AcceptHostAsync(jobScheduling.WorkerDistribution,
-                                                                      webSocket,
-                                                                      CancellationToken.None);
-                        await closeTask;
-                    }
-                    else
-                    {
-                        await ProcessWebSocketRequestAsync(context, webSocket, requestRegistry);
-                    }
+                    var (worker, closeTask) = 
+                        await RemoteWorkerService.AcceptHostAsync(jobScheduling.WorkerDistribution,
+                                                                  webSocket,
+                                                                  CancellationToken.None);
+                    await closeTask;
                 }
             });
            
