@@ -97,9 +97,7 @@ namespace JobBank.Server.Mocks
         /// <returns>
         /// JSON encoded in UTF-8 bytes.
         /// </returns>
-        public Memory<byte> SerializeToJsonUtf8Bytes()
-        {
-            return new Memory<byte>(JsonSerializer.SerializeToUtf8Bytes(this));
-        }
+        public byte[] SerializeToJsonUtf8Bytes()
+            => JsonSerializer.SerializeToUtf8Bytes(this);
     }
 }

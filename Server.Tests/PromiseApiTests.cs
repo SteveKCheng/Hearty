@@ -1,5 +1,3 @@
-using JobBank.Server.Program;
-using JobBank.Client;
 using System.Net.Http;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -7,6 +5,9 @@ using System;
 using Xunit;
 using System.Text;
 using System.Threading.Tasks;
+using JobBank.Server.Program;
+using JobBank.Server.Mocks;
+using JobBank.Client;
 
 namespace JobBank.Server.Tests
 {
@@ -28,11 +29,14 @@ namespace JobBank.Server.Tests
         public async Task RunJob()
         {
             using var client = new JobBankClient(_webServer.CreateClient());
-            var input = @"{ ""test"": ""test"" }";
-            var content = new ByteArrayContent(_utf8.GetBytes(input));
-            content.Headers.ContentType = new("application/json");
-            var promiseId = await client.PostJobAsync("pricing", content);
-            Assert.NotEqual((ulong)0, promiseId.RawInteger);
+            var inputs = MockPricingInput.GenerateRandomSamples(DateTime.Today, 41, 5);
+            foreach (var input in inputs)
+            {
+                var content = new ByteArrayContent(input.SerializeToJsonUtf8Bytes());
+                content.Headers.ContentType = new("application/json");
+                var promiseId = await client.PostJobAsync("pricing", content);
+                Assert.NotEqual((ulong)0, promiseId.RawInteger);
+            }
         }
 
         public void Dispose()
