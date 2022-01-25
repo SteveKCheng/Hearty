@@ -64,7 +64,6 @@ namespace JobBank.Server.Program
             });
 
             services.AddSingleton<PathsDirectory, InMemoryPathsDirectory>();
-            services.AddSingleton<JobsServerConfiguration>();
             services.AddSingleton<JobSchedulingSystem>();
             services.AddSingleton<TimeoutProvider, SimpleTimeoutProvider>();
             services.AddSingleton<WorkerDistribution<PromiseJob, PromiseData>>(p =>
@@ -119,10 +118,9 @@ namespace JobBank.Server.Program
                 endpoints.MapBlazorHub();
                 endpoints.MapFallbackToPage("/_Host");
                 
-                var jobsServerConfig = app.ApplicationServices.GetRequiredService<JobsServerConfiguration>();
                 var jobScheduling = app.ApplicationServices.GetRequiredService<JobSchedulingSystem>();
 
-                endpoints.MapPostJob(jobsServerConfig, "pricing", async (JobInput input, PromiseStorage promiseStorage) =>
+                endpoints.MapPostJob("pricing", async (JobInput input, PromiseStorage promiseStorage) =>
                 {
                     using var stream = input.PipeReader.AsStream();
                     var requestData = await ReadStreamIntoMemorySafelyAsync(stream,
@@ -141,8 +139,8 @@ namespace JobBank.Server.Program
                     return promise.Id;
                 });
 
-                endpoints.MapGetPromiseById(jobsServerConfig);
-                endpoints.MapGetPromiseByPath(jobsServerConfig);
+                endpoints.MapGetPromiseById();
+                endpoints.MapGetPromiseByPath();
             });
 
         }

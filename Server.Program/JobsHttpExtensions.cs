@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Primitives;
 using System;
 using System.Text;
@@ -24,7 +25,6 @@ namespace JobBank.Server
         /// Accept jobs of a certain type to be posted at a specific HTTP endpoint. 
         /// </summary>
         /// <param name="endpoints">Builds all the HTTP endpoints used by the application. </param>
-        /// <param name="config">Configuration and dependencies for processing this kind of request. </param>
         /// <param name="routeKey">Sub-path occurring after the URL prefix for Job Bank that 
         /// is specific to job executor being registered.
         /// </param>
@@ -36,14 +36,46 @@ namespace JobBank.Server
         /// </returns>
         public static IEndpointConventionBuilder 
             MapPostJob(this IEndpointRouteBuilder endpoints,
-                       JobsServerConfiguration config,
                        string routeKey,
                        JobExecutor executor)
         {
+            var services = endpoints.GetServices();
             routeKey = routeKey.Trim('/');
             return endpoints.MapPost(
                     "/jobs/v1/queue/" + routeKey,
-                    httpContext => PostJobAsync(config, httpContext, routeKey, executor));
+                    httpContext => PostJobAsync(services, httpContext, routeKey, executor));
+        }
+
+        /// <summary>
+        /// Groups the dependencies and settings needed to implement
+        /// Web APIs for promises.
+        /// </summary>
+        private readonly struct Services
+        {
+            /// <summary>
+            /// The implementation of <see cref="PromiseStorage" />.
+            /// </summary>
+            public PromiseStorage PromiseStorage { get; init; }
+
+            /// <summary>
+            /// The implementation of <see cref="PathsDirectory" />.
+            /// </summary>
+            public PathsDirectory PathsDirectory { get; init; }
+        }
+
+        /// <summary>
+        /// Retrieve the <see cref="PromiseStorage" /> instance
+        /// that has been dependency-injected in the ASP.NET Core application.
+        /// </summary>
+        private static Services
+            GetServices(this IEndpointRouteBuilder endpoints)
+        {
+            var p = endpoints.ServiceProvider;
+            return new Services
+            {
+                PromiseStorage = p.GetRequiredService<PromiseStorage>(),
+                PathsDirectory = p.GetRequiredService<PathsDirectory>()
+            };
         }
 
         /// <summary>
@@ -80,7 +112,7 @@ namespace JobBank.Server
         /// <summary>
         /// Invokes a job executor to process a job posted by an HTTP client.
         /// </summary>
-        private static async Task PostJobAsync(JobsServerConfiguration config, 
+        private static async Task PostJobAsync(Services services, 
                                                HttpContext httpContext,
                                                string routeKey,
                                                JobExecutor executor)
@@ -97,7 +129,7 @@ namespace JobBank.Server
                                             httpRequest.BodyReader,
                                             cancellationToken);
 
-                promiseId = await executor.Invoke(jobInput, config.PromiseStorage)
+                promiseId = await executor.Invoke(jobInput, services.PromiseStorage)
                                           .ConfigureAwait(false);
             }
             catch (Exception e)
@@ -117,20 +149,20 @@ namespace JobBank.Server
         /// Maps the HTTP route that reads out to the client a cached promise given its ID.
         /// </summary>
         /// <param name="endpoints">Builds all the HTTP endpoints used by the application. </param>
-        /// <param name="config">Configuration and dependencies for processing this kind of request. </param>
         /// <returns>Builder specific to the new job executor's endpoint that may be
         /// used to customize its handling by the ASP.NET Core framework.
         /// </returns>
         public static IEndpointConventionBuilder
-            MapGetPromiseById(this IEndpointRouteBuilder endpoints,
-                              JobsServerConfiguration config)
+            MapGetPromiseById(this IEndpointRouteBuilder endpoints)
         {
+            var services = endpoints.GetServices();
+
             // FIXME This should be managed by a cache
             IPromiseClientInfo clientInfo = new BasicPromiseClientInfo();
 
             return endpoints.MapGet(
                     pattern: "/jobs/v1/id/{serviceId}/{sequenceNumber}",
-                    requestDelegate: httpContext => GetPromiseByIdAsync(config, 
+                    requestDelegate: httpContext => GetPromiseByIdAsync(services, 
                                                                         httpContext, 
                                                                         clientInfo));
         }
@@ -140,27 +172,27 @@ namespace JobBank.Server
         /// if its (named) paths.
         /// </summary>
         /// <param name="endpoints">Builds all the HTTP endpoints used by the application. </param>
-        /// <param name="config">Configuration and dependencies for processing this kind of request. </param>
         /// <returns>Builder specific to the new job executor's endpoint that may be
         /// used to customize its handling by the ASP.NET Core framework.
         /// </returns>
         public static IEndpointConventionBuilder
-            MapGetPromiseByPath(this IEndpointRouteBuilder endpoints,
-                                JobsServerConfiguration config)
+            MapGetPromiseByPath(this IEndpointRouteBuilder endpoints)
         {
+            var services = endpoints.GetServices();
+
             // FIXME This should be managed by a cache
             IPromiseClientInfo clientInfo = new BasicPromiseClientInfo();
 
             return endpoints.MapGet(
                     pattern: "/jobs/v1/index/{**path}",
-                    requestDelegate: httpContext => GetPromiseByPathAsync(config,
+                    requestDelegate: httpContext => GetPromiseByPathAsync(services,
                                                                           httpContext,
                                                                           clientInfo));
         }
 
-        private static Task GetPromiseByIdAsync(JobsServerConfiguration config, 
-                                                      HttpContext httpContext,
-                                                      IPromiseClientInfo client)
+        private static Task GetPromiseByIdAsync(Services services, 
+                                                HttpContext httpContext,
+                                                IPromiseClientInfo client)
         {
             var httpRequest = httpContext.Request;
             var httpResponse = httpContext.Response;
@@ -176,7 +208,7 @@ namespace JobBank.Server
 
             var timeout = ParseTimeout(httpRequest.Query);
 
-            return RespondPromiseByIdAsync(config, httpResponse, 
+            return RespondPromiseByIdAsync(services, httpResponse, 
                                            promiseId, timeout, 
                                            client, cancellationToken);
         }
@@ -191,7 +223,7 @@ namespace JobBank.Server
             return timeout;
         }
 
-        private static Task GetPromiseByPathAsync(JobsServerConfiguration config,
+        private static Task GetPromiseByPathAsync(Services services,
                                                   HttpContext httpContext,
                                                   IPromiseClientInfo client)
         {
@@ -203,25 +235,25 @@ namespace JobBank.Server
             var timeout = ParseTimeout(httpRequest.Query);
 
             var path = PromisePath.Parse(pathString);
-            if (!config.PathsDirectory.TryGetPath(path, out var promiseId))
+            if (!services.PathsDirectory.TryGetPath(path, out var promiseId))
             {
                 httpResponse.StatusCode = StatusCodes.Status404NotFound;
                 return Task.CompletedTask;
             }
 
-            return RespondPromiseByIdAsync(config, httpResponse,
+            return RespondPromiseByIdAsync(services, httpResponse,
                                            promiseId, timeout,
                                            client, cancellationToken);
         }
 
-        private static async Task RespondPromiseByIdAsync(JobsServerConfiguration config,
+        private static async Task RespondPromiseByIdAsync(Services services,
                                                           HttpResponse httpResponse,
                                                           PromiseId promiseId,
                                                           TimeSpan timeout,
                                                           IPromiseClientInfo client,
                                                           CancellationToken cancellationToken)
         {
-            var promise = config.PromiseStorage.GetPromiseById(promiseId);
+            var promise = services.PromiseStorage.GetPromiseById(promiseId);
             if (promise == null)
             {
                 httpResponse.StatusCode = StatusCodes.Status404NotFound;
