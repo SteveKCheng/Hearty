@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.Encodings.Web;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace JobBank.Server.Mocks
 {
@@ -137,23 +138,78 @@ namespace JobBank.Server.Mocks
             };
         }
 
+        /// <summary>
+        /// Accepts and answers a request for mock pricing, after an artificial delay.
+        /// </summary>
+        /// <param name="request">
+        /// Job request whose payload is the UTF-8 JSON representation 
+        /// of <see cref="MockPricingInput" />.  The member
+        /// <see cref="RunJobRequestMessage.InitialWait" /> specifies
+        /// the artificial delay.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be used to cancel the pricing.
+        /// </param>
+        /// <returns>
+        /// The reply to the pricing request, with the result being
+        /// <see cref="MockPricingOutput" /> represented as UTF-8 JSON.
+        /// </returns>
         public async ValueTask<RunJobReplyMessage> 
             RunJobAsync(RunJobRequestMessage request, 
                         CancellationToken cancellationToken)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var pricingInput = DeserializePricingInput(request);
+            _logger.LogInformation("Starting job for execution ID {executionId} on mock pricing worker {workerName}",
+                                   request.ExecutionId, _name);
 
-            // Simulate working for some period of time
-            if (request.InitialWait < 0 || request.InitialWait > 60 * 1000)
-                throw new ArgumentOutOfRangeException(
-                    "InitialWait parameter of the job request is out of range. ", 
-                    (Exception?)null);
-            await Task.Delay(request.InitialWait, cancellationToken)
-                      .ConfigureAwait(false);
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var pricingInput = DeserializePricingInput(request);
 
-            var pricingOutput = BlackScholesEuropeanOption(pricingInput);
-            return SerializePricingOutput(pricingOutput);
+                // Simulate working for some period of time
+                if (request.InitialWait < 0 || request.InitialWait > 60 * 1000)
+                    throw new ArgumentOutOfRangeException(
+                        "InitialWait parameter of the job request is out of range. ",
+                        (Exception?)null);
+                await Task.Delay(request.InitialWait, cancellationToken)
+                          .ConfigureAwait(false);
+
+                var pricingOutput = BlackScholesEuropeanOption(pricingInput);
+                var reply = SerializePricingOutput(pricingOutput);
+
+                _logger.LogInformation("Ending job for execution ID {executionId}, on mock pricing worker {workerName}. " +
+                                       "Instrument {instrument} priced at {value:F4}. ",
+                                       request.ExecutionId, _name, pricingInput.InstrumentName ?? "-", pricingOutput.Value);
+
+                return reply;
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("Job for execution ID {executionId} on mock pricing worker {workerName} has been cancelled. ",
+                                       request.ExecutionId, _name);
+                throw;
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Job for execution ID {executionId} on mock pricing worker {workerName} failed. ",
+                                 request.ExecutionId, _name);
+                throw;
+            }
+        }
+
+        private readonly ILogger _logger;
+        private readonly string _name;
+
+        /// <summary>
+        /// Constructs the implementation of a worker that does mock pricing.
+        /// </summary>
+        /// <param name="logger">Logs the jobs accepted by the new worker. </param>
+        /// <param name="name">The name of the new worker to be displayed in logs. </param>
+        public MockPricingWorker(ILogger<MockPricingWorker> logger,
+                                 string name)
+        {
+            _logger = logger;
+            _name = name;
         }
     }
 }

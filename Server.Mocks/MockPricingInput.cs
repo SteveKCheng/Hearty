@@ -65,7 +65,7 @@ namespace JobBank.Server.Mocks
                                       - 0.5 * (sigma * sigma) * 0.25);
             S = Math.Round(S, 2);
 
-            string instrumentName = $"Call-{S}-{sigma * 100.0}-{maturityMonths}m";
+            string instrumentName = $"Call-{S:F2}-{sigma * 100.0:F2}-{maturityMonths}m";
 
             return new MockPricingInput
             {
