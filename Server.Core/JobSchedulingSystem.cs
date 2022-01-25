@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using JobBank.Scheduling;
@@ -46,43 +45,6 @@ namespace JobBank.Server
                                     SharedFuture<PromiseJob, PromiseData>>
             _futures = new();
 
-        private class DummyWorker : IJobWorker<PromiseJob, PromiseData>
-        {
-            public string Name => "DummyWorker";
-
-            public async ValueTask<PromiseData> ExecuteJobAsync(uint executionId, 
-                                                                IRunningJob<PromiseJob> runningJob,
-                                                                CancellationToken cancellationToken)
-            {
-                _logger.LogInformation("Starting job for execution ID {executionId}", executionId);
-
-                // Mock work
-                await Task.Delay(runningJob.InitialWait, cancellationToken).ConfigureAwait(false);
-                var output = new Payload("application/json", 
-                                         Encoding.ASCII.GetBytes(@"{ ""status"": ""finished job"" }"));
-
-                _logger.LogInformation("Completing job for execution ID {executionId}", executionId);
-
-                return output;
-            }
-
-            public void AbandonJob(uint executionId)
-            {
-            }
-
-            public bool IsAlive => true;
-
-
-            public DummyWorker(ILogger logger)
-            {
-                _logger = logger;
-            }
-
-            private readonly ILogger _logger;
-
-            public event EventHandler<WorkerEventArgs>? OnEvent;
-        }
-
         private readonly ILogger _logger;
 
         /// <summary>
@@ -97,7 +59,9 @@ namespace JobBank.Server
         /// a constant for the application.  The actual weights for
         /// each priority class are dynamically adjustable.
         /// </param>        
-        public JobSchedulingSystem(ILogger<JobSchedulingSystem> logger, int countPriorities = 10)
+        public JobSchedulingSystem(ILogger<JobSchedulingSystem> logger, 
+                                   WorkerDistribution<PromiseJob, PromiseData> workerDistribution,
+                                   int countPriorities = 10)
         {
             _logger = logger;
 
@@ -109,12 +73,11 @@ namespace JobBank.Server
             for (int i = 0; i < countPriorities; ++i)
                 PriorityClasses.ResetWeight(priority: i, weight: (i + 1) * 10);
 
-            WorkerDistribution = new WorkerDistribution<PromiseJob, PromiseData>();
-            WorkerDistribution.TryCreateWorker(new DummyWorker(logger), 10, out _);
+            WorkerDistribution = workerDistribution;
 
             _jobRunnerTask = JobScheduling.RunJobsAsync(
                                 PriorityClasses.AsChannel(),
-                                WorkerDistribution.AsChannel(),
+                                workerDistribution.AsChannel(),
                                 CancellationToken.None);
         }
 
