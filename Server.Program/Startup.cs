@@ -13,14 +13,9 @@ using System.Buffers;
 using System.IO;
 using System.Threading;
 using Microsoft.Extensions.Logging;
-using Microsoft.AspNetCore.Http;
-using System.Net.WebSockets;
-using JobBank.WebSockets;
-using JobBank.Work;
 using JobBank.Server.Mocks;
 using JobBank.Server.WebApi;
 using JobBank.Scheduling;
-using System.Text;
 
 namespace JobBank.Server.Program
 {
@@ -83,14 +78,6 @@ namespace JobBank.Server.Program
 
         private static readonly IJobQueueOwner _dummyQueueOwner =
             new SimpleQueueOwner("testClient");
-
-        private async Task ProcessWebSocketRequestAsync(HttpContext context, 
-                                                        WebSocket webSocket,
-                                                        RpcRegistry requestRegistry)
-        {
-            var rpc = new WebSocketRpc(webSocket, requestRegistry);
-            await rpc.WaitForCloseAsync().ConfigureAwait(false);
-        }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
