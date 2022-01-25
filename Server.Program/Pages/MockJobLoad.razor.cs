@@ -1,4 +1,5 @@
-﻿using System;
+﻿using JobBank.Server.Mocks;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -20,8 +21,10 @@ namespace JobBank.Server.Program.Pages
 
         private void InjectJobs(int client, int priority, int load)
         {
-            PromiseData request =
-                new Payload("application/json", Encoding.ASCII.GetBytes(@"{ ""request"": ""..."" }"));
+            var requestJson = MockPricingInput.GenerateRandomSample(DateTime.Today, _random)
+                                              .SerializeToJsonUtf8Bytes();
+
+            PromiseData request = new Payload("application/json", requestJson);
 
             int howMany = load switch
             {
@@ -47,22 +50,22 @@ namespace JobBank.Server.Program.Pages
         }
 
         private readonly Func<double>[] _waitingTimeGenerators;
+        private readonly Random _random = new Random(34);
 
         public MockJobLoad()
         {
             _waitingTimeGenerators = new Func<double>[3];
-            _waitingTimeGenerators[0] = CreateExponentialWaitingTimeGenerator(34, 200.0, 8000.0);
-            _waitingTimeGenerators[1] = CreateExponentialWaitingTimeGenerator(34, 500.0, 8000.0);
-            _waitingTimeGenerators[2] = CreateExponentialWaitingTimeGenerator(34, 2000.0, 8000.0);
+            _waitingTimeGenerators[0] = CreateExponentialWaitingTimeGenerator(_random, 200.0, 8000.0);
+            _waitingTimeGenerators[1] = CreateExponentialWaitingTimeGenerator(_random, 500.0, 8000.0);
+            _waitingTimeGenerators[2] = CreateExponentialWaitingTimeGenerator(_random, 2000.0, 8000.0);
         }
 
         private static Func<double>
-            CreateExponentialWaitingTimeGenerator(int seed, double mean, double cap)
+            CreateExponentialWaitingTimeGenerator(Random random, double mean, double cap)
         {
-            var uniformGenerator = new Random(seed);
             return () =>
             {
-                var y = uniformGenerator.NextDouble();
+                var y = random.NextDouble();
                 var t = -Math.Log(1.0 - y) * mean;
                 t = Math.Min(t, cap);
                 return t;
