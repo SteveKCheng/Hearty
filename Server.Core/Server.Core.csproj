@@ -19,6 +19,7 @@
     <Compile Include="InMemoryPathsDirectory.cs" />
     <Compile Include="IPromiseClientInfo.cs" />
     <Compile Include="JobSchedulingSystem.cs" />
+    <Compile Include="LocalWorkerAdaptor.cs" />
     <Compile Include="PathsDirectory.cs" />
     <Compile Include="Payload.cs" />
     <Compile Include="Promise.cs" />

@@ -33,15 +33,15 @@ namespace JobBank.Server
         {
         }
 
-        async ValueTask<PromiseData>
-            IJobWorker<PromiseJob, PromiseData>.ExecuteJobAsync(
-                uint executionId,
-                IRunningJob<PromiseJob> runningJob,
-                CancellationToken cancellationToken)
+        internal static async ValueTask<PromiseData> 
+            ExecuteJobAsyncImpl(IJobSubmission impl,
+                                uint executionId,
+                                IRunningJob<PromiseJob> runningJob,
+                                CancellationToken cancellationToken)
         {
             var contentType = runningJob.Input.Data.SuggestedContentType;
 
-            var reply = await RunJobAsync(new RunJobRequestMessage
+            var reply = await impl.RunJobAsync(new RunJobRequestMessage
             {
                 Route = runningJob.Input.Route,
                 ContentType = contentType,
@@ -56,6 +56,13 @@ namespace JobBank.Server
             var output = new Payload(reply.ContentType, reply.Data);
             return output;
         }
+
+        ValueTask<PromiseData>
+            IJobWorker<PromiseJob, PromiseData>.ExecuteJobAsync(
+                uint executionId,
+                IRunningJob<PromiseJob> runningJob,
+                CancellationToken cancellationToken)
+            => ExecuteJobAsyncImpl(this, executionId, runningJob, cancellationToken);
 
         public RemoteWorkerProxy(string name, RpcConnection rpc)
         {
