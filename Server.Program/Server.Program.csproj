@@ -10,10 +10,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Server.Mocks\Server.Mocks.csproj" />
-    <ProjectReference Include="..\WebSockets\WebSockets.csproj" />
     <ProjectReference Include="..\Scheduling\Scheduling.csproj" />
+    <ProjectReference Include="..\WebSockets\WebSockets.csproj" />
     <ProjectReference Include="..\Server.Core\Server.Core.csproj" />
+    <ProjectReference Include="..\Server.Mocks\Server.Mocks.csproj" />
+    <ProjectReference Include="..\Server.WebApi\Server.WebApi.csproj" />
   </ItemGroup>
 
 </Project>

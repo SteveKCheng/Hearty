@@ -18,6 +18,7 @@ using System.Net.WebSockets;
 using JobBank.WebSockets;
 using JobBank.Work;
 using JobBank.Server.Mocks;
+using JobBank.Server.WebApi;
 using JobBank.Scheduling;
 using System.Text;
 
@@ -111,38 +112,7 @@ namespace JobBank.Server.Program
 
             app.UseWebSockets();
 
-            app.Use(async (context, next) =>
-            {
-                if (context.Request.Path != "/ws/worker")
-                {
-                    await next();
-                }
-                else if (!context.WebSockets.IsWebSocketRequest)
-                {
-                    context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                }
-                else
-                {
-                    var logger = app.ApplicationServices.GetRequiredService<ILogger<Startup>>();
-                    var jobScheduling = app.ApplicationServices.GetRequiredService<JobSchedulingSystem>();
-
-                    logger.LogInformation("Incoming WebSocket connection");
-
-                    using var webSocket = await context.WebSockets.AcceptWebSocketAsync(
-                        new WebSocketAcceptContext
-                        {
-                            DangerousEnableCompression = true,
-                            DisableServerContextTakeover = true,
-                            SubProtocol = WorkerHost.WebSocketsSubProtocol
-                        });
-
-                    var (worker, closeTask) = 
-                        await RemoteWorkerService.AcceptHostAsync(jobScheduling.WorkerDistribution,
-                                                                  webSocket,
-                                                                  CancellationToken.None);
-                    await closeTask;
-                }
-            });
+            app.UseRemoteWorkers();
            
             app.UseEndpoints(endpoints =>
             {
