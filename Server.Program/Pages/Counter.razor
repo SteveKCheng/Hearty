@@ -2,7 +2,9 @@
 
 @using JobBank.Server.Program.Data
 @using JobBank.Server.Mocks
-@inject WebSocketTest _webSocketTest
+@using Microsoft.Extensions.Logging
+@inject MockWorkerHosts _mockWorkerHosts
+@inject ILogger<MockPricingWorker> _workerLogger
 
 @code {
     [CascadingParameter]
@@ -35,7 +37,15 @@
     }
 
     private Task MakeFakeRemoteWorkersAsync()
-        => _webSocketTest.CreateFakeRemoteWorkerHostsAsync(ConnectionInfo.ServerHost,
-                                                           ConnectionInfo.ServerPort,
-                                                           ConnectionInfo.IsSecure);
+    {
+        return _mockWorkerHosts.CreateFakeWorkersAsync(
+            host: ConnectionInfo.ServerHost,
+            port: ConnectionInfo.ServerPort,
+            secure: ConnectionInfo.IsSecure,
+            count: 10,
+            concurrency: 10,
+            namePrefix: "remote-worker-",
+            factory: (name, concurrency) 
+                => new MockPricingWorker(_workerLogger, name));
+    }
 }

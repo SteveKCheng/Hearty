@@ -21,11 +21,6 @@ namespace JobBank.Server.Program.Pages
 
         private void InjectJobs(int client, int priority, int load)
         {
-            var requestJson = MockPricingInput.GenerateRandomSample(DateTime.Today, _random)
-                                              .SerializeToJsonUtf8Bytes();
-
-            PromiseData request = new Payload("application/json", requestJson);
-
             int howMany = load switch
             {
                 0 => 100,
@@ -38,6 +33,11 @@ namespace JobBank.Server.Program.Pages
             for (int i = 0; i < howMany; ++i)
             {
                 int waitingTime = (int)waitingTimeGenerator();
+
+                var requestJson = MockPricingInput.GenerateRandomSample(DateTime.Today, _random)
+                                                  .SerializeToJsonUtf8Bytes();
+
+                PromiseData request = new Payload("application/json", requestJson);
 
                 var promise = _promiseStorage.CreatePromise(request);
                 var jobFunction = new PromiseJob(request);

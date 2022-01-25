@@ -74,7 +74,7 @@ namespace JobBank.Server.Program
                 return d;
             });
 
-            services.AddSingleton<WebSocketTest>();
+            services.AddSingleton<MockWorkerHosts>();
         }
 
         private static readonly IJobQueueOwner _dummyQueueOwner =
