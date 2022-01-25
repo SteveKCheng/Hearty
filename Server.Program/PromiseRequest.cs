@@ -6,22 +6,23 @@ using System.Threading.Tasks;
 namespace JobBank.Server
 {
     /// <summary>
-    /// Called by the Job Bank system when a job is posted by a client.
+    /// Called by the Job Bank system when a client requests a promise.
     /// </summary>
-    /// <param name="input">
-    /// Inputs that describe the job.
+    /// <param name="request">
+    /// The data sent by the client in its promise request.
+    /// If the promise entails spawning a job then this may serve
+    /// as the input for the job as well, but not necessarily.
     /// </param>
     /// <param name="promiseStorage">
-    /// Can be used to create a promise for the job
-    /// or look up an existing promise.
+    /// Can be used to create a promise or look up an existing promise.
     /// </param>
     /// <returns>
     /// ID of the either an existing promise or a newly created promise
     /// that will provide the result (asynchronously).
     /// </returns>
     public delegate ValueTask<PromiseId> 
-        JobExecutor(JobInput input, 
-                    PromiseStorage promiseStorage);
+        PromiseProducer(PromiseRequest request, 
+                        PromiseStorage promiseStorage);
 
     /// <summary>
     /// Progress updates on a background job for a promise.
@@ -57,9 +58,9 @@ namespace JobBank.Server
     }
 
     /// <summary>
-    /// The inputs to the job provided by the client.
+    /// The data provided by a client when it requests a promise. 
     /// </summary>
-    public readonly struct JobInput
+    public readonly struct PromiseRequest
     {
         /// <summary>
         /// The IANA media type that the payload, as a byte stream,
@@ -99,7 +100,7 @@ namespace JobBank.Server
         /// </summary>
         public CancellationToken CancellationToken { get; }
 
-        internal JobInput(string? contentType, 
+        internal PromiseRequest(string? contentType, 
                           long? contentLength, 
                           PipeReader pipeReader, 
                           CancellationToken cancellationToken)

@@ -37,7 +37,7 @@ namespace JobBank.Server
         public static IEndpointConventionBuilder 
             MapPostJob(this IEndpointRouteBuilder endpoints,
                        string routeKey,
-                       JobExecutor executor)
+                       PromiseProducer executor)
         {
             var services = endpoints.GetServices();
             routeKey = routeKey.Trim('/');
@@ -115,7 +115,7 @@ namespace JobBank.Server
         private static async Task PostJobAsync(Services services, 
                                                HttpContext httpContext,
                                                string routeKey,
-                                               JobExecutor executor)
+                                               PromiseProducer executor)
         {
             var httpRequest = httpContext.Request;
             var httpResponse = httpContext.Response;
@@ -124,7 +124,7 @@ namespace JobBank.Server
 
             try
             {
-                var jobInput = new JobInput(httpRequest.ContentType,
+                var jobInput = new PromiseRequest(httpRequest.ContentType,
                                             httpRequest.ContentLength,
                                             httpRequest.BodyReader,
                                             cancellationToken);
