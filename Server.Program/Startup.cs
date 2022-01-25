@@ -68,9 +68,13 @@ namespace JobBank.Server.Program
             services.AddSingleton<TimeoutProvider, SimpleTimeoutProvider>();
             services.AddSingleton<WorkerDistribution<PromiseJob, PromiseData>>(p =>
             {
-                var w = new DummyWorker(p.GetRequiredService<ILogger<DummyWorker>>());
                 var d = new WorkerDistribution<PromiseJob, PromiseData>();
-                d.TryCreateWorker(w, 10, out _);
+
+                var w = new MockPricingWorker(
+                            logger: p.GetRequiredService<ILogger<MockPricingWorker>>(),
+                            name: "local-worker");
+                
+                d.TryCreateWorker(new LocalWorkerAdaptor(w, w.Name) , 10, out _);
                 return d;
             });
 
@@ -198,43 +202,5 @@ namespace JobBank.Server.Program
 
             return bufferWriter.GetSequence();
         }
-
-    }
-
-    internal class DummyWorker : IJobWorker<PromiseJob, PromiseData>
-    {
-        public string Name => "DummyWorker";
-
-        public async ValueTask<PromiseData> ExecuteJobAsync(uint executionId,
-                                                            IRunningJob<PromiseJob> runningJob,
-                                                            CancellationToken cancellationToken)
-        {
-            _logger.LogInformation("Starting job for execution ID {executionId}", executionId);
-
-            // Mock work
-            await Task.Delay(runningJob.InitialWait, cancellationToken).ConfigureAwait(false);
-            var output = new Payload("application/json",
-                                     Encoding.ASCII.GetBytes(@"{ ""status"": ""finished job"" }"));
-
-            _logger.LogInformation("Completing job for execution ID {executionId}", executionId);
-
-            return output;
-        }
-
-        public void AbandonJob(uint executionId)
-        {
-        }
-
-        public bool IsAlive => true;
-
-
-        public DummyWorker(ILogger<DummyWorker> logger)
-        {
-            _logger = logger;
-        }
-
-        private readonly ILogger _logger;
-
-        public event EventHandler<WorkerEventArgs>? OnEvent;
     }
 }

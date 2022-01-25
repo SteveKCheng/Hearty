@@ -159,7 +159,7 @@ namespace JobBank.Server.Mocks
                         CancellationToken cancellationToken)
         {
             _logger.LogInformation("Starting job for execution ID {executionId} on mock pricing worker {workerName}",
-                                   request.ExecutionId, _name);
+                                   request.ExecutionId, Name);
 
             try
             {
@@ -179,26 +179,30 @@ namespace JobBank.Server.Mocks
 
                 _logger.LogInformation("Ending job for execution ID {executionId}, on mock pricing worker {workerName}. " +
                                        "Instrument {instrument} priced at {value:F4}. ",
-                                       request.ExecutionId, _name, pricingInput.InstrumentName ?? "-", pricingOutput.Value);
+                                       request.ExecutionId, Name, pricingInput.InstrumentName ?? "-", pricingOutput.Value);
 
                 return reply;
             }
             catch (OperationCanceledException)
             {
                 _logger.LogInformation("Job for execution ID {executionId} on mock pricing worker {workerName} has been cancelled. ",
-                                       request.ExecutionId, _name);
+                                       request.ExecutionId, Name);
                 throw;
             }
             catch (Exception e)
             {
                 _logger.LogError(e, "Job for execution ID {executionId} on mock pricing worker {workerName} failed. ",
-                                 request.ExecutionId, _name);
+                                 request.ExecutionId, Name);
                 throw;
             }
         }
 
         private readonly ILogger _logger;
-        private readonly string _name;
+        
+        /// <summary>
+        /// The name of the new worker to be displayed in logs.
+        /// </summary>
+        public string Name { get; }
 
         /// <summary>
         /// Constructs the implementation of a worker that does mock pricing.
@@ -209,7 +213,7 @@ namespace JobBank.Server.Mocks
                                  string name)
         {
             _logger = logger;
-            _name = name;
+            Name = name;
         }
     }
 }
