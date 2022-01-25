@@ -5,7 +5,9 @@ using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Server
+#pragma warning disable CS1591
+
+namespace JobBank.Server.WebApi
 {
     /// <summary>
     /// A basic implementation of <see cref="IPromiseClientInfo" />.

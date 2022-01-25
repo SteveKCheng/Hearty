@@ -3,7 +3,7 @@ using System.IO.Pipelines;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Server
+namespace JobBank.Server.WebApi
 {
     /// <summary>
     /// Called by the Job Bank system when a client requests a promise.

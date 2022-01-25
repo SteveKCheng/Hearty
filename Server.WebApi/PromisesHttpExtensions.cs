@@ -9,17 +9,17 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Server
+namespace JobBank.Server.WebApi
 {
     /// <summary>
-    /// Exposes jobs and promises from a Job Bank server to HTTP clients. 
+    /// Exposes promises from a Job Bank server to HTTP clients. 
     /// </summary>
     /// <remarks>
     /// As the HTTP endpoints need to expose arbitrary payloads efficiently,
     /// the MVC (Model-View-Controller) framework and model-binding are not used.
     /// HTTP endpoints are implemented in the "raw" ASP.NET Core API.
     /// </remarks>
-    public static class JobsHttpExtensions
+    public static class PromisesHttpExtensions
     {
         /// <summary>
         /// Accept jobs of a certain type to be posted at a specific HTTP endpoint. 

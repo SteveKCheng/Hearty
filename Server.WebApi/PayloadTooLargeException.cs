@@ -1,8 +1,10 @@
 ﻿using System;
 
-namespace JobBank.Server
+#pragma warning disable CS1591
+
+namespace JobBank.Server.WebApi
 {
-    internal class PayloadTooLargeException : Exception
+    public class PayloadTooLargeException : Exception
     {
         public PayloadTooLargeException()
             : this("The payload in the HTTP request exceeds the maximum allowed. ")
