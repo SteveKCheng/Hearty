@@ -22,14 +22,17 @@ namespace JobBank.Server.WebApi
     public static class PromisesHttpExtensions
     {
         /// <summary>
-        /// Accept jobs of a certain type to be posted at a specific HTTP endpoint. 
+        /// Accept requests for promises 
+        /// of a certain type to be posted at a specific HTTP endpoint. 
         /// </summary>
         /// <param name="endpoints">Builds all the HTTP endpoints used by the application. </param>
         /// <param name="routeKey">Sub-path occurring after the URL prefix for Job Bank that 
         /// is specific to job executor being registered.
         /// </param>
-        /// <param name="executor">Processes the jobs' inputs and provides the results into
-        /// the created promises.
+        /// <param name="executor">Processes the requests for promises
+        /// and returns them by ID.  The ID can be either an existing promise 
+        /// or a newly created promise that will provide its result 
+        /// (asynchronously).
         /// </param>
         /// <returns>Builder specific to the new job executor's endpoint that may be
         /// used to customize its handling by the ASP.NET Core framework.
@@ -37,7 +40,7 @@ namespace JobBank.Server.WebApi
         public static IEndpointConventionBuilder 
             MapPostJob(this IEndpointRouteBuilder endpoints,
                        string routeKey,
-                       PromiseProducer executor)
+                       Func<PromiseRequest, ValueTask<PromiseId>> executor)
         {
             var services = endpoints.GetServices();
             routeKey = routeKey.Trim('/');
@@ -115,7 +118,7 @@ namespace JobBank.Server.WebApi
         private static async Task PostJobAsync(Services services, 
                                                HttpContext httpContext,
                                                string routeKey,
-                                               PromiseProducer executor)
+                                               Func<PromiseRequest, ValueTask<PromiseId>> executor)
         {
             var httpRequest = httpContext.Request;
             var httpResponse = httpContext.Response;
@@ -124,12 +127,14 @@ namespace JobBank.Server.WebApi
 
             try
             {
-                var jobInput = new PromiseRequest(httpRequest.ContentType,
-                                            httpRequest.ContentLength,
-                                            httpRequest.BodyReader,
-                                            cancellationToken);
+                var jobInput = new PromiseRequest(services.PromiseStorage,
+                                                  services.PathsDirectory,
+                                                  httpRequest.ContentType,
+                                                  httpRequest.ContentLength,
+                                                  httpRequest.BodyReader,
+                                                  cancellationToken);
 
-                promiseId = await executor.Invoke(jobInput, services.PromiseStorage)
+                promiseId = await executor.Invoke(jobInput)
                                           .ConfigureAwait(false);
             }
             catch (Exception e)

@@ -111,7 +111,7 @@ namespace JobBank.Server.Program
                 
                 var jobScheduling = app.ApplicationServices.GetRequiredService<JobSchedulingSystem>();
 
-                endpoints.MapPostJob("pricing", async (PromiseRequest input, PromiseStorage promiseStorage) =>
+                endpoints.MapPostJob("pricing", async input =>
                 {
                     using var stream = input.PipeReader.AsStream();
                     var requestData = await ReadStreamIntoMemorySafelyAsync(stream,
@@ -122,7 +122,7 @@ namespace JobBank.Server.Program
 
                     var request = new Payload(input.ContentType ?? string.Empty, requestData);
 
-                    var promise = promiseStorage.CreatePromise(request);
+                    var promise = input.Storage.CreatePromise(request);
 
                     jobScheduling.PushJobForClientAsync(_dummyQueueOwner, 5, 15000, promise,
                         new PromiseJob(request));

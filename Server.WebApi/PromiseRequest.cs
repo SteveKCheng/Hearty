@@ -6,25 +6,6 @@ using System.Threading.Tasks;
 namespace JobBank.Server.WebApi
 {
     /// <summary>
-    /// Called by the Job Bank system when a client requests a promise.
-    /// </summary>
-    /// <param name="request">
-    /// The data sent by the client in its promise request.
-    /// If the promise entails spawning a job then this may serve
-    /// as the input for the job as well, but not necessarily.
-    /// </param>
-    /// <param name="promiseStorage">
-    /// Can be used to create a promise or look up an existing promise.
-    /// </param>
-    /// <returns>
-    /// ID of the either an existing promise or a newly created promise
-    /// that will provide the result (asynchronously).
-    /// </returns>
-    public delegate ValueTask<PromiseId> 
-        PromiseProducer(PromiseRequest request, 
-                        PromiseStorage promiseStorage);
-
-    /// <summary>
     /// Progress updates on a background job for a promise.
     /// </summary>
     public struct JobProgress
@@ -60,8 +41,33 @@ namespace JobBank.Server.WebApi
     /// <summary>
     /// The data provided by a client when it requests a promise. 
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// If the promise entails spawning a job then this data may serve
+    /// as the input for the job as well.  But there is not necessarily
+    /// a one-to-one relationship between promises and jobs (items
+    /// to execute in the job scheduling system).  Promises may be
+    /// cached so that the request for the same promise returns
+    /// the existing promise and not re-spawn a job to compute its
+    /// outputs.
+    /// </para>
+    /// </remarks>
     public readonly struct PromiseRequest
     {
+        /// <summary>
+        /// The instance of <see cref="PromiseStorage" />
+        /// being exposed to the client and that is 
+        /// the target of this request.
+        /// </summary>
+        public PromiseStorage Storage { get; init; }
+
+        /// <summary>
+        /// The instance of <see cref="PathsDirectory" />
+        /// being exposed to the client and that is 
+        /// the target of this request.
+        /// </summary>
+        public PathsDirectory Directory { get; init; }
+
         /// <summary>
         /// The IANA media type that the payload, as a byte stream,
         /// has been labelled with.
@@ -89,8 +95,10 @@ namespace JobBank.Server.WebApi
         /// Incrementally reads the byte stream of the payload.
         /// </summary>
         /// <remarks>
-        /// This pipe must be completed by the job executor before
-        /// <see cref="Job.RequestReadingDone"/> completes.
+        /// This pipe must be completed by the promise producer 
+        /// before it returns.  Thus, promises cannot be created
+        /// from on partially received data; the protocols used
+        /// for the Web APIs from Job Bank impose this restriction.
         /// </remarks>
         public PipeReader PipeReader { get; }
 
@@ -100,11 +108,15 @@ namespace JobBank.Server.WebApi
         /// </summary>
         public CancellationToken CancellationToken { get; }
 
-        internal PromiseRequest(string? contentType, 
-                          long? contentLength, 
-                          PipeReader pipeReader, 
-                          CancellationToken cancellationToken)
+        internal PromiseRequest(PromiseStorage storage,
+                                PathsDirectory directory,
+                                string? contentType, 
+                                long? contentLength, 
+                                PipeReader pipeReader, 
+                                CancellationToken cancellationToken)
         {
+            Storage = storage;
+            Directory = directory;
             ContentType = contentType;
             ContentLength = contentLength;
             PipeReader = pipeReader;
