@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using JobBank.Server.Program.Data;
 using JobBank.Utilities;
 using System.Buffers;
 using System.IO;
@@ -36,7 +35,6 @@ namespace JobBank.Server.Program
 
             services.AddRazorPages();
             services.AddServerSideBlazor();
-            services.AddSingleton<WeatherForecastService>();
 
             services.AddSingleton<PromiseStorage>(c =>
             {
