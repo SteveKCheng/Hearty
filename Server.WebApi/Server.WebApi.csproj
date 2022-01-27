@@ -21,6 +21,7 @@
     <Compile Include="PayloadTooLargeException.cs" />
     <Compile Include="PromiseRequest.cs" />
     <Compile Include="RemoteWorkersEndpoints.cs" />
+    <Compile Include="RemoteWorkersWebSocketOptions.cs" />
   </ItemGroup>
 
   <ItemGroup>

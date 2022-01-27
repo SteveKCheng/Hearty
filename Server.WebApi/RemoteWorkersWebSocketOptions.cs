@@ -1,0 +1,31 @@
+﻿using JobBank.Work;
+using Microsoft.AspNetCore.Http;
+using System;
+
+namespace JobBank.Server.WebApi
+{
+    /// <summary>
+    /// Options for the remote workers' endpoint speaking a WebSocket protocol.
+    /// </summary>
+    public class RemoteWorkersWebSocketOptions : WebSocketAcceptContext
+    {
+        /// <summary>
+        /// The fixed sub-protocol for the remote workers' WebSocket service.
+        /// It may not be overridden.
+        /// </summary>
+        public sealed override string? SubProtocol
+        {
+            get => WorkerHost.WebSocketsSubProtocol;
+            set => throw new InvalidOperationException("The WebSocket protocol may not be overridden for the remote workers endpoint. ");
+        }
+
+        /// <summary>
+        /// Create an instance with default settings
+        /// </summary>
+        public RemoteWorkersWebSocketOptions()
+        {
+            DangerousEnableCompression = true;
+            DisableServerContextTakeover = true;
+        }
+    }
+}

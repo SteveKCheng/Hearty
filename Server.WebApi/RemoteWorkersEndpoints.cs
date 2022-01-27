@@ -1,13 +1,12 @@
-﻿using JobBank.Scheduling;
-using JobBank.Work;
+﻿using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
+using JobBank.Scheduling;
 
 namespace JobBank.Server.WebApi
 {
@@ -28,40 +27,31 @@ namespace JobBank.Server.WebApi
     {
         /// <summary>
         /// Accept connections from remote worker hosts 
-        /// at a WebSocket endpoint "/ws/worker".
-        /// </summary>
-        /// <param name="endpoints">
-        /// Builds all the HTTP endpoints used by the application. 
-        /// </param>
-        /// <returns>
-        /// Object that allows customizing the new endpoint further.
-        /// </returns>
-        public static IEndpointConventionBuilder
-            MapRemoteWorkersWebSocket(this IEndpointRouteBuilder endpoints)
-        {
-            return MapRemoteWorkersWebSocket(endpoints, "/ws/worker");
-        }
-
-        /// <summary>
-        /// Accept connections from remote worker hosts 
         /// at a WebSocket endpoint.
         /// </summary>
         /// <param name="endpoints">
         /// Builds all the HTTP endpoints used by the application. 
         /// </param>
         /// <param name="pattern">Route pattern for the WebSocket endpoint.
-        /// Typically "/ws/worker".
+        /// Typically "/ws/worker", which is the default is this parameter
+        /// is null.
+        /// </param>
+        /// <param name="options">
+        /// Options when accepting connections on the WebSocket endpoint.
+        /// If null, a default is used.
         /// </param>
         /// <returns>
         /// Object that allows customizing the new endpoint further.
         /// </returns>
         public static IEndpointConventionBuilder
             MapRemoteWorkersWebSocket(this IEndpointRouteBuilder endpoints,
-                                      string pattern)
+                                      string? pattern = null,
+                                      RemoteWorkersWebSocketOptions? options = null)
         {
             return endpoints.Map(
-                    pattern,
-                    RemoteWorkersWebSocketEndpoint.Create(endpoints.ServiceProvider));
+                    pattern ?? "/ws/worker",
+                    RemoteWorkersWebSocketEndpoint.CreateRequestDelegate(
+                        endpoints.ServiceProvider, options));
         }
     }
 
@@ -69,13 +59,16 @@ namespace JobBank.Server.WebApi
     {
         private readonly ILogger _logger;
         private readonly WorkerDistribution<PromiseJob, PromiseData> _workerDistribution;
+        private readonly RemoteWorkersWebSocketOptions _options;
 
         private RemoteWorkersWebSocketEndpoint(
             ILogger<RemoteWorkersWebSocketEndpoint> logger,
-            WorkerDistribution<PromiseJob, PromiseData> workerDistribution)
+            WorkerDistribution<PromiseJob, PromiseData> workerDistribution,
+            RemoteWorkersWebSocketOptions options)
         {
             _logger = logger;
             _workerDistribution = workerDistribution;
+            _options = options;
         }
 
         private Task AcceptAsync(HttpContext context)
@@ -86,20 +79,15 @@ namespace JobBank.Server.WebApi
                 return Task.CompletedTask;
             }
 
-            return InvokeAsyncImpl(context);
+            return AcceptAsyncImpl(context);
         }
 
-        private async Task InvokeAsyncImpl(HttpContext context)
+        private async Task AcceptAsyncImpl(HttpContext context)
         {
             _logger.LogInformation("Incoming WebSocket connection");
 
-            using var webSocket = await context.WebSockets.AcceptWebSocketAsync(
-                new WebSocketAcceptContext
-                {
-                    DangerousEnableCompression = true,
-                    DisableServerContextTakeover = true,
-                    SubProtocol = WorkerHost.WebSocketsSubProtocol
-                });
+            using var webSocket = await context.WebSockets
+                                               .AcceptWebSocketAsync(_options);
 
             var (worker, closeTask) =
                 await RemoteWorkerService.AcceptHostAsync(_workerDistribution,
@@ -108,11 +96,14 @@ namespace JobBank.Server.WebApi
             await closeTask;
         }
 
-        public static RequestDelegate Create(IServiceProvider services)
+        public static RequestDelegate 
+            CreateRequestDelegate(IServiceProvider services,
+                                  RemoteWorkersWebSocketOptions? options)
         {
             var self = new RemoteWorkersWebSocketEndpoint(
                     services.GetRequiredService<ILogger<RemoteWorkersWebSocketEndpoint>>(),
-                    services.GetRequiredService<WorkerDistribution<PromiseJob, PromiseData>>()
+                    services.GetRequiredService<WorkerDistribution<PromiseJob, PromiseData>>(),
+                    options ?? new RemoteWorkersWebSocketOptions()
                 );
             return self.AcceptAsync;
         }
