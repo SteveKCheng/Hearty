@@ -26,6 +26,14 @@ namespace JobBank.Server.WebApi
         {
             DangerousEnableCompression = true;
             DisableServerContextTakeover = true;
+            RegistrationTimeout = TimeSpan.FromSeconds(60);
         }
+
+        /// <summary>
+        /// The time interval allowed for the 
+        /// remote worker to register itself after the WebSocket
+        /// connection is accepted.
+        /// </summary>
+        public TimeSpan RegistrationTimeout { get; set; }
     }
 }

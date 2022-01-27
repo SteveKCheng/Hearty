@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -7,6 +6,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using JobBank.Scheduling;
+using JobBank.Utilities;
 
 namespace JobBank.Server.WebApi
 {
@@ -89,10 +89,17 @@ namespace JobBank.Server.WebApi
             using var webSocket = await context.WebSockets
                                                .AcceptWebSocketAsync(_options);
 
+            CancellationSourcePool.Use cancellationSourceUse = default;
+            var timeout = _options.RegistrationTimeout;
+            if (timeout != TimeSpan.Zero)
+                cancellationSourceUse = CancellationSourcePool.CancelAfter(timeout);
+
+            using var _ = cancellationSourceUse;
+
             var (worker, closeTask) =
                 await RemoteWorkerService.AcceptHostAsync(_workerDistribution,
                                                           webSocket,
-                                                          CancellationToken.None);
+                                                          cancellationSourceUse.Token);
             await closeTask;
         }
 
