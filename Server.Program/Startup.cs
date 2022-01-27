@@ -102,12 +102,11 @@ namespace JobBank.Server.Program
 
             app.UseWebSockets();
 
-            app.UseRemoteWorkers();
-           
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapBlazorHub();
                 endpoints.MapFallbackToPage("/_Host");
+                endpoints.MapRemoteWorkersWebSocket();
                 
                 var jobScheduling = app.ApplicationServices.GetRequiredService<JobSchedulingSystem>();
 

@@ -17,11 +17,10 @@
 
   <ItemGroup>
     <Compile Include="BasicPromiseClientInfo.cs" />
-    <Compile Include="JobBankMiddlewareExtensions.cs" />
     <Compile Include="PromisesHttpExtensions.cs" />
     <Compile Include="PayloadTooLargeException.cs" />
     <Compile Include="PromiseRequest.cs" />
-    <Compile Include="RemoteWorkersMiddleware.cs" />
+    <Compile Include="RemoteWorkersEndpoints.cs" />
   </ItemGroup>
 
   <ItemGroup>
