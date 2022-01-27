@@ -19,7 +19,7 @@ namespace JobBank.Server.WebApi
     /// the MVC (Model-View-Controller) framework and model-binding are not used.
     /// HTTP endpoints are implemented in the "raw" ASP.NET Core API.
     /// </remarks>
-    public static class PromisesHttpExtensions
+    public static class PromisesEndpoints
     {
         /// <summary>
         /// Accept requests for promises 
