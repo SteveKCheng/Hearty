@@ -25,9 +25,12 @@ namespace JobBank.Server.Program
             Configuration = configuration;
 
             UiEnabled = configuration.GetValue<bool>("enableUi", true);
+            PathBase = configuration.GetValue<string>("pathBase", string.Empty);
         }
 
         public bool UiEnabled { get; }
+
+        public string PathBase { get; }
 
         public IConfiguration Configuration { get; }
 
@@ -88,6 +91,8 @@ namespace JobBank.Server.Program
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
+            app.UsePathBase(PathBase);
+
             app.UseForwardedHeaders();
 
             if (env.IsDevelopment())
@@ -117,7 +122,7 @@ namespace JobBank.Server.Program
                 {
                     endpoints.Map("/", httpContext =>
                     {
-                        httpContext.Response.Redirect("/ui/", false);
+                        httpContext.Response.Redirect(PathBase.Add("/ui/"), false);
                         return Task.CompletedTask;
                     });
 

@@ -147,7 +147,8 @@ namespace JobBank.Server.WebApi
             httpResponse.StatusCode = StatusCodes.Status303SeeOther;
             httpResponse.Headers.Add("x-promise-id", promiseId.ToString());
 
-            httpResponse.Headers.Add("location", $"/jobs/v1/id/{promiseId}");
+            httpResponse.Headers.Add("location", 
+                httpRequest.PathBase.Add($"/jobs/v1/id/{promiseId}").ToString());
         }
 
         /// <summary>

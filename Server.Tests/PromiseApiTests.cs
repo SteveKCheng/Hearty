@@ -18,6 +18,8 @@ namespace JobBank.Server.Tests
         private readonly TestServer _webServer;
         private readonly Encoding _utf8 = new UTF8Encoding(false);
 
+        public const string PathBase = "/test/";
+
         public PromiseApiTests()
         {
             var webBuilder = new WebHostBuilder();
@@ -25,20 +27,27 @@ namespace JobBank.Server.Tests
             {
                 configBuilder.AddInMemoryCollection(new KeyValuePair<string, string>[]
                 {
-                    new("enableUi", "false")
+                    new("enableUi", "false"),
+                    new("pathBase", PathBase)
                 });
             });
 
             webBuilder.UseStartup<Startup>();
 
             _webServer = new TestServer(webBuilder);
-            _webServer.CreateClient();
+        }
+
+        private HttpClient CreateClient()
+        {
+            var client = _webServer.CreateClient();
+            client.BaseAddress = new Uri(client.BaseAddress!, PathBase);
+            return client;
         }
 
         [Fact]
         public async Task RunJob()
         {
-            using var client = new JobBankClient(_webServer.CreateClient());
+            using var client = new JobBankClient(CreateClient());
             var inputs = MockPricingInput.GenerateRandomSamples(DateTime.Today, 41, 5);
             foreach (var input in inputs)
             {
