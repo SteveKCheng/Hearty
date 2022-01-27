@@ -94,6 +94,9 @@ namespace JobBank.Server.Program
             }
 
             app.UseHttpsRedirection();
+
+            // Do not just add arguments to this call.  Blazor will break if you do:
+            // https://github.com/dotnet/aspnetcore/issues/19578
             app.UseStaticFiles();
 
             app.UseRouting();
@@ -102,10 +105,17 @@ namespace JobBank.Server.Program
 
             app.UseEndpoints(endpoints =>
             {
-                endpoints.MapBlazorHub();
-                endpoints.MapFallbackToPage("/_Host");
-                endpoints.MapRemoteWorkersWebSocket();
+                endpoints.Map("/", httpContext =>
+                {
+                    httpContext.Response.Redirect("/ui/", false);
+                    return Task.CompletedTask;
+                });
+
+                endpoints.MapBlazorHub("/ui/_blazor");
+                endpoints.MapFallbackToPage(pattern: "/ui/{*path:nonfile}", page: "/_Host");
                 
+                endpoints.MapRemoteWorkersWebSocket();
+
                 var jobScheduling = app.ApplicationServices.GetRequiredService<JobSchedulingSystem>();
 
                 endpoints.MapPostJob("pricing", async input =>
