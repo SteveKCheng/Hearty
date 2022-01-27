@@ -5,9 +5,11 @@ using System;
 using Xunit;
 using System.Text;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using JobBank.Server.Program;
 using JobBank.Server.Mocks;
 using JobBank.Client;
+using Microsoft.Extensions.Configuration;
 
 namespace JobBank.Server.Tests
 {
@@ -19,6 +21,14 @@ namespace JobBank.Server.Tests
         public PromiseApiTests()
         {
             var webBuilder = new WebHostBuilder();
+            webBuilder.ConfigureAppConfiguration(configBuilder =>
+            {
+                configBuilder.AddInMemoryCollection(new KeyValuePair<string, string>[]
+                {
+                    new("enableUi", "false")
+                });
+            });
+
             webBuilder.UseStartup<Startup>();
 
             _webServer = new TestServer(webBuilder);

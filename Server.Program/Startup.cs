@@ -23,7 +23,11 @@ namespace JobBank.Server.Program
         public Startup(IConfiguration configuration)
         {
             Configuration = configuration;
+
+            UiEnabled = configuration.GetValue<bool>("enableUi", true);
         }
+
+        public bool UiEnabled { get; }
 
         public IConfiguration Configuration { get; }
 
@@ -31,10 +35,14 @@ namespace JobBank.Server.Program
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddHttpContextAccessor();
+            services.AddRouting();
 
-            services.AddRazorPages();
-            services.AddServerSideBlazor();
+            if (UiEnabled)
+            {
+                services.AddHttpContextAccessor();
+                services.AddRazorPages();
+                services.AddServerSideBlazor();
+            }
 
             services.AddSingleton<PromiseStorage>(c =>
             {
@@ -105,15 +113,18 @@ namespace JobBank.Server.Program
 
             app.UseEndpoints(endpoints =>
             {
-                endpoints.Map("/", httpContext =>
+                if (UiEnabled)
                 {
-                    httpContext.Response.Redirect("/ui/", false);
-                    return Task.CompletedTask;
-                });
+                    endpoints.Map("/", httpContext =>
+                    {
+                        httpContext.Response.Redirect("/ui/", false);
+                        return Task.CompletedTask;
+                    });
 
-                endpoints.MapBlazorHub("/ui/_blazor");
-                endpoints.MapFallbackToPage(pattern: "/ui/{*path:nonfile}", page: "/_Host");
-                
+                    endpoints.MapBlazorHub("/ui/_blazor");
+                    endpoints.MapFallbackToPage(pattern: "/ui/{*path:nonfile}", page: "/_Host");
+                }
+
                 endpoints.MapRemoteWorkersWebSocket();
 
                 var jobScheduling = app.ApplicationServices.GetRequiredService<JobSchedulingSystem>();
