@@ -32,6 +32,12 @@ namespace JobBank.Server.Mocks
         /// with TLS (Transport Layer Security).
         /// If false, the WebSocket connection is naked.
         /// </param>
+        /// <param name="path">
+        /// The path specified to connect to the WebSocket endpoint.
+        /// Typically it is "/ws/worker". If null, that will be the 
+        /// default.  The caller may need to override it to have
+        /// a base path prepended.
+        /// </param>
         /// <param name="count">
         /// The number of worker hosts to instantiate.
         /// </param>
@@ -51,6 +57,7 @@ namespace JobBank.Server.Mocks
         public async Task CreateFakeWorkersAsync(string host, 
                                                  int? port, 
                                                  bool secure,
+                                                 string? path,
                                                  int count,
                                                  int concurrency,
                                                  string namePrefix,
@@ -59,7 +66,7 @@ namespace JobBank.Server.Mocks
             var uri = new UriBuilder(scheme: secure ? "wss" : "ws",
                                      host: host,
                                      port: port ?? -1,
-                                     pathValue: "ws/worker").Uri;
+                                     pathValue: path ?? WorkerHost.WebSocketsDefaultPath).Uri;
 
             _logger.LogInformation("Fake workers will connect by WebSockets on URL: {uri}", uri);
 

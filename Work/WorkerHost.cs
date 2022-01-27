@@ -131,6 +131,11 @@ namespace JobBank.Work
         public static readonly string WebSocketsSubProtocol = "JobBank.Work";
 
         /// <summary>
+        /// Conventional path for the WebSockets endpoint.
+        /// </summary>
+        public static readonly string WebSocketsDefaultPath = "/ws/worker";
+
+        /// <summary>
         /// Register the new worker host and begin accepting work
         /// by connecting to a JobBank server over WebSockets.
         /// </summary>

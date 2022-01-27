@@ -17,6 +17,8 @@ namespace JobBank.Server.Program
 
         public bool IsSecure { get; set; }
 
+        public string PathBase { get; set; }
+
         public BlazorConnectionInfo()
         {
         }
@@ -27,6 +29,7 @@ namespace JobBank.Server.Program
             ServerHost = host.Host;
             ServerPort = host.Port;
             IsSecure = httpContext.Request.IsHttps;
+            PathBase = httpContext.Request.PathBase;
 
             UserAgent = httpContext.Request.Headers["User-Agent"];
             IpAddress = httpContext.Connection.RemoteIpAddress?.ToString();

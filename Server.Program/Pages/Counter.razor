@@ -1,6 +1,7 @@
 @page "/counter"
 
 @using JobBank.Server.Mocks
+@using JobBank.Work
 @using Microsoft.Extensions.Logging
 @inject MockWorkerHosts _mockWorkerHosts
 @inject ILogger<MockPricingWorker> _workerLogger
@@ -41,6 +42,7 @@
             host: ConnectionInfo.ServerHost,
             port: ConnectionInfo.ServerPort,
             secure: ConnectionInfo.IsSecure,
+            path: ConnectionInfo.PathBase + WorkerHost.WebSocketsDefaultPath,
             count: 10,
             concurrency: 10,
             namePrefix: "remote-worker-",

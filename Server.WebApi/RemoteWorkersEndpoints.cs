@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using JobBank.Scheduling;
 using JobBank.Utilities;
+using JobBank.Work;
 
 namespace JobBank.Server.WebApi
 {
@@ -33,8 +34,8 @@ namespace JobBank.Server.WebApi
         /// Builds all the HTTP endpoints used by the application. 
         /// </param>
         /// <param name="pattern">Route pattern for the WebSocket endpoint.
-        /// Typically "/ws/worker", which is the default is this parameter
-        /// is null.
+        /// Typically it is <see cref="WorkerHost.WebSocketsDefaultPath"/>, 
+        /// which is the default is this parameter is null.
         /// </param>
         /// <param name="options">
         /// Options when accepting connections on the WebSocket endpoint.
@@ -49,7 +50,7 @@ namespace JobBank.Server.WebApi
                                       RemoteWorkersWebSocketOptions? options = null)
         {
             return endpoints.Map(
-                    pattern ?? "/ws/worker",
+                    pattern ?? WorkerHost.WebSocketsDefaultPath,
                     RemoteWorkersWebSocketEndpoint.CreateRequestDelegate(
                         endpoints.ServiceProvider, options));
         }
