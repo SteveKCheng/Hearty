@@ -47,14 +47,31 @@ namespace JobBank.Server.Tests
         [Fact]
         public async Task RunJob()
         {
+            var itemList = new List<(MockPricingInput Input, PromiseId PromiseId)>();
+
             using var client = new JobBankClient(CreateClient());
             var inputs = MockPricingInput.GenerateRandomSamples(DateTime.Today, 41, 5);
+
             foreach (var input in inputs)
             {
                 var content = new ByteArrayContent(input.SerializeToJsonUtf8Bytes());
                 content.Headers.ContentType = new("application/json");
                 var promiseId = await client.PostJobAsync("pricing", content);
                 Assert.NotEqual((ulong)0, promiseId.RawInteger);
+
+                itemList.Add((input, promiseId));
+            }
+
+            foreach (var (input, promiseId) in itemList)
+            {
+                var stream = await client.GetContentAsync(promiseId,
+                                                          contentType: "application/json",
+                                                          timeout: TimeSpan.FromMinutes(5));
+
+                var output = MockPricingOutput.DeserializeFromStream(stream);
+
+                var expected = input.Calculate();
+                Assert.Equal(expected, output);
             }
         }
 
