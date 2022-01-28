@@ -17,67 +17,6 @@ namespace JobBank.Server.Mocks
     /// </summary>
     public class MockPricingWorker : IJobSubmission 
     {
-        private static MockPricingOutput BlackScholesEuropeanOption(in MockPricingInput input)
-        {
-            var S = input.SpotPrice;
-            var K = input.StrikePrice;
-            var σ = input.Volatility;
-            var r = input.InterestRate;
-            var q = input.DividendYield;
-            var τ = (input.MaturityDate - input.ValuationDate).TotalDays / 365.25;
-            var z = Math.Log(S / K);
-            var s = σ * Math.Sqrt(τ);
-            var v = σ * σ;
-            var μ = r - q;
-            var dₚ = (z + (μ + 0.5 * v) * τ) / s;
-            var dₘ = (z + (μ - 0.5 * v) * τ) / s;
-
-            var Fd = S * Math.Exp(-q * τ);
-            var Kd = K * Math.Exp(-r * τ);
-
-            var Φdₚ = MathFunctions.GaussianCdf(dₚ);
-            var Φdₘ = MathFunctions.GaussianCdf(dₘ);
-            var φdₚ = MathFunctions.GaussianPdf(dₚ);
-
-            double V;
-            double Δ;
-            double Γ;
-            double ϴ;
-            double vega;
-
-            if (input.IsCall != false)
-            {
-                V = Fd * Φdₚ - Kd * Φdₘ;
-                Δ = Fd * Φdₚ;
-                ϴ = ((-0.5 * Fd) * (s / τ) * Φdₚ 
-                  - r * Kd * Φdₘ 
-                  + q * Fd * Φdₚ) / 365.25;
-            }
-            else
-            {
-                V = Kd * (1.0 - Φdₘ) - Fd * (1.0 - Φdₚ);
-                Δ = Fd * (Φdₚ - 1.0);
-                ϴ = ((-0.5 * Fd) * (s / τ) * Φdₚ 
-                  + r * Kd * (1.0 - Φdₘ) 
-                  - q * Fd * (1.0 - Φdₚ)) / 365.25;
-            }
-
-            Γ = (Fd * 0.01 / s) * φdₚ;
-            vega = (0.01 * Math.Sqrt(τ) * Fd) * φdₚ;
-
-            var u = input.Units ?? 1.0;
-
-            return new MockPricingOutput
-            {
-                InstrumentName = input.InstrumentName,
-                Value = V * u,
-                NotionalDelta = Δ * u,
-                NotionalGamma = Γ * u,
-                ThetaDay = ϴ * u,
-                Vega = vega * u
-            };
-        }
-
         private const string JsonMediaType = "application/json";
 
         private static void ValidateJsonContentType(string contentType)
@@ -174,7 +113,7 @@ namespace JobBank.Server.Mocks
                 await Task.Delay(request.InitialWait, cancellationToken)
                           .ConfigureAwait(false);
 
-                var pricingOutput = BlackScholesEuropeanOption(pricingInput);
+                var pricingOutput = pricingInput.Calculate();
                 var reply = SerializePricingOutput(pricingOutput);
 
                 _logger.LogInformation("Ending job for execution ID {executionId}, on mock pricing worker {workerName}. " +
