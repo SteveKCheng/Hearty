@@ -22,6 +22,7 @@
     <Compile Include="PromiseRequest.cs" />
     <Compile Include="RemoteWorkersEndpoints.cs" />
     <Compile Include="RemoteWorkersWebSocketOptions.cs" />
+    <Compile Include="StrictPathBaseMiddleware.cs" />
   </ItemGroup>
 
   <ItemGroup>

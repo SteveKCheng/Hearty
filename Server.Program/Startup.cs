@@ -15,6 +15,7 @@ using Microsoft.Extensions.Logging;
 using JobBank.Server.Mocks;
 using JobBank.Server.WebApi;
 using JobBank.Scheduling;
+using Microsoft.AspNetCore.Http;
 
 namespace JobBank.Server.Program
 {
@@ -30,7 +31,7 @@ namespace JobBank.Server.Program
 
         public bool UiEnabled { get; }
 
-        public string PathBase { get; }
+        public PathString PathBase { get; }
 
         public IConfiguration Configuration { get; }
 
@@ -91,7 +92,7 @@ namespace JobBank.Server.Program
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
-            app.UsePathBase(PathBase);
+            app.UseStrictPathBaseOrRedirect(PathBase);
 
             app.UseForwardedHeaders();
 
