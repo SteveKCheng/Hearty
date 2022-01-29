@@ -18,7 +18,6 @@ namespace JobBank.Server
     /// processing, over an asynchronous RPC protocol.
     /// </remarks>
     internal sealed class RemoteWorkerProxy : IJobWorker<PromiseJob, PromiseData>
-                                            , IJobSubmission
     {
         /// <inheritdoc cref="IWorkerNotification.Name" />
         public string Name { get; }
@@ -33,11 +32,47 @@ namespace JobBank.Server
         {
         }
 
+        /// <summary>
+        /// Translates an invocation of
+        /// <see cref="IJobWorker{PromiseJob, PromiseData}.ExecuteJobAsync"/>
+        /// into an invocation of <see cref="IJobSubmission.RunJobAsync" />.
+        /// </summary>
+        /// <remarks>
+        /// This function is factored out so both <see cref="RemoteWorkerProxy" />
+        /// and <see cref="LocalWorkerAdaptor" /> can use it.
+        /// </remarks>
+        /// <typeparam name="TImpl">
+        /// Type that implements <see cref="IJobSubmission" />.
+        /// This may be a wrapper structure to force the .NET compiler 
+        /// to monomorphize the code, i.e. to avoid one layer of
+        /// unnecessary virtual dispatch.
+        /// </typeparam>
+        /// <param name="impl">
+        /// The instance implementing <see cref="IJobSubmission" />
+        /// to forward the call to.
+        /// </param>
+        /// <param name="executionId">
+        /// An arbitrary integer, assigned by some convention, that may 
+        /// distinguish the jobs executed by this worker.
+        /// </param>
+        /// <param name="runningJob">
+        /// Holds an object that manages the job,
+        /// and contains the inputs to be serialized
+        /// for <see cref="IJobSubmission.RunJobAsync" />.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Used by the caller to cancel the job.
+        /// </param>
+        /// <returns>
+        /// Asynchronous task that completes with the output from 
+        /// <see cref="IJobSubmission.RunJobAsync" />, after de-serialization.
+        /// </returns>
         internal static async ValueTask<PromiseData> 
-            ExecuteJobAsyncImpl(IJobSubmission impl,
-                                uint executionId,
-                                IRunningJob<PromiseJob> runningJob,
-                                CancellationToken cancellationToken)
+            ForwardExecuteJobAsync<TImpl>(TImpl impl,
+                                   uint executionId,
+                                   IRunningJob<PromiseJob> runningJob,
+                                   CancellationToken cancellationToken)
+                where TImpl : IJobSubmission
         {
             var contentType = runningJob.Input.Data.SuggestedContentType;
 
@@ -62,7 +97,10 @@ namespace JobBank.Server
                 uint executionId,
                 IRunningJob<PromiseJob> runningJob,
                 CancellationToken cancellationToken)
-            => ExecuteJobAsyncImpl(this, executionId, runningJob, cancellationToken);
+            => ForwardExecuteJobAsync(new JobSubmissionForwarder(this), 
+                                      executionId, 
+                                      runningJob, 
+                                      cancellationToken);
 
         public RemoteWorkerProxy(string name, RpcConnection rpc)
         {
@@ -77,14 +115,26 @@ namespace JobBank.Server
 
         private readonly RpcConnection _rpc;
 
-        /// <inheritdoc cref="IJobSubmission.RunJobAsync" />
-        public ValueTask<RunJobReplyMessage> 
-            RunJobAsync(RunJobRequestMessage request, 
-                        CancellationToken cancellationToken)
+        /// <summary>
+        /// Wrapper over <see cref="RemoteWorkerProxy" /> to expose,
+        /// only internally, its implementation of <see cref="IJobSubmission" />.
+        /// </summary>
+        private readonly struct JobSubmissionForwarder : IJobSubmission
         {
-            return _rpc.InvokeRemotelyAsync<RunJobRequestMessage, 
-                                            RunJobReplyMessage>(
-                WorkerHost.TypeCode_RunJob, request, cancellationToken);
+            private readonly RemoteWorkerProxy _proxy;
+
+            public JobSubmissionForwarder(RemoteWorkerProxy proxy)
+                => _proxy = proxy;
+
+            /// <inheritdoc cref="IJobSubmission.RunJobAsync" />
+            public ValueTask<RunJobReplyMessage>
+                RunJobAsync(RunJobRequestMessage request,
+                            CancellationToken cancellationToken)
+            {
+                return _proxy._rpc.InvokeRemotelyAsync<RunJobRequestMessage,
+                                                       RunJobReplyMessage>(
+                    WorkerHost.TypeCode_RunJob, request, cancellationToken);
+            }
         }
     }
 }

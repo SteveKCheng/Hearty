@@ -40,10 +40,10 @@ namespace JobBank.Server
         public ValueTask<PromiseData> ExecuteJobAsync(uint executionId,
                                                       IRunningJob<PromiseJob> runningJob,
                                                       CancellationToken cancellationToken)
-            => RemoteWorkerProxy.ExecuteJobAsyncImpl(_impl, 
-                                                     executionId, 
-                                                     runningJob, 
-                                                     cancellationToken);
+            => RemoteWorkerProxy.ForwardExecuteJobAsync(_impl, 
+                                                        executionId, 
+                                                        runningJob, 
+                                                        cancellationToken);
         
         private readonly IJobSubmission _impl;
 
