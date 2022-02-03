@@ -21,8 +21,13 @@ namespace JobBank.Server
     /// look-up keys to the set of queues owned the formal
     /// owner.
     /// </para>
+    /// <para>
+    /// This interface needs to implement <see cref="IComparable{T}" />
+    /// to allow instances to be used as keys in sorted containers.
+    /// </para>
     /// </remarks>
-    public interface IJobQueueOwner : IEquatable<IJobQueueOwner>
+    public interface IJobQueueOwner : IComparable<IJobQueueOwner>
+                                    , IEquatable<IJobQueueOwner>
     {
         /// <summary>
         /// The title or short text description of this owner, for display.
