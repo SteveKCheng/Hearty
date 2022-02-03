@@ -149,7 +149,7 @@ namespace JobBank.Server.Program
                     var promise = input.Storage.CreatePromise(request);
 
                     jobScheduling.PushJobForClientAsync(_dummyQueueOwner, 5, 15000, promise,
-                        new PromiseJob(request));
+                        new PromiseJob(request), CancellationToken.None);
 
                     return promise.Id;
                 });

@@ -45,7 +45,8 @@ namespace JobBank.Server.Program.Pages
                                                      priority,
                                                      waitingTime,
                                                      promise,
-                                                     jobFunction);
+                                                     jobFunction,
+                                                     CancellationToken.None);
             }
         }
 

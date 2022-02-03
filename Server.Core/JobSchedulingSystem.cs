@@ -110,15 +110,17 @@ namespace JobBank.Server
                              PromiseId promiseId,
                              PromiseJob request, 
                              int charge,
-                             out Task<PromiseData> outputTask)
+                             out Task<PromiseData> outputTask,
+                             CancellationToken cancellationToken)
         {
             JobMessage job;
 
             lock (_futures)
             {
+                // Attach account to existing job for same promise ID if it exists
                 if (_futures.TryGetValue(promiseId, out var future) && !future.IsCancelled)
                 {
-                    job = future.CreateJob(account, CancellationToken.None);
+                    job = future.CreateJob(account, cancellationToken);
                     outputTask = future.OutputTask;
 
                     // Check again because cancellation can race with registering
@@ -127,11 +129,12 @@ namespace JobBank.Server
                         return job;
                 }
 
+                // Usual case: completely new job
                 job = SharedFuture<PromiseJob, PromiseData>.CreateJob(
                         request,
                         charge,
                         account,
-                        CancellationToken.None,
+                        cancellationToken,
                         _timingQueue,
                         out future);
 
@@ -181,7 +184,8 @@ namespace JobBank.Server
                                           int priority, 
                                           int charge,
                                           Promise promise,
-                                          PromiseJob jobFunction)
+                                          PromiseJob jobFunction,
+                                          CancellationToken cancellationToken)
         {
             // Enqueue nothing if promise is already completed
             if (promise.IsCompleted)
@@ -193,7 +197,8 @@ namespace JobBank.Server
                                        promise.Id, 
                                        jobFunction, 
                                        charge, 
-                                       out var outputTask);
+                                       out var outputTask,
+                                       cancellationToken);
 
             promise.TryAwaitAndPostResult(new ValueTask<PromiseData>(outputTask),
                                           p => RemoveCachedFuture(p.Id));
