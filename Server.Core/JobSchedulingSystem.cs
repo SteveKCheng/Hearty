@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using JobBank.Scheduling;
+using JobBank.Utilities;
 using Microsoft.Extensions.Logging;
 
 namespace JobBank.Server
 {
     using JobMessage = ScheduledJob<PromiseJob, PromiseData>;
     using ClientQueue = SchedulingQueue<ScheduledJob<PromiseJob, PromiseData>>;
+    using OwnerCancellation = KeyValuePair<IJobQueueOwner, CancellationSourcePool.Use>;
 
     /// <summary>
     /// Schedules execution of promises using a hierarchy of job queues.
@@ -44,6 +46,15 @@ namespace JobBank.Server
         private readonly Dictionary<PromiseId, 
                                     SharedFuture<PromiseJob, PromiseData>>
             _futures = new();
+
+        /// <summary>
+        /// Track <see cref="CancellationTokenSource" /> that are
+        /// registered together with the jobs that are not supplied
+        /// with external cancellation tokens.
+        /// </summary>
+        private readonly Dictionary<PromiseId,
+                                    SmallList<OwnerCancellation>>
+            _cancellations = new();
 
         private readonly ILogger _logger;
 
@@ -106,31 +117,31 @@ namespace JobBank.Server
         /// <param name="charge"></param>
         /// <returns></returns>
         private JobMessage
-            GetJobToSchedule(ISchedulingAccount account, 
-                             PromiseId promiseId,
-                             PromiseJob request, 
-                             int charge,
-                             out Task<PromiseData> outputTask,
-                             CancellationToken cancellationToken)
+            GetJobMessage(ISchedulingAccount account, 
+                          PromiseId promiseId,
+                          PromiseJob request, 
+                          int charge,
+                          out Task<PromiseData> outputTask,
+                          CancellationToken cancellationToken)
         {
-            JobMessage job;
+            JobMessage message;
 
             lock (_futures)
             {
                 // Attach account to existing job for same promise ID if it exists
                 if (_futures.TryGetValue(promiseId, out var future) && !future.IsCancelled)
                 {
-                    job = future.CreateJob(account, cancellationToken);
+                    message = future.CreateJob(account, cancellationToken);
                     outputTask = future.OutputTask;
 
                     // Check again because cancellation can race with registering
                     // a new client
                     if (!future.IsCancelled)
-                        return job;
+                        return message;
                 }
 
                 // Usual case: completely new job
-                job = SharedFuture<PromiseJob, PromiseData>.CreateJob(
+                message = SharedFuture<PromiseJob, PromiseData>.CreateJob(
                         request,
                         charge,
                         account,
@@ -142,7 +153,7 @@ namespace JobBank.Server
                 _futures[promiseId] = future;
             }
 
-            return job;
+            return message;
         }
 
         /// <summary>
@@ -158,6 +169,16 @@ namespace JobBank.Server
             {
                 _futures.Remove(promiseId);
             }
+
+            SmallList<OwnerCancellation> list;
+            lock (_cancellations)
+            {
+                if (!_cancellations.Remove(promiseId, out list))
+                    return;
+            }
+
+            foreach (var item in list)
+                item.Value.Dispose();
         }
 
         /// <summary>
@@ -175,17 +196,20 @@ namespace JobBank.Server
         /// A promise which may be newly created or already existing.
         /// If newly created, the asynchronous task for the job
         /// is posted into it.  Otherwise the existing asynchronous task
-        /// is consumed, and <paramref name="jobFunction" /> is ignored.
+        /// is consumed, and <paramref name="job" /> is ignored.
         /// </param>
-        /// <param name="jobFunction">
+        /// <param name="job">
         /// Produces the result output of the promise.
         /// </param>
-        public void PushJobForClientAsync(IJobQueueOwner owner,
-                                          int priority, 
-                                          int charge,
-                                          Promise promise,
-                                          PromiseJob jobFunction,
-                                          CancellationToken cancellationToken)
+        /// <param name="cancellationToken">
+        /// Used by the caller to request cancellation of the job.
+        /// </param>
+        public void PushJob(IJobQueueOwner owner,
+                            int priority, 
+                            int charge,
+                            Promise promise,
+                            PromiseJob job,
+                            CancellationToken cancellationToken)
         {
             // Enqueue nothing if promise is already completed
             if (promise.IsCompleted)
@@ -193,16 +217,126 @@ namespace JobBank.Server
 
             var queue = PriorityClasses[priority].GetOrAdd(owner);
 
-            var job = GetJobToSchedule(queue, 
-                                       promise.Id, 
-                                       jobFunction, 
-                                       charge, 
-                                       out var outputTask,
-                                       cancellationToken);
+            var message = GetJobMessage(queue, 
+                                           promise.Id, 
+                                           job, 
+                                           charge, 
+                                           out var outputTask,
+                                           cancellationToken);
 
             promise.TryAwaitAndPostResult(new ValueTask<PromiseData>(outputTask),
                                           p => RemoveCachedFuture(p.Id));
-            queue.Enqueue(job);
+            queue.Enqueue(message);
+        }
+
+        private CancellationToken CreateCancellationToken(IJobQueueOwner owner, 
+                                                          PromiseId promiseId)
+        {
+            var use = CancellationSourcePool.Rent();
+            var item = new OwnerCancellation(owner, use);
+
+            lock (_cancellations)
+            {
+                if (_cancellations.TryGetValue(promiseId, out var oldList))
+                {
+                    var a = new OwnerCancellation[oldList.Count + 1];
+                    for (int i = 0; i < oldList.Count; ++i)
+                        a[i] = oldList[i];
+                    a[oldList.Count] = item;
+                    _cancellations[promiseId] = new SmallList<OwnerCancellation>(a);
+                }
+                else
+                {
+                    _cancellations.Add(promiseId, new SmallList<OwnerCancellation>(item));
+                }
+            }
+
+            return use.Token;
+        }
+
+        /// <summary>
+        /// Create and push a job to complete a promise,
+        /// and also create and track a cancellation token for it.
+        /// </summary>
+        /// <remarks>
+        /// This method is designed for clients that do not or
+        /// cannot hold on to the <see cref="CancellationTokenSource" />
+        /// needed to cancel a job, e.g. if the request is coming
+        /// from a ReST API endpoint that may not necessarily retain
+        /// any connection state.  The job can be cancelled instead
+        /// via <see cref="TryCancelForClient" />.
+        /// </remarks>
+        /// <param name="owner">
+        /// Owner of the queue.
+        /// </param>
+        /// <param name="priority">
+        /// The desired priority that the job should be enqueued into.  It is expressed
+        /// using the same integer key as used by <see cref="PriorityClasses" />.
+        /// </param>
+        /// <param name="charge"></param>
+        /// <param name="promise">
+        /// A promise which may be newly created or already existing.
+        /// If newly created, the asynchronous task for the job
+        /// is posted into it.  Otherwise the existing asynchronous task
+        /// is consumed, and <paramref name="job" /> is ignored.
+        /// </param>
+        /// <param name="job">
+        /// Produces the result output of the promise.
+        /// </param>
+        public void PushJobAndSourceCancellation(IJobQueueOwner owner,
+                                                 int priority,
+                                                 int charge,
+                                                 Promise promise, 
+                                                 PromiseJob job)
+        {
+            var cancellationToken = CreateCancellationToken(owner, promise.Id);
+            PushJob(owner,
+                    priority,
+                    charge,
+                    promise,
+                    job,
+                    cancellationToken);
+        }
+
+        /// <summary>
+        /// Cancel a job that was pushed with
+        /// <see cref="PushJobAndSourceCancellation" />.
+        /// </summary>
+        /// <param name="owner">
+        /// The owner that had requested the job earlier. 
+        /// </param>
+        /// <param name="promiseId">
+        /// The ID of the promise associated to the job.
+        /// </param>
+        /// <returns>
+        /// False if the combination of client and promise is no longer
+        /// registered.  True if the combination is registered
+        /// and cancellation has been requested.
+        /// </returns>
+        public bool TryCancelForClient(IJobQueueOwner owner, PromiseId promiseId)
+        {
+            CancellationTokenSource? source = null;
+
+            lock (_cancellations)
+            {
+                if (_cancellations.TryGetValue(promiseId, out var oldList))
+                {
+                    foreach (var item in oldList)
+                    {
+                        if (item.Key.Equals(owner))
+                        {
+                            source = item.Value.Source;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (source is null)
+                return false;
+
+            source.Cancel();
+            return true;
         }
     }
 }

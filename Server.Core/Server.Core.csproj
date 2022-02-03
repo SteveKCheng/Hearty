@@ -31,6 +31,7 @@
     <Compile Include="PromiseStorage.cs" />
     <Compile Include="RemoteWorkerProxy.cs" />
     <Compile Include="RemoteWorkerService.cs" />
+    <Compile Include="SmallList.cs" />
     <Compile Include="SubscribedResult.cs" />
     <Compile Include="Subscription.cs" />
   </ItemGroup>

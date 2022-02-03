@@ -41,12 +41,12 @@ namespace JobBank.Server.Program.Pages
 
                 var promise = _promiseStorage.CreatePromise(request);
                 var jobFunction = new PromiseJob(request);
-                _jobScheduling.PushJobForClientAsync(GetClient(client),
-                                                     priority,
-                                                     waitingTime,
-                                                     promise,
-                                                     jobFunction,
-                                                     CancellationToken.None);
+                _jobScheduling.PushJob(GetClient(client),
+                                       priority,
+                                       waitingTime,
+                                       promise,
+                                       jobFunction,
+                                       CancellationToken.None);
             }
         }
 
