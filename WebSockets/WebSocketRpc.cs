@@ -83,26 +83,8 @@ namespace JobBank.WebSockets
         /// </summary>
         private uint _nextRequestId;
 
-        /// <summary>
-        /// Wait for the RPC connection to be torn down.
-        /// </summary>
-        /// <remarks>
-        /// <para>
-        /// This method waits gracefully if teardown was
-        /// initiated by a call to <see cref="Quit" />
-        /// either on this instance or on the remote end
-        /// of the connection.
-        /// </para>
-        /// <para>
-        /// This method itself does not initiate termination.
-        /// </para>
-        /// </remarks>
-        /// <returns>
-        /// Asynchronous task that completes when the connection is closed.
-        /// If the connection terminated because of an error, that error
-        /// will be thrown as an exception.
-        /// </returns>
-        public Task WaitForCloseAsync()
+        /// <inheritdoc />
+        public sealed override Task WaitForCloseAsync()
             => WaitForCloseAsync(throwException: true);
 
         private async Task WaitForCloseAsync(bool throwException)
@@ -133,26 +115,12 @@ namespace JobBank.WebSockets
                 throw e;
         }
 
-        /// <inheritdoc cref="IsClosingStarted" />
+        /// <inheritdoc />
         public override bool IsClosingStarted => _toTerminate;
 
-        /// <summary>
-        /// Request that this RPC connection be gracefully shut down.
-        /// </summary>
-        /// <remarks>
-        /// <para>
-        /// Outstanding asynchronous function calls will throw exceptions
-        /// indicating that the RPC connection has been closed.
-        /// </para>
-        /// <para>
-        /// This method only requests the connection be torn down.
-        /// Closing the connection requires a handshake which will
-        /// occur asynchronously; use <see cref="WaitForCloseAsync" />
-        /// to wait for that handshake to complete, before
-        /// disposing this instance.
-        /// </para>
-        /// </remarks>
-        public void Quit() => Terminate(WebSocketCloseStatus.NormalClosure);
+        /// <inheritdoc />
+        public sealed override void Quit() 
+            => Terminate(WebSocketCloseStatus.NormalClosure);
 
         /// <summary>
         /// Request that this RPC connection be shut down, possibly because
