@@ -4,6 +4,10 @@ using System.Buffers;
 
 namespace JobBank.WebSockets
 {
+    /// <summary>
+    /// Partial representation of a .NET exception 
+    /// in a safely serializable form.
+    /// </summary>
     [MessagePackObject]
     public struct ExceptionMessagePayload
     {
@@ -18,6 +22,21 @@ namespace JobBank.WebSockets
 
         [Key("stackTrace")]
         public string? StackTrace { get; set; }
+
+        /// <summary>
+        /// Create an instance based on the data in a .NET exception.
+        /// </summary>
+        public static ExceptionMessagePayload 
+            CreateFromException(Exception exception)
+        {
+            return new ExceptionMessagePayload
+            {
+                Class = exception.GetType().FullName,
+                Description = exception.Message,
+                Source = exception.Source,
+                StackTrace = exception.StackTrace,
+            };
+        }
     }
 
     internal sealed class ExceptionMessage : RpcMessage
@@ -30,14 +49,7 @@ namespace JobBank.WebSockets
             : base(RpcMessageKind.ExceptionalReply, typeCode, replyId)
         {
             _serializeOptions = registry.SerializeOptions;
-
-            Body = new ExceptionMessagePayload
-            {
-                Class = exception.GetType().FullName,
-                Description = exception.Message,
-                Source = exception.Source,
-                StackTrace = exception.StackTrace,
-            };
+            Body = ExceptionMessagePayload.CreateFromException(exception);
         }
 
         public override void PackPayload(IBufferWriter<byte> writer)
