@@ -82,12 +82,13 @@ namespace JobBank.Server.Program
                 d.TryCreateWorker(new LocalWorkerAdaptor(w, w.Name) , 10, out _);
                 return d;
             });
+            services.AddSingleton<IRemoteCancellation<PromiseId>, JobSchedulingCancellation>();
             services.AddSingleton<PromiseExceptionTranslator>(BasicExceptionTranslator.Instance);
 
             services.AddSingleton<MockWorkerHosts>();
         }
 
-        private static readonly IJobQueueOwner _dummyQueueOwner =
+        internal static readonly IJobQueueOwner _dummyQueueOwner =
             new SimpleQueueOwner("testClient");
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -149,13 +150,14 @@ namespace JobBank.Server.Program
 
                     var promise = input.Storage.CreatePromise(request);
 
-                    jobScheduling.PushJob(_dummyQueueOwner, 5, 15000, promise,
-                        new PromiseJob(request), CancellationToken.None);
+                    jobScheduling.PushJobAndSourceCancellation(_dummyQueueOwner, 5, 100000, promise,
+                        new PromiseJob(request));
 
                     return promise.Id;
                 });
 
                 endpoints.MapGetPromiseById();
+                endpoints.MapPostPromiseById();
                 endpoints.MapGetPromiseByPath();
             });
 
