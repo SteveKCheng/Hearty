@@ -6,7 +6,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Primitives;
 using System;
 using System.Security.Claims;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -69,6 +68,12 @@ namespace JobBank.Server.WebApi
             public PathsDirectory PathsDirectory { get; init; }
 
             /// <summary>
+            /// Called to translate exceptions that come from
+            /// user-defined functions involving promises.
+            /// </summary>
+            public PromiseExceptionTranslator ExceptionTranslator { get; init; }
+
+            /// <summary>
             /// Services requests for cancelling previously
             /// created promises.
             /// </summary>
@@ -87,6 +92,7 @@ namespace JobBank.Server.WebApi
             {
                 PromiseStorage = p.GetRequiredService<PromiseStorage>(),
                 PathsDirectory = p.GetRequiredService<PathsDirectory>(),
+                ExceptionTranslator = p.GetRequiredService<PromiseExceptionTranslator>(),
                 RemoteCancellation = p.GetService<IRemoteCancellation<PromiseId>>()
                                         ?? _dummyRemoteCancellation
             };
@@ -110,18 +116,14 @@ namespace JobBank.Server.WebApi
         }
 
         /// <summary>
-        /// Encodes strings to UTF-8 without the so-called "byte order mark".
-        /// </summary>
-        private static readonly Encoding Utf8NoBOM = new UTF8Encoding(false);
-
-        /// <summary>
         /// Translate a .NET exception to an HTTP response to the client as best
         /// as possible.
         /// </summary>
-        private static async Task TranslateExceptionToHttpResponseAsync(Exception e,
+        private static async Task TranslateExceptionToHttpResponseAsync(PromiseExceptionTranslator translator,
+                                                                        Exception exception,
                                                                         HttpResponse httpResponse)
         {
-            if (e is PayloadTooLargeException)
+            if (exception is PayloadTooLargeException)
             {
                 httpResponse.StatusCode = StatusCodes.Status413PayloadTooLarge;
             }
@@ -129,12 +131,19 @@ namespace JobBank.Server.WebApi
             {
                 httpResponse.StatusCode = StatusCodes.Status400BadRequest;
 
-                var bytes = Utf8NoBOM.GetBytes(e.ToString());
+                var output = translator.Invoke(null, exception);
 
-                httpResponse.ContentType = "text/plain";
-                httpResponse.ContentLength = bytes.Length;
+                httpResponse.ContentType = output.SuggestedContentType;
+                httpResponse.ContentLength = output.ContentLength;
 
-                await httpResponse.BodyWriter.WriteAsync(bytes).ConfigureAwait(false);
+                var writer = httpResponse.BodyWriter;
+                var reader = await output.GetPipeReaderAsync(output.SuggestedContentType, 
+                                                             position: 0,
+                                                             CancellationToken.None)
+                                         .ConfigureAwait(false);
+                await reader.CopyToAsync(httpResponse.BodyWriter)
+                            .ConfigureAwait(false);
+
                 httpResponse.BodyWriter.Complete();
             }
 
@@ -168,7 +177,10 @@ namespace JobBank.Server.WebApi
             catch (Exception e)
             {
                 // FIXME remove the Promise object here
-                await TranslateExceptionToHttpResponseAsync(e, httpResponse).ConfigureAwait(false);
+                await TranslateExceptionToHttpResponseAsync(services.ExceptionTranslator, 
+                                                            e, 
+                                                            httpResponse)
+                    .ConfigureAwait(false);
                 return;
             }
 
