@@ -7,6 +7,36 @@ using System.Threading.Tasks;
 namespace JobBank.Server
 {
     /// <summary>
+    /// Translates a failure represented by a .NET exception 
+    /// to output that can be stored in <see cref="Promise" />.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The translator should not throw an exception unless
+    /// it should be considered a fatal one for the (server)
+    /// application.
+    /// </para>
+    /// <para>
+    /// An explicit delegate type is used so that it can 
+    /// readily used in dependency injection.
+    /// </para>
+    /// </remarks>
+    /// <param name="promiseId">
+    /// The ID for the promise whose processing threw the exception,
+    /// if any.
+    /// </param>
+    /// <param name="exception">
+    /// The .NET exception object to translate.
+    /// </param>
+    /// <returns>
+    /// A (partial) representation of the exception that can
+    /// be stored in a promise (and transferred to remote clients,
+    /// or persisted).
+    /// </returns>
+    public delegate PromiseData 
+        PromiseExceptionTranslator(PromiseId? promiseId, Exception exception);
+
+    /// <summary>
     /// Holds a result that is provided asynchronously, that can be queried by remote clients.
     /// </summary>
     /// <remarks>
@@ -102,9 +132,10 @@ namespace JobBank.Server
         /// the unique <see cref="PromiseId" /> to use as the cache key, 
         /// before the asynchronous work can start.
         /// </remarks>
-        public void AwaitAndPostResult(in ValueTask<PromiseData> task)
+        public void AwaitAndPostResult(in ValueTask<PromiseData> task,
+                                       PromiseExceptionTranslator exceptionTranslator)
         {
-            if (!TryAwaitAndPostResult(task))
+            if (!TryAwaitAndPostResult(task, exceptionTranslator))
                 throw new InvalidOperationException("Cannot post more than one asynchronous output into a promise. ");
         }
 
@@ -123,6 +154,11 @@ namespace JobBank.Server
         /// <param name="task">
         /// The .NET asynchronous task that will provide the result.
         /// </param>
+        /// <param name="exceptionTranslator">
+        /// Translates the exception to a serializable format if 
+        /// <paramref name="task" /> completes with an exception.
+        /// This function itself should not throw an exception.
+        /// </param>
         /// <param name="postAction">
         /// A function that is called after this promise receives the result.
         /// The effect will be similar to <see cref="Task.ContinueWith(Action{Task, object?}, object?)"/>,
@@ -135,12 +171,13 @@ namespace JobBank.Server
         /// <paramref name="postAction" /> is ignored.
         /// </returns>
         public bool TryAwaitAndPostResult(in ValueTask<PromiseData> task,
+                                          PromiseExceptionTranslator exceptionTranslator,
                                           Action<Promise>? postAction = null)
         {
             if (Interlocked.Exchange(ref _hasAsyncResult, 1) != 0)
                 return false;
 
-            _ = PostResultAsync(task, postAction);
+            _ = PostResultAsync(task, exceptionTranslator, postAction);
             return true;
         }
 
@@ -161,9 +198,19 @@ namespace JobBank.Server
         /// <see cref="Task.CompletedTask"/> gets returned.
         /// </remarks>
         private async Task PostResultAsync(ValueTask<PromiseData> task,
+                                           PromiseExceptionTranslator exceptionTranslator,
                                            Action<Promise>? postAction)
         {
-            var output = await task.ConfigureAwait(false);
+            PromiseData output;
+            try
+            {
+                output = await task.ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                output = exceptionTranslator.Invoke(Id, e);
+            }
+
             PostResult(output);
             postAction?.Invoke(this);
         }

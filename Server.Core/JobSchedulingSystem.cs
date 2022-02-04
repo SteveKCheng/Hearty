@@ -58,6 +58,8 @@ namespace JobBank.Server
 
         private readonly ILogger _logger;
 
+        private readonly PromiseExceptionTranslator _exceptionTranslator;
+
         /// <summary>
         /// Prepare the system to schedule jobs and assign them to workers.
         /// </summary>
@@ -65,16 +67,22 @@ namespace JobBank.Server
         /// Receives log messages for significant events in the job scheduling
         /// system.
         /// </param>
+        /// <param name="exceptionTranslator">
+        /// Translates .NET exceptions when they occur as a result of 
+        /// executing the work for promises.
+        /// </param>
         /// <param name="countPriorities">
         /// The number of priority classes for jobs.  This is typically
         /// a constant for the application.  The actual weights for
         /// each priority class are dynamically adjustable.
         /// </param>        
         public JobSchedulingSystem(ILogger<JobSchedulingSystem> logger, 
+                                   PromiseExceptionTranslator exceptionTranslator,
                                    WorkerDistribution<PromiseJob, PromiseData> workerDistribution,
                                    int countPriorities = 10)
         {
             _logger = logger;
+            _exceptionTranslator = exceptionTranslator;
 
             PriorityClasses = new(countPriorities, 
                 () => new ClientQueueSystem<JobMessage, IJobQueueOwner, ClientQueue>(
@@ -225,6 +233,7 @@ namespace JobBank.Server
                                            cancellationToken);
 
             promise.TryAwaitAndPostResult(new ValueTask<PromiseData>(outputTask),
+                                          _exceptionTranslator,
                                           p => RemoveCachedFuture(p.Id));
             queue.Enqueue(message);
         }

@@ -82,6 +82,7 @@ namespace JobBank.Server.Program
                 d.TryCreateWorker(new LocalWorkerAdaptor(w, w.Name) , 10, out _);
                 return d;
             });
+            services.AddSingleton<PromiseExceptionTranslator>(BasicExceptionTranslator.Instance);
 
             services.AddSingleton<MockWorkerHosts>();
         }
