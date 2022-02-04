@@ -102,18 +102,19 @@ namespace JobBank.Server.Mocks
 
             try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                var pricingInput = DeserializePricingInput(request);
-
                 // Simulate working for some period of time
-                if (request.InitialWait < 0 || request.InitialWait > 60 * 1000)
+                if (request.InitialWait < 0 || request.InitialWait > 60 * 60 * 1000)
                     throw new ArgumentOutOfRangeException(
                         "InitialWait parameter of the job request is out of range. ",
                         (Exception?)null);
                 await Task.Delay(request.InitialWait, cancellationToken)
                           .ConfigureAwait(false);
 
+                var pricingInput = DeserializePricingInput(request);
                 var pricingOutput = pricingInput.Calculate();
+
+                cancellationToken.ThrowIfCancellationRequested();
+
                 var reply = SerializePricingOutput(pricingOutput);
 
                 _logger.LogInformation("Ending job for execution ID {executionId}, on mock pricing worker {workerName}. " +
