@@ -246,13 +246,13 @@ namespace JobBank.Tests
 
             var exceptionQuestion = "do you throw exceptions? ";
 
-            var caughtException = await Assert.ThrowsAnyAsync<Exception>(async () =>
+            var caughtException = await Assert.ThrowsAsync<RemoteWorkException>(async () =>
             {
                 await InvokeFunc2Async(clientRpc,
                                        new Func1Request { Question = exceptionQuestion },
                                        CancellationToken.None);
             });
-            Assert.Contains(exceptionQuestion, caughtException.Message);
+            Assert.Contains(exceptionQuestion, caughtException.InnerException?.Message);
 
             await Assert.ThrowsAsync<OperationCanceledException>(async () =>
                 {

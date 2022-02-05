@@ -29,7 +29,7 @@ namespace JobBank.Work
         Exception IRpcExceptionSerializer.DeserializeToException(in ReadOnlySequence<byte> payload)
         {
             var body = MessagePackSerializer.Deserialize<ExceptionPayload>(payload, _serializeOptions);
-            return new Exception(body.Description);
+            return new RemoteWorkException(body);
         }
 
         void IRpcExceptionSerializer.SerializePayload(IBufferWriter<byte> writer, object payload)
