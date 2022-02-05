@@ -56,75 +56,100 @@ namespace JobBank.Utilities
             return (stream1, stream2);
         }
 
+        /// <inheritdoc />
         public override bool CanRead => _readStream.CanRead;
 
+        /// <inheritdoc />
         public override bool CanSeek => false;
 
+        /// <inheritdoc />
         public override bool CanWrite => _writeStream.CanWrite;
 
+        /// <inheritdoc />
         public override long Length => throw new NotSupportedException();
 
+        /// <inheritdoc />
         public override bool CanTimeout => _readStream.CanTimeout || _writeStream.CanTimeout;
 
+        /// <inheritdoc />
         public override int ReadTimeout 
         {
             get => _readStream.ReadTimeout;
             set => _readStream.ReadTimeout = value; 
         }
 
+        /// <inheritdoc />
         public override int WriteTimeout 
         {
             get => _writeStream.WriteTimeout;
             set => _writeStream.WriteTimeout = value;
         }
 
+        /// <inheritdoc />
         public override long Position
         {
             get => throw new NotSupportedException();
             set => throw new NotSupportedException();
         }
 
+        /// <inheritdoc />
         public override void Flush() => _writeStream.Flush();
 
+        /// <inheritdoc />
         public override Task FlushAsync(CancellationToken cancellationToken)
             => _writeStream.FlushAsync(cancellationToken);
 
+        /// <inheritdoc />
         public override int Read(byte[] buffer, int offset, int count)
             => _readStream.Read(buffer, offset, count);
 
+        /// <inheritdoc />
         public override int Read(Span<byte> buffer) => _readStream.Read(buffer);
 
+        /// <inheritdoc />
         public override int ReadByte() => _readStream.ReadByte();
 
+        /// <inheritdoc />
         public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
             => _readStream.ReadAsync(buffer, offset, count, cancellationToken);
 
+        /// <inheritdoc />
         public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
             => _readStream.ReadAsync(buffer, cancellationToken);
 
+        /// <inheritdoc />
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
 
+        /// <inheritdoc />
         public override void SetLength(long value) => throw new NotSupportedException();
 
+        /// <inheritdoc />
         public override void Write(byte[] buffer, int offset, int count)
             => _writeStream.Write(buffer, offset, count);
 
+        /// <inheritdoc />
         public override void Write(ReadOnlySpan<byte> buffer) => _writeStream.Write(buffer);
 
+        /// <inheritdoc />
         public override void WriteByte(byte value) => _writeStream.WriteByte(value);
 
+        /// <inheritdoc />
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
             => _writeStream.WriteAsync(buffer, offset, count, cancellationToken);
 
+        /// <inheritdoc />
         public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
             => _writeStream.WriteAsync(buffer, cancellationToken);
 
+        /// <inheritdoc />
         public override void CopyTo(Stream destination, int bufferSize)
             => _readStream.CopyTo(destination, bufferSize);
 
+        /// <inheritdoc />
         public override Task CopyToAsync(Stream destination, int bufferSize, CancellationToken cancellationToken)
             => _readStream.CopyToAsync(destination, bufferSize, cancellationToken);
 
+        /// <inheritdoc />
         protected override void Dispose(bool disposing)
         {
             if (disposing)

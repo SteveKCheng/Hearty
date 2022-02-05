@@ -11,6 +11,7 @@
     <Authors>Steve Cheng</Authors>
     <Company>​​</Company>
     <Description>Library of utilities used by all components in JobBank</Description>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>

@@ -45,7 +45,7 @@ namespace JobBank.Utilities
         /// <remarks>
         /// This feature allows priority keys of existing elements to be changed
         /// efficiently, given their indices. Generally, this feature can only work 
-        /// if <see cref="TValue" /> is an object reference or (is a structure that)
+        /// if <typeparamref name="TValue"/> is an object reference or (is a structure that)
         /// wraps an object reference.  
         /// </remarks>
         /// <param name="element">Reference to the element in the array. </param>
@@ -78,7 +78,7 @@ namespace JobBank.Utilities
         /// <summary>
         /// Prepare an initially empty heap.
         /// </summary>
-        /// <param name="indexTracker">Called whenever indices
+        /// <param name="callback">Called whenever indices
         /// of elements in the heap need to be updated. </param>
         /// <param name="capacity">The initial capacity 
         /// of the arrays allocates for the priority heap.
@@ -180,7 +180,7 @@ namespace JobBank.Utilities
         /// <summary>
         /// Get the index of the first child of an element in a d-ary heap.
         /// </summary>
-        /// <param name="index">The index i of the parent element in the
+        /// <param name="parentIndex">The index i of the parent element in the
         /// array representation of the heap.  Must not be negative.
         /// </param>
         /// <remarks>
@@ -193,7 +193,7 @@ namespace JobBank.Utilities
         /// <summary>
         /// Get the index that the parent of an element in a d-ary heap lives at.
         /// </summary>
-        /// <param name="index">The index i of the child element in the
+        /// <param name="childIndex">The index i of the child element in the
         /// array representation of the heap.  Must be positive.
         /// </param>
         /// <remarks>
@@ -209,10 +209,10 @@ namespace JobBank.Utilities
         /// </summary>
         /// <param name="keyA">Reference to the slot of the key
         /// for the first entry. </param>
-        /// <param name="keyA">Reference to the slot of the key
+        /// <param name="keyB">Reference to the slot of the key
         /// for the second entry. </param>
         /// <param name="indexA">The index of the first entry. 
-        /// This index will also be reported to <see cref="IArrayIndexTracker{TValue}.ChangeIndex"/>,
+        /// This index will also be reported to <see cref="IndexUpdateCallback" />,
         /// for the value of the first entry after swapping.
         /// </param>
         /// <param name="indexB">The index of the second entry. 
@@ -382,7 +382,7 @@ namespace JobBank.Utilities
         /// of this priority heap.
         /// </summary>
         /// <returns>The element extracted, that was previously the maximum
-        /// in the priority heap. </param>
+        /// in the priority heap. </returns>
         public KeyValuePair<int, TValue> TakeMaximum()
         {
             int[] keys = _keys;
@@ -414,7 +414,7 @@ namespace JobBank.Utilities
         /// of this priority heap.
         /// </summary>
         /// <returns>The element in the heap 
-        /// with the currently maximum priority. </param>
+        /// with the currently maximum priority. </returns>
         public KeyValuePair<int, TValue> PeekMaximum()
         {
             return new KeyValuePair<int, TValue>(_keys[0], _values[0]);
@@ -470,8 +470,12 @@ namespace JobBank.Utilities
         /// Common code used by <see cref="ChangeKey"/> and the setter 
         /// of <see cref="this[int]" />.
         /// </summary>
-        /// <param name="index">The index of the element in the priority heap. </param>
-        /// <param name="key">The new key of the element to change to. </param>
+        /// <param name="index">The new index of the element in the priority heap. </param>
+        /// <param name="newKey">The new key of the element to change to. </param>
+        /// <param name="keySlot">The slot for the key being changed. </param>
+        /// <param name="valueSlot">Holds the value associated to the key,
+        /// which is retained (but may be moved). 
+        /// </param>
         private void ChangeKeyCore(int index, int newKey, 
                                    ref int keySlot, ref TValue valueSlot)
         {
@@ -675,7 +679,7 @@ namespace JobBank.Utilities
         /// Clear the heap and add many elements into it in one shot.
         /// </summary>
         /// <typeparam name="TState">Type of the 
-        /// arbitrary state to pass into <paramref cref="action"/>. 
+        /// arbitrary state to pass into <paramref cref="PopulateEntriesFunction{TState}" />. 
         /// </typeparam>
         /// <param name="capacity">
         /// The capacity that the priority heap should be allocated for.
