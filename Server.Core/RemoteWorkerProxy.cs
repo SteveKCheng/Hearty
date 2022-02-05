@@ -76,7 +76,7 @@ namespace JobBank.Server
         {
             var contentType = runningJob.Input.Data.SuggestedContentType;
 
-            var reply = await impl.RunJobAsync(new RunJobRequestMessage
+            var reply = await impl.RunJobAsync(new JobRequestMessage
             {
                 Route = runningJob.Input.Route,
                 ContentType = contentType,
@@ -127,12 +127,12 @@ namespace JobBank.Server
                 => _proxy = proxy;
 
             /// <inheritdoc cref="IJobSubmission.RunJobAsync" />
-            public ValueTask<RunJobReplyMessage>
-                RunJobAsync(RunJobRequestMessage request,
+            public ValueTask<JobReplyMessage>
+                RunJobAsync(JobRequestMessage request,
                             CancellationToken cancellationToken)
             {
-                return _proxy._rpc.InvokeRemotelyAsync<RunJobRequestMessage,
-                                                       RunJobReplyMessage>(
+                return _proxy._rpc.InvokeRemotelyAsync<JobRequestMessage,
+                                                       JobReplyMessage>(
                     WorkerHost.TypeCode_RunJob, request, cancellationToken);
             }
         }

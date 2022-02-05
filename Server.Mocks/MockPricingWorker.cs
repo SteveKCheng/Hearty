@@ -39,7 +39,7 @@ namespace JobBank.Server.Mocks
         }
 
         private static MockPricingInput 
-            DeserializePricingInput(RunJobRequestMessage request)
+            DeserializePricingInput(JobRequestMessage request)
         {
             ValidateJsonContentType(request.ContentType);
 
@@ -64,13 +64,13 @@ namespace JobBank.Server.Mocks
             WriteIndented = true
         };
 
-        private RunJobReplyMessage 
+        private JobReplyMessage 
             SerializePricingOutput(MockPricingOutput output)
         {
             var bytes = JsonSerializer.SerializeToUtf8Bytes(output, 
                                                             _jsonSerializerOptions);
 
-            return new RunJobReplyMessage
+            return new JobReplyMessage
             {
                 ContentType = JsonMediaType,
                 Data = new ReadOnlySequence<byte>(bytes)
@@ -83,7 +83,7 @@ namespace JobBank.Server.Mocks
         /// <param name="request">
         /// Job request whose payload is the UTF-8 JSON representation 
         /// of <see cref="MockPricingInput" />.  The member
-        /// <see cref="RunJobRequestMessage.InitialWait" /> specifies
+        /// <see cref="JobRequestMessage.InitialWait" /> specifies
         /// the artificial delay.
         /// </param>
         /// <param name="cancellationToken">
@@ -93,8 +93,8 @@ namespace JobBank.Server.Mocks
         /// The reply to the pricing request, with the result being
         /// <see cref="MockPricingOutput" /> represented as UTF-8 JSON.
         /// </returns>
-        public async ValueTask<RunJobReplyMessage> 
-            RunJobAsync(RunJobRequestMessage request, 
+        public async ValueTask<JobReplyMessage> 
+            RunJobAsync(JobRequestMessage request, 
                         CancellationToken cancellationToken)
         {
             _logger.LogInformation("Starting job for execution ID {executionId} on mock pricing worker {workerName}",

@@ -25,13 +25,13 @@ namespace JobBank.Work
         /// Asynchronous task that completes with the results
         /// from the executed job.
         /// </returns>
-        ValueTask<RunJobReplyMessage> RunJobAsync(
-            RunJobRequestMessage request,
+        ValueTask<JobReplyMessage> RunJobAsync(
+            JobRequestMessage request,
             CancellationToken cancellationToken);
     }
 
     [MessagePackObject]
-    public struct RunJobRequestMessage
+    public struct JobRequestMessage
     {
         [Key("r")]
         public string? Route { get; set; }
@@ -50,7 +50,7 @@ namespace JobBank.Work
     }
 
     [MessagePackObject]
-    public struct RunJobReplyMessage
+    public struct JobReplyMessage
     {
         [Key("t")]
         public string ContentType { get; set; }
