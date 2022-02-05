@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text.Json.Serialization;
 using MessagePack;
 
 namespace JobBank.Common
@@ -24,6 +25,7 @@ namespace JobBank.Common
     /// </para>
     /// </remarks>
     [MessagePackObject]
+    //[JsonSerializable]
     public class ExceptionPayload
     {
         /// <summary>
@@ -36,6 +38,7 @@ namespace JobBank.Common
         /// </remarks>
 
         [Key("language")]
+        [JsonPropertyName("language")]
         public string? Language { get; set; }
 
         /// <summary>
@@ -49,6 +52,7 @@ namespace JobBank.Common
         /// of an operation.
         /// </summary>
         [Key("cancelling")]
+        [JsonPropertyName("cancelling")]
         public bool Cancelling { get; set; }
 
         /// <summary>
@@ -61,24 +65,28 @@ namespace JobBank.Common
         /// a whitelist, to prevent remote-code execution vulnerabilities.
         /// </remarks>
         [Key("class")]
+        [JsonPropertyName("class")]
         public string? Class { get; set; }
 
         /// <summary>
         /// Basic human-readable error message.
         /// </summary>
         [Key("description")]
+        [JsonPropertyName("description")]
         public string? Description { get; set; }
 
         /// <summary>
         /// Miscellaneous information about the source of the exception.
         /// </summary>
         [Key("source")]
+        [JsonPropertyName("source")]
         public string? Source { get; set; }
 
         /// <summary>
         /// Trace of the call stack from where the exception originated.
         /// </summary>
         [Key("trace")]
+        [JsonPropertyName("trace")]
         public string? Trace { get; set; }
 
         /// <summary>

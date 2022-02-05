@@ -26,6 +26,7 @@
     <Compile Include="Promise.Subscription.cs" />
     <Compile Include="PromiseException.cs" />
     <Compile Include="PromiseData.cs" />
+    <Compile Include="PromiseExceptionalData.cs" />
     <Compile Include="PromiseJob.cs" />
     <Compile Include="PromisePath.cs" />
     <Compile Include="PromiseStorage.cs" />
