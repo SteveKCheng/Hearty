@@ -40,7 +40,7 @@ namespace JobBank.WebSockets
 
         private bool _isFrozen;
 
-        internal readonly IExceptionSerializer _exceptionSerializer;
+        internal readonly IRpcExceptionSerializer _exceptionSerializer;
 
         /// <summary>
         /// Construct with user-specified settings for 
@@ -55,7 +55,7 @@ namespace JobBank.WebSockets
         /// Settings for serializing and de-serializing .NET types
         /// as MessagePack payloads.
         /// </param>
-        public RpcRegistry(IExceptionSerializer exceptionSerializer, 
+        public RpcRegistry(IRpcExceptionSerializer exceptionSerializer, 
                            MessagePackSerializerOptions serializeOptions)
         {
             SerializeOptions = serializeOptions 
@@ -64,29 +64,11 @@ namespace JobBank.WebSockets
         }
 
         /// <summary>
-        /// Construct with user-specified settings for 
-        /// MessagePack payloads.
-        /// </summary>
-        /// <param name="exceptionSerializer">
-        /// Invoked to serialize exceptions when a procedure call
-        /// requested by a remote side fails, and to de-serialize 
-        /// failure replies from procedure calls made to a remote side.
-        /// </param>
-        /// <param name="serializeOptions">
-        /// Settings for serializing and de-serializing .NET types
-        /// as MessagePack payloads.
-        /// </param>
-        public RpcRegistry(MessagePackSerializerOptions serializeOptions)
-            : this(new ExceptionSerializer(serializeOptions), serializeOptions)
-        {
-        }
-
-        /// <summary>
         /// Construct with standard MessagePack serialization 
         /// settings that defend against untrusted paylods.
         /// </summary>
-        public RpcRegistry()
-            : this(StandardSerializeOptions)
+        public RpcRegistry(IRpcExceptionSerializer exceptionSerializer)
+            : this(exceptionSerializer, StandardSerializeOptions)
         {
         }
 

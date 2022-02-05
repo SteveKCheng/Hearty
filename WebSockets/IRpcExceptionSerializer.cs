@@ -6,7 +6,7 @@ namespace JobBank.WebSockets
     /// <summary>
     /// Allows customizing how .NET exceptions are serialized by the RPC system.
     /// </summary>
-    public interface IExceptionSerializer
+    public interface IRpcExceptionSerializer
     {
         /// <summary>
         /// Translate a .NET exception to an implementation-defined payload

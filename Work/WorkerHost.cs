@@ -49,7 +49,7 @@ namespace JobBank.Work
 
         private static RpcRegistry CreateWorkerRpcRegistry()
         {
-            var registry = new RpcRegistry(SerializeOptions);
+            var registry = new RpcRegistry(new RpcExceptionSerializer(SerializeOptions), SerializeOptions);
             registry.Add<RunJobRequestMessage, RunJobReplyMessage>(
                 WorkerHost.TypeCode_RunJob, RunJobImplAsync);
 

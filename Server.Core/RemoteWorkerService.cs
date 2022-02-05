@@ -18,7 +18,7 @@ namespace JobBank.Server
 
         private static RpcRegistry CreateBankRpcRegistry()
         {
-            var registry = new RpcRegistry(WorkerHost.SerializeOptions);
+            var registry = new RpcRegistry(new RpcExceptionSerializer(WorkerHost.SerializeOptions), WorkerHost.SerializeOptions);
             registry.Add<RegisterWorkerRequestMessage, RegisterWorkerReplyMessage>(
                 WorkerHost.TypeCode_RegisterWorker,
                 (r, c, t) => ValueTask.FromResult(RegisterRemoteWorkerImpl(r, c, t)));

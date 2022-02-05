@@ -13,12 +13,14 @@
   </PropertyGroup>
     
   <ItemGroup>
+    <Compile Include="RpcExceptionSerializer.cs" />
     <Compile Include="IJobSubmission.cs" />
     <Compile Include="IWorkerRegistration.cs" />
     <Compile Include="WorkerHost.cs" />
   </ItemGroup>
     
   <ItemGroup>
+    <ProjectReference Include="..\Common\Common.csproj" />
     <ProjectReference Include="..\WebSockets\WebSockets.csproj" />
   </ItemGroup>
 

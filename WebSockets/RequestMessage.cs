@@ -16,7 +16,7 @@ namespace JobBank.WebSockets
     /// <typeparam name="TReply">User-defined type for the reply outputs. </typeparam>
     internal sealed class RequestMessage<TRequest, TReply> : RpcMessage, IValueTaskSource<TReply>
     {
-        private readonly IExceptionSerializer _exceptionSerializer;
+        private readonly IRpcExceptionSerializer _exceptionSerializer;
 
         /// <summary>
         /// The user-defined inputs to the remote procedure call.
@@ -27,7 +27,7 @@ namespace JobBank.WebSockets
                               uint id,
                               TRequest body, 
                               RpcConnection connection,
-                              IExceptionSerializer exceptionSerializer,
+                              IRpcExceptionSerializer exceptionSerializer,
                               CancellationToken cancellationToken)
             : base(RpcMessageKind.Request, typeCode, id)
         {

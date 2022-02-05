@@ -35,6 +35,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Scheduling\Scheduling.csproj" />
     <ProjectReference Include="..\WebSockets\WebSockets.csproj" />
+    <ProjectReference Include="..\Work\Work.csproj" />
   </ItemGroup>
 
 </Project>

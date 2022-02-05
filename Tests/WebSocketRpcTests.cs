@@ -12,6 +12,7 @@ using System.Threading;
 using Xunit;
 using JobBank.Utilities;
 using System.IO;
+using JobBank.Work;
 
 namespace JobBank.Tests
 {
@@ -80,7 +81,7 @@ namespace JobBank.Tests
                                     subProtocol: null,
                                     keepAliveInterval: keepAliveInterval);
 
-            var registry = new RpcRegistry();
+            var registry = new RpcRegistry(new RpcExceptionSerializer(RpcRegistry.StandardSerializeOptions));
             registry.Add(0x1, (RpcFunction<Func1Request, Func1Reply>)this.Func1Async);
             registry.Add(0x2, (RpcFunction<Func1Request, Func1Reply>)this.Func2Async);
             registry.Add(0x3, (RpcFunction<Func1Request, Func1Reply>)this.Func3Async);
