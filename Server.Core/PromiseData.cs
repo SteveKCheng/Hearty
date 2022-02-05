@@ -99,5 +99,26 @@ namespace JobBank.Server
         /// if known.
         /// </summary>
         public virtual long? ContentLength { get => null; }
+
+        /// <summary>
+        /// Whether this data represents a failure condition.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Some consumers may take a true value as a hint to wrap
+        /// the data in an exception or other wrapper they conventionally
+        /// use to report failures.  Generally, payloads that represent
+        /// errors raised by the promises or job execution system would get 
+        /// will have this property report true.  This property also
+        /// reports true for the output from a job being cancelled.
+        /// </para>
+        /// <para>
+        /// But it is unspecified whether problems from application-level 
+        /// processing are flagged as failures here.  Some applications
+        /// may prefer to report their anomalous conditions as normal
+        /// payloads, possibly with a distinguished content type.
+        /// </para>
+        /// </remarks>
+        public virtual bool IsFailure { get => false; }
     }
 }

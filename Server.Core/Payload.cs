@@ -23,6 +23,9 @@ namespace JobBank.Server
         /// <inheritdoc />
         public override long? ContentLength => Body.Length;
 
+        /// <inheritdoc />
+        public override bool IsFailure { get; }
+
         /// <summary>
         /// The sequence of bytes forming the user-defined data.
         /// </summary>
@@ -34,10 +37,14 @@ namespace JobBank.Server
         /// </summary>
         /// <param name="contentType"><see cref="SuggestedContentType"/>. </param>
         /// <param name="body">Sequence of bytes, possibly in multiple buffers chained together. </param>
-        public Payload(string contentType, in ReadOnlySequence<byte> body)
+        /// <param name="isFailure">Whether this payload encapsulates a failure condition,
+        /// as defined by <see cref="PromiseData.IsFailure" />.
+        /// </param>
+        public Payload(string contentType, in ReadOnlySequence<byte> body, bool isFailure = false)
         {
             SuggestedContentType = contentType;
             Body = body;
+            IsFailure = isFailure;
         }
 
         /// <summary>
@@ -46,8 +53,11 @@ namespace JobBank.Server
         /// </summary>
         /// <param name="contentType"><see cref="SuggestedContentType"/>. </param>
         /// <param name="body">Sequence of bytes in one contiguous member buffer. </param>
-        public Payload(string contentType, in ReadOnlyMemory<byte> body)
-            : this(contentType, new ReadOnlySequence<byte>(body))
+        /// <param name="isFailure">Whether this payload encapsulates a failure condition,
+        /// as defined by <see cref="PromiseData.IsFailure" />.
+        /// </param>
+        public Payload(string contentType, in ReadOnlyMemory<byte> body, bool isFailure = false)
+            : this(contentType, new ReadOnlySequence<byte>(body), isFailure)
         {
         }
 

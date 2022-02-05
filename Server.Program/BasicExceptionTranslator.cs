@@ -13,7 +13,7 @@ namespace JobBank.Server.Program
         private static PromiseData Translate(PromiseId? promiseId, Exception exception)
         {
             var bytes = Utf8NoBOM.GetBytes(exception.ToString());
-            return new Payload("text/x-exception; charset=utf-8", bytes);
+            return new Payload("text/x-exception; charset=utf-8", bytes, isFailure: true);
         }
 
         public static PromiseExceptionTranslator Instance { get; } = Translate;
