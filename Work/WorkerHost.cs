@@ -19,11 +19,20 @@ namespace JobBank.Work
     /// </remarks>
     public sealed class WorkerHost : IDisposable, IAsyncDisposable
     {
+        /// <summary>
+        /// Type code for the "RegisterWorker" function
+        /// in the RPC protocol.
+        /// </summary>
         public static readonly ushort TypeCode_RegisterWorker = 0x1;
+
+        /// <summary>
+        /// Type code for the "RunJob" function
+        /// in the RPC protocol.
+        /// </summary>
         public static readonly ushort TypeCode_RunJob = 0x2;
 
-        private static ValueTask<RunJobReplyMessage> RunJobImplAsync(
-            RunJobRequestMessage request,
+        private static ValueTask<JobReplyMessage> RunJobImplAsync(
+            JobRequestMessage request,
             RpcConnection connection,
             CancellationToken cancellationToken)
         {
@@ -31,6 +40,9 @@ namespace JobBank.Work
             return self._impl.RunJobAsync(request, cancellationToken);
         }
 
+        /// <summary>
+        /// Serialization options for MessagePack used by the RPC protocol.
+        /// </summary>
         public static MessagePackSerializerOptions SerializeOptions { get; }
             = CreateSerializeOptions();
 
@@ -50,7 +62,7 @@ namespace JobBank.Work
         private static RpcRegistry CreateWorkerRpcRegistry()
         {
             var registry = new RpcRegistry(new RpcExceptionSerializer(SerializeOptions), SerializeOptions);
-            registry.Add<RunJobRequestMessage, RunJobReplyMessage>(
+            registry.Add<JobRequestMessage, JobReplyMessage>(
                 WorkerHost.TypeCode_RunJob, RunJobImplAsync);
 
             return registry;
@@ -138,6 +150,10 @@ namespace JobBank.Work
         /// Register the new worker host and begin accepting work
         /// by connecting to a JobBank server over WebSockets.
         /// </summary>
+        /// <param name="impl">
+        /// This object is invoked to executes work requests 
+        /// sent over the connection, once established.
+        /// </param>
         /// <param name="settings">
         /// Settings that the new worker is registered with in the
         /// job server.
@@ -194,6 +210,10 @@ namespace JobBank.Work
         /// Register the new worker host and begin accepting work
         /// by connecting to a JobBank server over WebSockets.
         /// </summary>
+        /// <param name="impl">
+        /// This object is invoked to executes work requests 
+        /// sent over the connection, once established.
+        /// </param>
         /// <param name="settings">
         /// Settings that the new worker is registered with in the
         /// job server.

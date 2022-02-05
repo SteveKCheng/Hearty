@@ -10,6 +10,7 @@
     <Authors>Steve Cheng</Authors>
     <Company>​​</Company>
     <Description>Library for implementing worker hosts in JobBank, and interfaces common to the job server and worker hosts</Description>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
   </PropertyGroup>
     
   <ItemGroup>
