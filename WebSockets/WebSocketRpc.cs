@@ -191,7 +191,7 @@ namespace JobBank.WebSockets
         /// gets frozen when it is passed to this constructor.
         /// </param>
         /// <param name="state">The reference that is assigned
-        /// to <see cref="State" />.
+        /// to <see cref="RpcConnection.State" />.
         /// </param>
         public WebSocketRpc(WebSocket webSocket, RpcRegistry registry, object? state = null)
             : base(registry, state)
@@ -209,6 +209,7 @@ namespace JobBank.WebSockets
             _readPendingMessagesTask = ReadPendingMessagesAsync(CancellationToken.None);
         }
 
+        /// <inheritdoc />
         protected override sealed ValueTask<uint> GetNextRequestIdAsync()
             => ValueTask.FromResult(Interlocked.Increment(ref _nextRequestId));
 
@@ -697,13 +698,14 @@ namespace JobBank.WebSockets
             return _channel.Writer.TryWriteAsync(message);
         }
 
+        /// <inheritdoc />
         public override ValueTask DisposeAsync()
         {
             Quit();
             return new ValueTask(WaitForCloseAsync(throwException: false));
         }
 
-        /// <inheritdoc cref="RpcConnection.Abort" />
+        /// <inheritdoc />
         public override void Abort() => _webSocket.Abort();
     }
 }

@@ -19,6 +19,14 @@ namespace JobBank.WebSockets
         /// </remarks>
         public Exception? Exception { get; }
 
+        /// <summary>
+        /// Instantiates close event data, with the exception
+        /// if there is an error.
+        /// </summary>
+        /// <param name="exception">
+        /// The exception object if the connection is closing
+        /// due to an error.
+        /// </param>
         public RpcConnectionCloseEventArgs(Exception? exception)
             => Exception = exception;
     }
@@ -81,6 +89,14 @@ namespace JobBank.WebSockets
         /// </summary>
         public bool HasClosed { get; private set; }
 
+        /// <summary>
+        /// To be called on the connection closing to
+        /// invoke event handlers registered onto <see cref="OnClose" />.
+        /// </summary>
+        /// <param name="exception">
+        /// The exception object if the connection is closing
+        /// due to an error.
+        /// </param>
         protected void InvokeOnClose(Exception? exception)
         {
             HasClosed = true;

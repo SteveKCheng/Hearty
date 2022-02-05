@@ -37,8 +37,8 @@ namespace JobBank.WebSockets
         /// </param>
         /// <param name="isException">
         /// Whether the payload is for an exceptional result.
-        /// The payload for exception results is, by convention,
-        /// the MessagePack serialization of <see cref="ExceptionMessagePayload" />.
+        /// The payload for exception results is serialized
+        /// by <see cref="IRpcExceptionSerializer" />.
         /// </param>
         public virtual void ProcessReply(in ReadOnlySequence<byte> payload, 
                                          bool isException)

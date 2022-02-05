@@ -10,6 +10,7 @@
     <Authors>Steve Cheng</Authors>
     <Company>​​</Company>
     <Description>Library for lightweight remote procedure calls based on WebSockets and MessagePack</Description>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>

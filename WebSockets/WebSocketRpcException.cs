@@ -9,8 +9,14 @@ namespace JobBank.WebSockets
     /// </summary>
     public class WebSocketRpcException : Exception
     {
+        /// <summary>
+        /// The reason reported for the WebSocket connection closing.
+        /// </summary>
         public WebSocketCloseStatus CloseStatus { get; }
 
+        /// <summary>
+        /// Constructor.
+        /// </summary>
         public WebSocketRpcException(WebSocketCloseStatus status)
             : base($"WebSocketCloseStatus = {status}")
         {
