@@ -41,9 +41,8 @@ namespace JobBank.Work
                             MessagePack.Resolvers.StandardResolver.Instance
                         );
 
-            var serializeOptions = MessagePackSerializerOptions.Standard
-                                .WithSecurity(MessagePackSecurity.UntrustedData)
-                                .WithResolver(resolver);
+            var serializeOptions = RpcRegistry.StandardSerializeOptions
+                                              .WithResolver(resolver);
 
             return serializeOptions;
         }

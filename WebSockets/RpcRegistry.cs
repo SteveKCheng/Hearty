@@ -59,10 +59,18 @@ namespace JobBank.WebSockets
         /// settings that defend against untrusted paylods.
         /// </summary>
         public RpcRegistry()
-            : this(MessagePackSerializerOptions.Standard
-                                               .WithSecurity(MessagePackSecurity.UntrustedData))
+            : this(StandardSerializeOptions)
         {
         }
+
+        /// <summary>
+        /// Standard MessagePack serialization 
+        /// settings that defend against untrusted paylods
+        /// but with no other customizations.
+        /// </summary>
+        public static MessagePackSerializerOptions StandardSerializeOptions { get; }
+            = MessagePackSerializerOptions.Standard
+                                          .WithSecurity(MessagePackSecurity.UntrustedData);
 
         /// <summary>
         /// Settings for serializing and de-serializing .NET types
