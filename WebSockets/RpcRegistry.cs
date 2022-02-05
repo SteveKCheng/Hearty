@@ -40,18 +40,45 @@ namespace JobBank.WebSockets
 
         private bool _isFrozen;
 
+        internal readonly IExceptionSerializer _exceptionSerializer;
+
+        /// <summary>
+        /// Construct with user-specified settings for 
+        /// MessagePack payloads, and an exception serializer.
+        /// </summary>
+        /// <param name="exceptionSerializer">
+        /// Invoked to serialize exceptions when a procedure call
+        /// requested by a remote side fails, and to de-serialize 
+        /// failure replies from procedure calls made to a remote side.
+        /// </param>
+        /// <param name="serializeOptions">
+        /// Settings for serializing and de-serializing .NET types
+        /// as MessagePack payloads.
+        /// </param>
+        public RpcRegistry(IExceptionSerializer exceptionSerializer, 
+                           MessagePackSerializerOptions serializeOptions)
+        {
+            SerializeOptions = serializeOptions 
+                ?? throw new ArgumentNullException(nameof(serializeOptions));
+            _exceptionSerializer = exceptionSerializer;
+        }
+
         /// <summary>
         /// Construct with user-specified settings for 
         /// MessagePack payloads.
         /// </summary>
+        /// <param name="exceptionSerializer">
+        /// Invoked to serialize exceptions when a procedure call
+        /// requested by a remote side fails, and to de-serialize 
+        /// failure replies from procedure calls made to a remote side.
+        /// </param>
         /// <param name="serializeOptions">
         /// Settings for serializing and de-serializing .NET types
         /// as MessagePack payloads.
         /// </param>
         public RpcRegistry(MessagePackSerializerOptions serializeOptions)
+            : this(new ExceptionSerializer(serializeOptions), serializeOptions)
         {
-            SerializeOptions = serializeOptions 
-                ?? throw new ArgumentNullException(nameof(serializeOptions));
         }
 
         /// <summary>

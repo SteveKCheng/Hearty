@@ -16,6 +16,8 @@ namespace JobBank.WebSockets
     /// <typeparam name="TReply">User-defined type for the reply outputs. </typeparam>
     internal sealed class RequestMessage<TRequest, TReply> : RpcMessage, IValueTaskSource<TReply>
     {
+        private readonly IExceptionSerializer _exceptionSerializer;
+
         /// <summary>
         /// The user-defined inputs to the remote procedure call.
         /// </summary>
@@ -25,12 +27,14 @@ namespace JobBank.WebSockets
                               uint id,
                               TRequest body, 
                               RpcConnection connection,
+                              IExceptionSerializer exceptionSerializer,
                               CancellationToken cancellationToken)
             : base(RpcMessageKind.Request, typeCode, id)
         {
             Body = body;
             _taskSource.RunContinuationsAsynchronously = true;
             _connection = connection;
+            _exceptionSerializer = exceptionSerializer;
 
             if (cancellationToken.CanBeCanceled)
             {
@@ -138,8 +142,7 @@ namespace JobBank.WebSockets
                 }
                 else
                 {
-                    var body = MessagePackSerializer.Deserialize<ExceptionMessagePayload>(payload, options);
-                    var exception = new Exception(body.Description);
+                    var exception = _exceptionSerializer.DeserializeToException(payload);
                     TrySetException(exception);
                 }
             }

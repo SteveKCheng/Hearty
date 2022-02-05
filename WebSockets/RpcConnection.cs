@@ -186,6 +186,7 @@ namespace JobBank.WebSockets
                                                             id,
                                                             request,
                                                             this,
+                                                            Registry._exceptionSerializer,
                                                             cancellationToken);
 
             if (!await SendMessageAsync(item).ConfigureAwait(false))

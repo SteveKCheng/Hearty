@@ -9,7 +9,7 @@ namespace JobBank.WebSockets
     /// in a safely serializable form.
     /// </summary>
     [MessagePackObject]
-    public struct ExceptionMessagePayload
+    public class ExceptionMessagePayload
     {
         [Key("class")]
         public string? Class { get; set; }
@@ -41,20 +41,39 @@ namespace JobBank.WebSockets
 
     internal sealed class ExceptionMessage : RpcMessage
     {
-        public ExceptionMessagePayload Body { get; }
+        public object Payload { get; }
 
-        private readonly MessagePackSerializerOptions _serializeOptions;
+        private readonly IExceptionSerializer _exceptionSerializer;
 
         public ExceptionMessage(ushort typeCode, uint replyId, RpcRegistry registry, Exception exception)
             : base(RpcMessageKind.ExceptionalReply, typeCode, replyId)
         {
-            _serializeOptions = registry.SerializeOptions;
-            Body = ExceptionMessagePayload.CreateFromException(exception);
+            _exceptionSerializer = registry._exceptionSerializer;
+            Payload = _exceptionSerializer.PreparePayload(exception);
         }
 
         public override void PackPayload(IBufferWriter<byte> writer)
+            => _exceptionSerializer.SerializePayload(writer, Payload);
+    }
+
+    internal sealed class ExceptionSerializer : IExceptionSerializer
+    {
+        private readonly MessagePackSerializerOptions _serializeOptions;
+
+        public ExceptionSerializer(MessagePackSerializerOptions serializeOptions)
+            => _serializeOptions = serializeOptions;
+
+        public object PreparePayload(Exception exception)
+            => ExceptionMessagePayload.CreateFromException(exception);
+
+        public Exception DeserializeToException(in ReadOnlySequence<byte> payload)
         {
-            MessagePackSerializer.Serialize(writer, Body, _serializeOptions);
+            var body = MessagePackSerializer.Deserialize<ExceptionMessagePayload>(payload, _serializeOptions);
+            return new Exception(body.Description);
         }
+
+        public void SerializePayload(IBufferWriter<byte> writer, object payload)
+            => MessagePackSerializer.Serialize<ExceptionMessagePayload>(
+                writer, (ExceptionMessagePayload)payload, _serializeOptions);
     }
 }
