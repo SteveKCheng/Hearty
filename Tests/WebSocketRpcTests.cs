@@ -18,19 +18,13 @@ namespace JobBank.Tests
 {
     public class WebSocketRpcTests
     {
-        private static uint GetRandomInteger()
-        {
-            using var p = new RNGCryptoServiceProvider();
-            Span<byte> buffer = stackalloc byte[sizeof(uint)];
-            p.GetBytes(buffer);
-            return BitConverter.ToUInt32(buffer);
-        }
-
         private static (NamedPipeClientStream ClientStream, 
                         NamedPipeServerStream ServerStream) 
             CreateNamedPipeStreamPair()
         {
-            var pipeName = $"WebSocketRpcTests-{GetRandomInteger():8X}";
+            // Guid.NewGuid should be sufficiently cryptographically random
+            // to avoid clashes with other processes.
+            var pipeName = $"WebSocketRpcTests-{Guid.NewGuid().ToString()[0..8]}";
             var pipeOptions = PipeOptions.Asynchronous |
                               PipeOptions.CurrentUserOnly |
                               PipeOptions.WriteThrough;
