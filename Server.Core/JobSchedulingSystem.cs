@@ -213,7 +213,7 @@ namespace JobBank.Server
         /// Used by the caller to request cancellation of the job.
         /// </param>
         public void PushJob(IJobQueueOwner owner,
-                            int priority, 
+                            int priority,
                             int charge,
                             Promise promise,
                             PromiseJob job,
@@ -225,17 +225,31 @@ namespace JobBank.Server
 
             var queue = PriorityClasses[priority].GetOrAdd(owner);
 
-            var message = GetJobMessage(queue, 
-                                           promise.Id, 
-                                           job, 
-                                           charge, 
-                                           out var outputTask,
-                                           cancellationToken);
+            var message = RegisterJob(queue, charge, 
+                                      promise, job, cancellationToken);
+
+            queue.Enqueue(message);
+        }
+
+        internal JobMessage RegisterJob(
+            ClientQueue queue,
+            int charge,
+            Promise promise,
+            PromiseJob job,
+            CancellationToken cancellationToken)
+        {
+            var message = GetJobMessage(queue,
+                                        promise.Id,
+                                        job,
+                                        charge,
+                                        out var outputTask,
+                                        cancellationToken);
 
             promise.TryAwaitAndPostResult(new ValueTask<PromiseData>(outputTask),
                                           _exceptionTranslator,
                                           p => RemoveCachedFuture(p.Id));
-            queue.Enqueue(message);
+
+            return message;
         }
 
         private CancellationToken CreateCancellationToken(IJobQueueOwner owner, 
@@ -346,6 +360,104 @@ namespace JobBank.Server
 
             source.Cancel();
             return true;
+        }
+    }
+
+    /// <summary>
+    /// The message type put into the queues managed by
+    /// <see cref="JobSchedulingSystem" /> that implements
+    /// a "macro job".
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A "macro job" expands into many "micro jobs" only when
+    /// the macro job is de-queued.  This feature avoids 
+    /// having to push hundreds and thousands of messages 
+    /// (for the micro jobs) into the queue which makes it
+    /// hard to visualize and manage.  Resources can also
+    /// be conserved if the generator of the micro jobs
+    /// is able to, internally, represent micro jobs more 
+    /// efficiently than generic messages in the job
+    /// scheduling queues.
+    /// </para>
+    /// <para>
+    /// A user-supplied generator
+    /// lists out the micro jobs as <see cref="PromiseJob" />
+    /// descriptors, and this class transforms them into
+    /// the messages that are put into the job queue,
+    /// to implement job sharing and time accounting.
+    /// </para>
+    /// </remarks>
+    internal class MacroJobMessage : IAsyncEnumerable<JobMessage>
+    {
+        private readonly IAsyncEnumerable<(Promise, PromiseJob)> _generator;
+
+        private readonly JobSchedulingSystem _jobScheduling;
+        private readonly ClientQueue _queue;
+        private readonly CancellationToken _cancellationToken;
+
+        /// <summary>
+        /// Construct the macro job message.
+        /// </summary>
+        /// <param name="jobScheduling">
+        /// The job scheduling system that this message is for.
+        /// This reference is needed to push micro jobs into
+        /// the job queue.
+        /// </param>
+        /// <param name="queue">
+        /// The job queue that micro jobs will be pushed into.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Cancellation token for the macro job.
+        /// For efficiency, all the micro jobs expanded from
+        /// this macro job will share the same cancellation source,
+        /// and micro jobs cannot be cancelled independently
+        /// of one another.
+        /// </param>
+        /// <param name="generator">
+        /// User-supplied generator that lists out
+        /// the promise objects and work descriptions for
+        /// the micro jobs.
+        /// </param>
+        internal MacroJobMessage(IAsyncEnumerable<(Promise, PromiseJob)> generator,
+                                 JobSchedulingSystem jobScheduling,
+                                 ClientQueue queue,
+                                 CancellationToken cancellationToken)
+        {
+            _generator = generator;
+            _jobScheduling = jobScheduling;
+            _queue = queue;
+            _cancellationToken = cancellationToken;
+        }
+
+        /// <summary>
+        /// Whether the iteration should stop immediately
+        /// because the job was cancelled.
+        /// </summary>
+        private bool ShouldStop
+            => _cancellationToken.IsCancellationRequested;
+
+        /// <inheritdoc cref="IAsyncEnumerable{T}.GetAsyncEnumerator" />
+        public async IAsyncEnumerator<JobMessage>
+            GetAsyncEnumerator(CancellationToken cancellationToken = default)
+        {
+            if (ShouldStop)
+                yield break;
+
+            await foreach (var (promise, input) in _generator)
+            {
+                if (ShouldStop)
+                    yield break;
+
+                var message = _jobScheduling.RegisterJob(
+                                    _queue,
+                                    0,
+                                    promise,
+                                    input,
+                                    _cancellationToken);
+
+                yield return message;
+            }
         }
     }
 }
