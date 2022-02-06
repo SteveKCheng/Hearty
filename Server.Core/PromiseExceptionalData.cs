@@ -1,4 +1,5 @@
 ﻿using JobBank.Common;
+using JobBank.Utilities;
 using MessagePack;
 using System;
 using System.Buffers;
@@ -84,7 +85,8 @@ namespace JobBank.Server
         public override ValueTask<Stream> GetByteStreamAsync(string contentType, CancellationToken cancellationToken)
         {
             var payload = GetPayload(contentType, cancellationToken);
-            return ValueTask.FromResult(CreatePipeReader(payload, 0).AsStream());
+            Stream stream = new MemoryReadingStream(payload);
+            return ValueTask.FromResult(stream);
         }
 
         private ReadOnlySequence<byte> GetPayload(string contentType, CancellationToken cancellationToken)
@@ -106,14 +108,6 @@ namespace JobBank.Server
         public override ValueTask<ReadOnlySequence<byte>> GetPayloadAsync(string contentType, CancellationToken cancellationToken)
             => ValueTask.FromResult(GetPayload(contentType, cancellationToken));
 
-        private static PipeReader CreatePipeReader(ReadOnlySequence<byte> body, long position)
-        {
-            var pipeReader = PipeReader.Create(body);
-            if (position > 0)
-                pipeReader.AdvanceTo(body.GetPosition(position));
-            return pipeReader;
-        }
-
         /// <inheritdoc />
         public override ValueTask<IAsyncEnumerator<ReadOnlyMemory<byte>>> GetPayloadStreamAsync(string contentType, int position, CancellationToken cancellationToken)
         {
@@ -124,7 +118,8 @@ namespace JobBank.Server
         public override ValueTask<PipeReader> GetPipeReaderAsync(string contentType, long position, CancellationToken cancellationToken)
         {
             var payload = GetPayload(contentType, cancellationToken);
-            return ValueTask.FromResult(CreatePipeReader(payload, position));
+            var pipeReader = PipeReader.Create(payload.Slice(position));
+            return ValueTask.FromResult(pipeReader);
         }
     }
 }

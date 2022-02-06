@@ -1,4 +1,5 @@
-﻿using System;
+﻿using JobBank.Utilities;
+using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
@@ -63,23 +64,18 @@ namespace JobBank.Server
 
         /// <inheritdoc />
         public override ValueTask<PipeReader> GetPipeReaderAsync(string contentType, long position, CancellationToken cancellationToken)
-            => ValueTask.FromResult(GetPipeReaderInternal(contentType, position, cancellationToken));
-
-        private PipeReader GetPipeReaderInternal(string contentType, long position, CancellationToken cancellationToken)
         {
             VerifyContentType(contentType);
-            var pipeReader = PipeReader.Create(Body);
-            if (position > 0)
-                pipeReader.AdvanceTo(Body.GetPosition(position));
-            return pipeReader;
+            var pipeReader = PipeReader.Create(Body.Slice(position));
+            return ValueTask.FromResult(pipeReader);
         }
 
         /// <inheritdoc />
         public override ValueTask<Stream> GetByteStreamAsync(string contentType, CancellationToken cancellationToken)
         {
             VerifyContentType(contentType);
-            var pipeReader = GetPipeReaderInternal(contentType, 0, cancellationToken);
-            return ValueTask.FromResult(pipeReader.AsStream());
+            Stream stream = new MemoryReadingStream(Body);
+            return ValueTask.FromResult(stream);
         }
 
         private void VerifyContentType(string contentType)
