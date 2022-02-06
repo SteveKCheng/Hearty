@@ -13,6 +13,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="AsyncExpandable.cs" />
     <Compile Include="DistributedWorker.cs" />
     <Compile Include="IRunningJob.cs" />
     <Compile Include="IDistributedWorker.cs" />
