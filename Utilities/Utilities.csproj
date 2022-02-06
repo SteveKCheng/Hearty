@@ -17,6 +17,7 @@
   <ItemGroup>
     <Compile Include="CancellationSourcePool.cs" />
     <Compile Include="CircularListLinks.cs" />
+    <Compile Include="MemoryReadingStream.cs" />
     <Compile Include="DuplexStream.cs" />
     <Compile Include="IInteriorStruct.cs" />
     <Compile Include="IntPriorityHeap.cs" />
