@@ -16,6 +16,7 @@
     <Compile Include="BasicPromiseStorage.cs" />
     <Compile Include="ExpiryQueue.cs" />
     <Compile Include="IJobQueueOwner.cs" />
+    <Compile Include="IncrementalAsyncList.cs" />
     <Compile Include="InMemoryPathsDirectory.cs" />
     <Compile Include="IPromiseClientInfo.cs" />
     <Compile Include="JobSchedulingSystem.cs" />
