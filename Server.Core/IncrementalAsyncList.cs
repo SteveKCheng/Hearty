@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace JobBank.Server
@@ -30,7 +31,8 @@ namespace JobBank.Server
     /// access already-produced elements by index.
     /// </para>
     /// </remarks>
-    public class IncrementalAsyncList<T> where T : notnull
+    public class IncrementalAsyncList<T> : IAsyncEnumerable<T>
+        where T : notnull
     {
         /// <summary>
         /// The list of members that may be incrementally populated.
@@ -129,14 +131,44 @@ namespace JobBank.Server
         /// <param name="index">
         /// The index of the desired member.
         /// </param>
+        /// <param name="cancellationToken">
+        /// Can be used to cancel waiting for a member that
+        /// has yet to be populated.
+        /// </param>
         /// <returns>
         /// Asynchronous task that completes with the desired
         /// member of the list, or null if the index is past
         /// the end of the list.
         /// </returns>
-        public ValueTask<T?> TryGetMemberAsync(int index)
+        public ValueTask<T?> TryGetMemberAsync(int index,
+                                               CancellationToken cancellationToken = default)
+            => TryGetMemberAsync(index, Timeout.InfiniteTimeSpan, cancellationToken);
+
+        /// <summary>
+        /// Get a member of the list by index if it exists,   
+        /// asynchronously.
+        /// </summary>
+        /// <param name="index">
+        /// The index of the desired member.
+        /// </param>
+        /// <param name="timeout">
+        /// Timeout for waiting for a member.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be used to cancel waiting for a member that
+        /// has yet to be populated.
+        /// </param>
+        /// <returns>
+        /// Asynchronous task that completes with the desired
+        /// member of the list, or null if the index is past
+        /// the end of the list.
+        /// </returns>
+        public ValueTask<T?> TryGetMemberAsync(int index, 
+                                               TimeSpan timeout,
+                                               CancellationToken cancellationToken)
         {
             ThrowIfIndexIsNegative(index);
+            cancellationToken.ThrowIfCancellationRequested();
 
             var consumers = _consumers;
             var count = _membersCount;
@@ -148,8 +180,12 @@ namespace JobBank.Server
                 return ValueTask.FromResult(value);
             }
 
+            Task<T?> task;
+
             lock (consumers)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 count = _membersCount;
 
                 // Need to re-check after taking lock
@@ -161,12 +197,23 @@ namespace JobBank.Server
 
                 // Re-use existing task or create new task
                 bool hasTaskBuilder = consumers.TryGetValue(index, out var taskBuilder);
-                var task = taskBuilder.Task;
+                task = taskBuilder.Task;
                 if (!hasTaskBuilder)
                     consumers.Add(index, taskBuilder);
-
-                return new ValueTask<T?>(task);
             }
+
+            if (!task.IsCompleted)
+            {
+                if (cancellationToken.CanBeCanceled || timeout != Timeout.InfiniteTimeSpan)
+                {
+                    if (timeout == TimeSpan.Zero)
+                        throw new TimeoutException("Requested timeout expired before a member of the list becomes available. ");
+
+                    task = task.WaitAsync(timeout, cancellationToken);
+                }
+            }
+
+            return new ValueTask<T?>(task);
         }
 
         /// <summary>
@@ -341,5 +388,21 @@ namespace JobBank.Server
         /// The current number of items in the list.
         /// </summary>
         public int Count => _membersCount;
+
+        /// <inheritdoc cref="IAsyncEnumerable{T}.GetAsyncEnumerator(CancellationToken)" />
+        public async IAsyncEnumerator<T> 
+            GetAsyncEnumerator(CancellationToken cancellationToken = default)
+        {
+            int index = 0;
+            while (true)
+            {
+                T? item = await TryGetMemberAsync(index++, cancellationToken)
+                                .ConfigureAwait(false);
+                if (item is null)
+                    yield break;
+
+                yield return item;
+            }
+        }
     }
 }
