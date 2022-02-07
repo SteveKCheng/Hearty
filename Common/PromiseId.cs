@@ -2,6 +2,7 @@
 using System.Globalization;
 using System.Diagnostics.CodeAnalysis;
 using static System.FormattableString;
+using System.Text;
 
 namespace JobBank
 {
@@ -30,6 +31,12 @@ namespace JobBank
         /// The 64-bit integer representing the promise ID.
         /// </summary>
         private readonly ulong _number;
+
+        /// <summary>
+        /// The maximum number of characters taken by the
+        /// canonical textual representation of a promise ID.
+        /// </summary>
+        public static readonly int MaxChars = 9 + 10;
 
         /// <summary>
         /// Construct the promise ID from its constituent parts.
@@ -151,11 +158,57 @@ namespace JobBank
             => left.CompareTo(right) >= 0;
 
 #if NET6_0_OR_GREATER
+        /// <inheritdoc />
         public bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format, IFormatProvider? provider)
             => destination.TryWrite(provider, $"{ServiceId:X8}/{SequenceNumber}", out charsWritten);
 
+        /// <inheritdoc />
         public string ToString(string? format, IFormatProvider? formatProvider)
             => ToString();
+
+        /// <summary>
+        /// Format the Promise ID as an ASCII string.
+        /// </summary>
+        /// <param name="destination">
+        /// Buffer to hold the ASCII string.  Must be sized
+        /// for at least <see cref="MaxChars" />.
+        /// </param>
+        /// <returns>
+        /// The number of bytes written to <paramref name="destination" />.
+        /// </returns>
+        /// <exception cref="ArgumentException">
+        /// The buffer <paramref name="destination" /> is too small.
+        /// </exception>
+        public int FormatAscii(Span<byte> destination)
+        {
+            Span<char> charBuffer = stackalloc char[MaxChars];
+            TryFormat(charBuffer, out int charsWritten, null, null);
+
+            if (destination.Length < charsWritten)
+            {
+                throw new ArgumentException("Destination buffer is insufficiently sized. ",
+                                            nameof(destination));
+            }
+
+            Encoding.ASCII.GetBytes(charBuffer, destination);
+            return charsWritten;
+        }
+
+        /// <summary>
+        /// Format the Promise ID as an ASCII string.
+        /// </summary>
+        /// <param name="destination">
+        /// Buffer to hold the ASCII string.  Must be sized
+        /// for at least <see cref="MaxChars" />.
+        /// </param>
+        /// <returns>
+        /// The number of bytes written to <paramref name="destination" />.
+        /// </returns>
+        /// <exception cref="ArgumentException">
+        /// The buffer <paramref name="destination" /> is too small.
+        /// </exception>
+        public int FormatAscii(Memory<byte> destination)
+            => FormatAscii(destination.Span);
 #endif
     }
 }
