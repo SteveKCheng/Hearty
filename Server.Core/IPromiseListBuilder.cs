@@ -53,12 +53,19 @@ namespace JobBank.Server
         /// number of unique indices whose corresponding values
         /// have been set.
         /// </exception>
-        void MarkComplete(int count);
+        /// <returns>
+        /// True if the current producer is the first to terminate.
+        /// </returns>
+        bool TryComplete(int count, Exception? exception = null);
 
         /// <summary>
         /// Whether the list has been conclusively terminated
         /// by any producer.
         /// </summary>
+        /// <remarks>
+        /// This property may be consulted to stop a producer
+        /// once another producer has already terminated the list.
+        /// </remarks>
         bool IsComplete { get; }
     }
 }

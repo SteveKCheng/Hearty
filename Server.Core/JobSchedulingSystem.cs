@@ -476,41 +476,65 @@ namespace JobBank.Server
             _cancellationToken = cancellationToken;
         }
 
-        /// <summary>
-        /// Whether the iteration should stop immediately
-        /// because the job was cancelled or is already completed.
-        /// </summary>
-        private bool ShouldStop
-            => _cancellationToken.IsCancellationRequested ||
-               _resultBuilder.IsComplete;
-
         /// <inheritdoc cref="IAsyncEnumerable{T}.GetAsyncEnumerator" />
         public async IAsyncEnumerator<JobMessage>
             GetAsyncEnumerator(CancellationToken cancellationToken = default)
         {
-            if (ShouldStop)
+            // Do not do anything if another producer has already completed.
+            if (_resultBuilder.IsComplete)
                 yield break;
 
+            // We cannot write the following loop as a straightforward
+            // "await foreach" with "yield return" inside, because
+            // we need to catch exceptions.
+            await using var enumerator = _generator.GetAsyncEnumerator(_cancellationToken);
+
             int count = 0;
+            Exception? exception = null;
 
-            await foreach (var (promise, input) in _generator)
+            while (true)
             {
-                if (ShouldStop)
-                    yield break;
+                JobMessage message;
 
-                _resultBuilder.SetMember(count++, promise);
+                try
+                {
+                    _cancellationToken.ThrowIfCancellationRequested();
 
-                var message = _jobScheduling.RegisterJob(
+                    // Stop generating job messages if another producer
+                    // has completely done so, or there are no more micro jobs.
+                    if (_resultBuilder.IsComplete || 
+                        !await enumerator.MoveNextAsync().ConfigureAwait(false))
+                        break;
+
+                    _cancellationToken.ThrowIfCancellationRequested();
+
+                    // Add the new member to the result sequence.
+                    var (promise, input) = enumerator.Current;
+                    _resultBuilder.SetMember(count, promise);
+                    count++;
+
+                    // Do not bother generating a message if the promise
+                    // is already complete by this point.
+                    if (promise.IsCompleted)
+                        continue;
+
+                    message = _jobScheduling.RegisterJob(
                                     _queue,
                                     0,
                                     promise,
                                     input,
                                     _cancellationToken);
+                }
+                catch (Exception e)
+                {
+                    exception = e;
+                    break;
+                }
 
                 yield return message;
             }
 
-            _resultBuilder.MarkComplete(count);
+            _resultBuilder.TryComplete(count, exception);
         }
     }
 }

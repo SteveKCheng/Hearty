@@ -30,6 +30,13 @@ namespace JobBank.Server
     /// list has not been produced yet.  Consumers can
     /// access already-produced elements by index.
     /// </para>
+    /// <para>
+    /// This class implements something analogous to a channel,
+    /// but consumers can randomly access the produced elements 
+    /// by index, and multiple producers can "compete"
+    /// (whichever first produces the item at a particular index 
+    /// "wins").
+    /// </para>
     /// </remarks>
     public class IncrementalAsyncList<T> : IAsyncEnumerable<T>
         where T : notnull
@@ -87,6 +94,17 @@ namespace JobBank.Server
         /// </para>
         /// </remarks>
         private volatile Dictionary<int, AsyncTaskMethodBuilder<T?>>? _consumers = new();
+
+        /// <summary>
+        /// Any user-supplied exception that is supplied on completing 
+        /// the list.
+        /// </summary>
+        /// <remarks>
+        /// This feature enables a background task that is producing the
+        /// sequence to propagate errors it encounters 
+        /// in producing the sequence.
+        /// </remarks>
+        private Exception? _exception;
 
         /// <summary>
         /// Throw an exception if the argument index is negative.
@@ -161,7 +179,10 @@ namespace JobBank.Server
         /// <returns>
         /// Asynchronous task that completes with the desired
         /// member of the list, or null if the index is past
-        /// the end of the list.
+        /// the end of the list.  If the list has been completed
+        /// with an exception, it will be thrown out when the 
+        /// index is past the end of the list; the preceding
+        /// items will still be reported normally.
         /// </returns>
         public ValueTask<T?> TryGetMemberAsync(int index, 
                                                TimeSpan timeout,
@@ -173,12 +194,21 @@ namespace JobBank.Server
             var consumers = _consumers;
             var count = _membersCount;
 
+            ValueTask<T?> GetMemberImmediately(int index, int count)
+            {
+                var exception = _exception;
+                if (index < count || exception is null)
+                {
+                    T? value = (index < count) ? _members[index] : default;
+                    return ValueTask.FromResult(value);
+                }
+
+                return ValueTask.FromException<T?>(exception);
+            }
+
             // Opportunistically read without taking locks
             if (consumers is null || index < count)
-            {
-                T? value = (index < count) ? _members[index] : default;
-                return ValueTask.FromResult(value);
-            }
+                return GetMemberImmediately(index, count);
 
             Task<T?> task;
 
@@ -190,10 +220,7 @@ namespace JobBank.Server
 
                 // Need to re-check after taking lock
                 if (_consumers is null || index < count)
-                {
-                    T? value = (index < count) ? _members[index] : default;
-                    return ValueTask.FromResult(value);
-                }
+                    return GetMemberImmediately(index, count);
 
                 // Re-use existing task or create new task
                 bool hasTaskBuilder = consumers.TryGetValue(index, out var taskBuilder);
@@ -304,6 +331,9 @@ namespace JobBank.Server
         /// The number of items that should have been produced so far.
         /// This argument is passed in purely to check for errors.
         /// </param>
+        /// <param name="exception">
+        /// Any exception to record as part of completion.
+        /// </param>
         /// <returns>
         /// True if the current invocation of this method
         /// is first to successfully terminate list.
@@ -315,7 +345,7 @@ namespace JobBank.Server
         /// number of unique indices whose corresponding values
         /// have been set.
         /// </exception>
-        public bool TryMarkComplete(int count)
+        public bool TryComplete(int count, Exception? exception = null)
         {
             // Ignore if list is already completed
             var consumers = _consumers;
@@ -335,13 +365,19 @@ namespace JobBank.Server
                 if (_consumers is null)
                     return false;
 
+                _exception = exception;
                 _consumers = null;
             }
 
             // Notify tasks waiting for members past the end of the list.
             // Invoke continuations outside the lock.
             foreach (var (_, taskBuilder) in consumers)
-                taskBuilder.SetResult(default);
+            {
+                if (exception is null)
+                    taskBuilder.SetResult(default);
+                else
+                    taskBuilder.SetException(exception);
+            }
 
             return true;
         }

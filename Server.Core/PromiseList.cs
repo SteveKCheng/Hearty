@@ -18,8 +18,8 @@ namespace JobBank.Server
 
         bool IPromiseListBuilder.IsComplete => _promiseIds.IsComplete;
 
-        void IPromiseListBuilder.MarkComplete(int count) 
-            => _promiseIds.TryMarkComplete(count);
+        bool IPromiseListBuilder.TryComplete(int count, Exception? exception)
+            => _promiseIds.TryComplete(count, exception);
 
         void IPromiseListBuilder.SetMember(int index, Promise promise)
             => _promiseIds.TrySetMember(index, promise.Id);
