@@ -231,6 +231,45 @@ namespace JobBank.Server
             queue.Enqueue(message);
         }
 
+        /// <summary>
+        /// Create a push a "macro job" into a job queue which
+        /// dynamically expands into many "micro jobs".
+        /// </summary>
+        /// <param name="owner">The owner of the queue. </param>
+        /// <param name="priority">The desired priority class of the jobs. </param>
+        /// <param name="promise">Promise object for the macro job. </param>
+        /// <param name="generator">
+        /// Generates the micro jobs once the macro job has
+        /// been de-queued and ready to run.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Used by the caller to request cancellation of the macro job
+        /// and any micro jobs created from it.
+        /// </param>
+        public void PushMacroJob(IJobQueueOwner owner, 
+                                 int priority,
+                                 Promise promise,
+                                 IAsyncEnumerable<(Promise, PromiseJob)> generator,
+                                 CancellationToken cancellationToken)
+        {
+            // Enqueue nothing if promise is already completed
+            if (promise.IsCompleted)
+                return;
+
+            var queue = PriorityClasses[priority].GetOrAdd(owner);
+
+            var promiseOutput = new PromiseList();
+
+            promise.AwaitAndPostResult(new ValueTask<PromiseData>(promiseOutput), 
+                                       _exceptionTranslator);
+
+            var message = new MacroJobMessage(generator,
+                                              this, queue, promiseOutput,
+                                              cancellationToken);
+
+            queue.Enqueue(message);
+        }
+
         internal JobMessage RegisterJob(
             ClientQueue queue,
             int charge,
