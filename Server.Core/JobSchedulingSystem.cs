@@ -229,8 +229,9 @@ namespace JobBank.Server
         /// the same job object.
         /// </remarks>
         private readonly Dictionary<PromiseId,
-                                    SharedFuture<PromiseJob, PromiseData>>
-            _futures = new();
+                            (SharedFuture<PromiseJob, PromiseData> Future, 
+                             bool OwnsCancellation)>
+            _microPromises = new();
 
         /// <summary>
         /// Remove the entry mapping a promise ID to a 
@@ -250,15 +251,13 @@ namespace JobBank.Server
         /// <param name="promiseId">
         /// The promise ID to unregister.
         /// </param>
-        /// <param name="unregisterCancellation">
-        /// If true, calls <see cref="UnregisterCancellationSource" />
-        /// for the same promise ID.
-        /// </param>
-        private void RemoveCachedFuture(PromiseId promiseId, bool unregisterCancellation)
+        private void RemoveCachedFuture(PromiseId promiseId)
         {
-            lock (_futures)
+            bool unregisterCancellation;
+            lock (_microPromises)
             {
-                _futures.Remove(promiseId);
+                bool isRemoved = _microPromises.Remove(promiseId, out var removedEntry);
+                unregisterCancellation = isRemoved && removedEntry.OwnsCancellation;
             }
 
             if (unregisterCancellation)
@@ -312,23 +311,41 @@ namespace JobBank.Server
                                PromiseId promiseId,
                                PromiseJob request, 
                                int charge,
+                               bool ownsCancellation,
                                out Task<PromiseData> outputTask,
                                CancellationToken cancellationToken)
         {
             JobMessage message;
+            SharedFuture<PromiseJob, PromiseData> future;
 
-            lock (_futures)
+            lock (_microPromises)
             {
-                // Attach account to existing job for same promise ID if it exists
-                if (_futures.TryGetValue(promiseId, out var future) && !future.IsCancelled)
-                {
-                    message = future.CreateJob(account, cancellationToken);
-                    outputTask = future.OutputTask;
+                ref var entry = ref CollectionsMarshal.GetValueRefOrNullRef(
+                                    _microPromises, promiseId);
 
-                    // Check again because cancellation can race with registering
-                    // a new client
+                // Attach account to existing job for same promise ID if it exists
+                // and has not been cancelled.
+                if (!Unsafe.IsNullRef(ref entry))
+                {
+                    future = entry.Future;
+
+                    // Set flag when at least one client owns cancellation
+                    ownsCancellation |= entry.OwnsCancellation;
+
                     if (!future.IsCancelled)
-                        return message;
+                    {
+                        message = future.CreateJob(account, cancellationToken);
+                        outputTask = future.OutputTask;
+
+                        // Check again because cancellation can race with registering
+                        // a new client.  If the job is really not cancelled then
+                        // go ahead and share it.
+                        if (!future.IsCancelled)
+                        {
+                            entry.OwnsCancellation = ownsCancellation;
+                            return message;
+                        }
+                    }
                 }
 
                 // Usual case: completely new job
@@ -341,7 +358,7 @@ namespace JobBank.Server
                         out future);
 
                 outputTask = future.OutputTask;
-                _futures[promiseId] = future;
+                _microPromises[promiseId] = (future, ownsCancellation);
             }
 
             return message;
@@ -356,21 +373,21 @@ namespace JobBank.Server
             int charge,
             Promise promise,
             PromiseJob job,
-            bool unregisterCancellation,
+            bool ownsCancellation,
             CancellationToken cancellationToken)
         {
             var message = RegisterJobMessage(queue,
-                                        promise.Id,
-                                        job,
-                                        charge,
-                                        out var outputTask,
-                                        cancellationToken);
+                                             promise.Id,
+                                             job,
+                                             charge,
+                                             ownsCancellation,
+                                             out var outputTask,
+                                             cancellationToken);
 
             promise.TryAwaitAndPostResult(
                 new ValueTask<PromiseData>(outputTask),
                 _exceptionTranslator,
-                unregisterCancellation ? p => RemoveCachedFuture(p.Id, true)
-                                       : p => RemoveCachedFuture(p.Id, false));
+                p => RemoveCachedFuture(p.Id));
 
             return message;
         }
@@ -413,7 +430,7 @@ namespace JobBank.Server
 
             var message = RegisterJobMessageAndSetPromise(
                             queue, charge, promise, job,
-                            unregisterCancellation: false,
+                            ownsCancellation: false,
                             cancellationToken);
 
             queue.Enqueue(message);
@@ -464,7 +481,7 @@ namespace JobBank.Server
 
             var message = RegisterJobMessageAndSetPromise(
                             queue, charge, promise, job,
-                            unregisterCancellation: true,
+                            ownsCancellation: true,
                             cancellationToken);
 
             queue.Enqueue(message);
@@ -566,8 +583,9 @@ namespace JobBank.Server
                                     _macroPromises, promise.Id, out _);
                 resultBuilder = (entry.ResultBuilder ??= (promiseOutput = new PromiseList()));
                 ++entry.ProducerCount;
-                if (ownsCancellation)
-                    entry.OwnsCancellation = true;
+
+                // Set flag when at least one client owns cancellation
+                entry.OwnsCancellation |= ownsCancellation;
             }
 
             if (promiseOutput is not null)
@@ -800,7 +818,7 @@ namespace JobBank.Server
                                         0,
                                         promise,
                                         input,
-                                        unregisterCancellation: false,
+                                        ownsCancellation: false,
                                         _jobCancelToken);
                     }
                     catch (Exception e)
