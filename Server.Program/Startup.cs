@@ -150,8 +150,8 @@ namespace JobBank.Server.Program
 
                     var promise = input.Storage.CreatePromise(request);
 
-                    jobScheduling.PushJobAndOwnCancellation(_dummyQueueOwner, 5, 100000, promise,
-                        new PromiseJob(request));
+                    jobScheduling.PushJobAndOwnCancellation(_dummyQueueOwner, 5, promise,
+                        new PromiseJob(request, 100000));
 
                     return promise.Id;
                 });

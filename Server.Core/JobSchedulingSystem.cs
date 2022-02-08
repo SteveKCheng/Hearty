@@ -277,7 +277,6 @@ namespace JobBank.Server
         /// job object for <paramref name="promiseId" />,
         /// this argument is ignored.
         /// </param>
-        /// <param name="charge"></param>
         /// <param name="outputTask">
         /// On return, the asynchronous task that completes 
         /// with the job's result is placed here.
@@ -310,7 +309,6 @@ namespace JobBank.Server
             RegisterJobMessage(ISchedulingAccount account, 
                                PromiseId promiseId,
                                PromiseJob request, 
-                               int charge,
                                bool ownsCancellation,
                                out Task<PromiseData> outputTask,
                                CancellationToken cancellationToken)
@@ -351,7 +349,7 @@ namespace JobBank.Server
                 // Usual case: completely new job
                 message = SharedFuture<PromiseJob, PromiseData>.CreateJob(
                         request,
-                        charge,
+                        request.InitialWait,
                         account,
                         cancellationToken,
                         _timingQueue,
@@ -370,7 +368,6 @@ namespace JobBank.Server
         /// </summary>
         internal JobMessage RegisterJobMessageAndSetPromise(
             ClientQueue queue,
-            int charge,
             Promise promise,
             PromiseJob job,
             bool ownsCancellation,
@@ -379,7 +376,6 @@ namespace JobBank.Server
             var message = RegisterJobMessage(queue,
                                              promise.Id,
                                              job,
-                                             charge,
                                              ownsCancellation,
                                              out var outputTask,
                                              cancellationToken);
@@ -402,7 +398,6 @@ namespace JobBank.Server
         /// The desired priority that the job should be enqueued into.  It is expressed
         /// using the same integer key as used by <see cref="PriorityClasses" />.
         /// </param>
-        /// <param name="charge"></param>
         /// <param name="promise">
         /// A promise which may be newly created or already existing.
         /// If newly created, the asynchronous task for the job
@@ -417,7 +412,6 @@ namespace JobBank.Server
         /// </param>
         public void PushJob(IJobQueueOwner owner,
                             int priority,
-                            int charge,
                             Promise promise,
                             PromiseJob job,
                             CancellationToken cancellationToken)
@@ -429,7 +423,7 @@ namespace JobBank.Server
             var queue = PriorityClasses[priority].GetOrAdd(owner);
 
             var message = RegisterJobMessageAndSetPromise(
-                            queue, charge, promise, job,
+                            queue, promise, job,
                             ownsCancellation: false,
                             cancellationToken);
 
@@ -455,7 +449,6 @@ namespace JobBank.Server
         /// The desired priority that the job should be enqueued into.  It is expressed
         /// using the same integer key as used by <see cref="PriorityClasses" />.
         /// </param>
-        /// <param name="charge"></param>
         /// <param name="promise">
         /// A promise which may be newly created or already existing.
         /// If newly created, the asynchronous task for the job
@@ -467,7 +460,6 @@ namespace JobBank.Server
         /// </param>
         public void PushJobAndOwnCancellation(IJobQueueOwner owner,
                                               int priority,
-                                              int charge,
                                               Promise promise,
                                               PromiseJob job)
         {
@@ -480,7 +472,7 @@ namespace JobBank.Server
             var cancellationToken = RegisterCancellationSource(owner, promise.Id);
 
             var message = RegisterJobMessageAndSetPromise(
-                            queue, charge, promise, job,
+                            queue, promise, job,
                             ownsCancellation: true,
                             cancellationToken);
 
@@ -815,7 +807,6 @@ namespace JobBank.Server
 
                         message = _jobScheduling.RegisterJobMessageAndSetPromise(
                                         _queue,
-                                        0,
                                         promise,
                                         input,
                                         ownsCancellation: false,

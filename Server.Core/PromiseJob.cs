@@ -52,13 +52,21 @@ namespace JobBank.Server
         public PromiseData Data { get; }
 
         /// <summary>
+        /// The initial estimate of the amount of time the job
+        /// would take, in milliseconds.
+        /// </summary>
+        public int InitialWait { get; }
+
+        /// <summary>
         /// Constructor.
         /// </summary>
         public PromiseJob(PromiseData data, 
+                          int initialWait,
                           string? route = null,
                           object? hint = null)
         {
             Route = route;
+            InitialWait = initialWait;
             Hint = hint;
             Data = data;
         }
