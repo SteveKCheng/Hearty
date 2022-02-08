@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Pipelines;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -78,17 +79,35 @@ namespace JobBank.Server
             try
             {
                 var buffer = new byte[PromiseId.MaxChars + 2];
+                var memory = new Memory<byte>(buffer);
 
-                PromiseId? promiseId;
                 int index = 0;
 
-                // Same as await foreach on _promiseIds but slightly more efficient
-                while ((promiseId = await _promiseIds.TryGetMemberAsync(index++, 
-                                                                        cancellationToken))
-                       is not null)
+                while (true)
                 {
-                    var memory = new Memory<byte>(buffer);
-                    int numBytes = promiseId.Value.FormatAscii(memory);
+                    int numBytes;
+
+                    var (promiseId, isValid) = await _promiseIds.TryGetMemberAsync(
+                                                        index, cancellationToken);
+                    if (!isValid)
+                    {
+                        // Exceptions from the promise list are reported as part of the
+                        // normal payload, and are not considered to fail the pipe.
+                        if (_promiseIds.Exception is Exception exception)
+                        {
+                            bool isCancellation = exception is OperationCanceledException;
+                            string text = isCancellation ? "<CANCELLED>\r\n" : "<FAILED>\r\n";
+                            numBytes = Encoding.ASCII.GetBytes(text, memory.Span);
+                            await writer.WriteAsync(memory[..numBytes], cancellationToken)
+                                        .ConfigureAwait(false);
+                        }
+
+                        break;
+                    }
+                    
+                    ++index;
+
+                    numBytes = promiseId.FormatAscii(memory);
 
                     // Terminate each entry by Internet-standard new-line
                     buffer[numBytes++] = (byte)'\r';

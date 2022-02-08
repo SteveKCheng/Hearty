@@ -39,7 +39,6 @@ namespace JobBank.Server
     /// </para>
     /// </remarks>
     public class IncrementalAsyncList<T> : IAsyncEnumerable<T>
-        where T : notnull
     {
         /// <summary>
         /// The list of members that may be incrementally populated.
@@ -93,7 +92,7 @@ namespace JobBank.Server
         /// is terminated, this object is set to null.  
         /// </para>
         /// </remarks>
-        private volatile Dictionary<int, AsyncTaskMethodBuilder<T?>>? _consumers = new();
+        private volatile Dictionary<int, AsyncTaskMethodBuilder<(T, bool)>>? _consumers = new();
 
         /// <summary>
         /// Any user-supplied exception that is supplied on completing 
@@ -155,11 +154,19 @@ namespace JobBank.Server
         /// </param>
         /// <returns>
         /// Asynchronous task that completes with the desired
-        /// member of the list, or null if the index is past
-        /// the end of the list.
+        /// member of the list, as the first item of the tuple.
+        /// The second item of the tuple is true if the index
+        /// refers to an actual member, or false if the index
+        /// is past the end of the list.  In the latter case
+        /// the first item of the tuple is set to the default
+        /// value for <typeparamref name="T" />.  If the
+        /// list has been terminated with an exception, that
+        /// exception is not thrown out of this method, and
+        /// all preceding members remain available.
         /// </returns>
-        public ValueTask<T?> TryGetMemberAsync(int index,
-                                               CancellationToken cancellationToken = default)
+        public ValueTask<(T Value, bool IsValid)> 
+            TryGetMemberAsync(int index,
+                              CancellationToken cancellationToken = default)
             => TryGetMemberAsync(index, Timeout.InfiniteTimeSpan, cancellationToken);
 
         /// <summary>
@@ -178,15 +185,20 @@ namespace JobBank.Server
         /// </param>
         /// <returns>
         /// Asynchronous task that completes with the desired
-        /// member of the list, or null if the index is past
-        /// the end of the list.  If the list has been completed
-        /// with an exception, it will be thrown out when the 
-        /// index is past the end of the list; the preceding
-        /// items will still be reported normally.
+        /// member of the list, as the first item of the tuple.
+        /// The second item of the tuple is true if the index
+        /// refers to an actual member, or false if the index
+        /// is past the end of the list.  In the latter case
+        /// the first item of the tuple is set to the default
+        /// value for <typeparamref name="T" />. If the
+        /// list has been terminated with an exception, that
+        /// exception is not thrown out of this method, and
+        /// all preceding members remain available.
         /// </returns>
-        public ValueTask<T?> TryGetMemberAsync(int index, 
-                                               TimeSpan timeout,
-                                               CancellationToken cancellationToken)
+        public ValueTask<(T Value, bool IsValid)> 
+            TryGetMemberAsync(int index, 
+                              TimeSpan timeout,
+                              CancellationToken cancellationToken)
         {
             ThrowIfIndexIsNegative(index);
             cancellationToken.ThrowIfCancellationRequested();
@@ -194,23 +206,18 @@ namespace JobBank.Server
             var consumers = _consumers;
             var count = _membersCount;
 
-            ValueTask<T?> GetMemberImmediately(int index, int count)
+            ValueTask<(T, bool)> GetMemberImmediately(int index, int count)
             {
-                var exception = _exception;
-                if (index < count || exception is null)
-                {
-                    T? value = (index < count) ? _members[index] : default;
-                    return ValueTask.FromResult(value);
-                }
-
-                return ValueTask.FromException<T?>(exception);
+                bool valid = index < count;
+                T value = valid ? _members[index] : default!;
+                return ValueTask.FromResult((value, valid));
             }
 
             // Opportunistically read without taking locks
             if (consumers is null || index < count)
                 return GetMemberImmediately(index, count);
 
-            Task<T?> task;
+            Task<(T, bool)> task;
 
             lock (consumers)
             {
@@ -219,7 +226,7 @@ namespace JobBank.Server
                 count = _membersCount;
 
                 // Need to re-check after taking lock
-                if (_consumers is null || index < count)
+                if (_consumers is null)
                     return GetMemberImmediately(index, count);
 
                 // Re-use existing task or create new task
@@ -229,18 +236,19 @@ namespace JobBank.Server
                     consumers.Add(index, taskBuilder);
             }
 
-            if (!task.IsCompleted)
+            // Add timeout and cancellation token on top of the
+            // shared task, if any.
+            if (!task.IsCompleted &&
+                (cancellationToken.CanBeCanceled || 
+                 timeout != Timeout.InfiniteTimeSpan))
             {
-                if (cancellationToken.CanBeCanceled || timeout != Timeout.InfiniteTimeSpan)
-                {
-                    if (timeout == TimeSpan.Zero)
-                        throw new TimeoutException("Requested timeout expired before a member of the list becomes available. ");
+                if (timeout == TimeSpan.Zero)
+                    throw new TimeoutException("Requested timeout expired before a member of the list becomes available. ");
 
-                    task = task.WaitAsync(timeout, cancellationToken);
-                }
+                task = task.WaitAsync(timeout, cancellationToken);
             }
 
-            return new ValueTask<T?>(task);
+            return new ValueTask<(T, bool)>(task);
         }
 
         /// <summary>
@@ -279,7 +287,7 @@ namespace JobBank.Server
                 return false;
 
             bool hasTaskBuilder;
-            AsyncTaskMethodBuilder<T?> taskBuilder;
+            AsyncTaskMethodBuilder<(T, bool)> taskBuilder;
 
             lock (consumers)
             {
@@ -314,7 +322,7 @@ namespace JobBank.Server
 
             // Invoke continuations outside the lock
             if (hasTaskBuilder)
-                taskBuilder.SetResult(value);
+                taskBuilder.SetResult((value, true));
 
             return true;
         }
@@ -372,12 +380,7 @@ namespace JobBank.Server
             // Notify tasks waiting for members past the end of the list.
             // Invoke continuations outside the lock.
             foreach (var (_, taskBuilder) in consumers)
-            {
-                if (exception is null)
-                    taskBuilder.SetResult(default);
-                else
-                    taskBuilder.SetException(exception);
-            }
+                taskBuilder.SetResult((default!, false));
 
             return true;
         }
@@ -425,6 +428,11 @@ namespace JobBank.Server
         /// </summary>
         public int Count => _membersCount;
 
+        /// <summary>
+        /// The exception that the list has been terminated with, if any.
+        /// </summary>
+        public Exception? Exception => _exception;
+
         /// <inheritdoc cref="IAsyncEnumerable{T}.GetAsyncEnumerator(CancellationToken)" />
         public async IAsyncEnumerator<T> 
             GetAsyncEnumerator(CancellationToken cancellationToken = default)
@@ -432,13 +440,17 @@ namespace JobBank.Server
             int index = 0;
             while (true)
             {
-                T? item = await TryGetMemberAsync(index++, cancellationToken)
-                                .ConfigureAwait(false);
-                if (item is null)
-                    yield break;
+                var (item, valid) = await TryGetMemberAsync(index, cancellationToken)
+                                            .ConfigureAwait(false);
+                if (!valid)
+                    break;
 
+                ++index;
                 yield return item;
             }
+
+            if (Exception is Exception exception)
+                throw exception;
         }
     }
 }
