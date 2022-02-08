@@ -67,5 +67,11 @@ namespace JobBank.Server
         /// once another producer has already terminated the list.
         /// </remarks>
         bool IsComplete { get; }
+
+        /// <summary>
+        /// Get the object that can be used to read what has
+        /// been built by this object, as a promise output.
+        /// </summary>
+        PromiseData Output { get; }
     }
 }

@@ -560,6 +560,7 @@ namespace JobBank.Server
         internal void PushMacroJobCore(IJobQueueOwner owner,
                                        int priority,
                                        Promise promise,
+                                       PromiseListBuilderFactory builderFactory,
                                        IAsyncEnumerable<(Promise, PromiseJob)> generator,
                                        bool ownsCancellation,
                                        CancellationToken cancellationToken)
@@ -567,24 +568,31 @@ namespace JobBank.Server
             var queue = PriorityClasses[priority].GetOrAdd(owner);
 
             IPromiseListBuilder resultBuilder;
-            PromiseList? promiseOutput = null;
+            bool isNew = false;
 
             lock (_macroPromises)
             {
                 ref var entry = ref CollectionsMarshal.GetValueRefOrAddDefault(
                                     _macroPromises, promise.Id, out _);
-                resultBuilder = (entry.ResultBuilder ??= (promiseOutput = new PromiseList()));
+
+                if (entry.ResultBuilder is null)
+                {
+                    entry.ResultBuilder = builderFactory.Invoke(promise);
+                    isNew = true;
+                }
+
+                resultBuilder = entry.ResultBuilder;
                 ++entry.ProducerCount;
 
                 // Set flag when at least one client owns cancellation
                 entry.OwnsCancellation |= ownsCancellation;
             }
 
-            if (promiseOutput is not null)
+            if (isNew)
             {
                 // FIXME should check this returns true
                 promise.TryAwaitAndPostResult(
-                    new ValueTask<PromiseData>(promiseOutput),
+                    ValueTask.FromResult(resultBuilder.Output),
                     _exceptionTranslator);
             }
 
@@ -603,6 +611,11 @@ namespace JobBank.Server
         /// <param name="owner">The owner of the queue. </param>
         /// <param name="priority">The desired priority class of the jobs. </param>
         /// <param name="promise">Promise object for the macro job. </param>
+        /// <param name="builderFactory">Provides the implementation
+        /// of <see cref="IPromiseListBuilder" /> for gathering the
+        /// promises generated from <paramref name="generator" />,
+        /// and storing them into <paramref name="promise" />.
+        /// </param>
         /// <param name="generator">
         /// Generates the micro jobs once the macro job has
         /// been de-queued and ready to run.
@@ -614,6 +627,7 @@ namespace JobBank.Server
         public void PushMacroJob(IJobQueueOwner owner, 
                                  int priority,
                                  Promise promise,
+                                 PromiseListBuilderFactory builderFactory,
                                  IAsyncEnumerable<(Promise, PromiseJob)> generator,
                                  CancellationToken cancellationToken)
         {
@@ -624,7 +638,8 @@ namespace JobBank.Server
                 return;
             }
 
-            PushMacroJobCore(owner, priority, promise, generator,
+            PushMacroJobCore(owner, priority, 
+                             promise, builderFactory, generator,
                              ownsCancellation: false,
                              cancellationToken);
         }
@@ -637,6 +652,11 @@ namespace JobBank.Server
         /// <param name="owner">The owner of the queue. </param>
         /// <param name="priority">The desired priority class of the jobs. </param>
         /// <param name="promise">Promise object for the macro job. </param>
+        /// <param name="builderFactory">Provides the implementation
+        /// of <see cref="IPromiseListBuilder" /> for gathering the
+        /// promises generated from <paramref name="generator" />,
+        /// and storing them into <paramref name="promise" />.
+        /// </param>
         /// <param name="generator">
         /// Generates the micro jobs once the macro job has
         /// been de-queued and ready to run.
@@ -644,6 +664,7 @@ namespace JobBank.Server
         public void PushMacroJobAndOwnCancellation(IJobQueueOwner owner,
                                                    int priority,
                                                    Promise promise,
+                                                   PromiseListBuilderFactory builderFactory,
                                                    IAsyncEnumerable<(Promise, PromiseJob)> generator)
         {
             // Enqueue nothing if promise is already completed
@@ -655,7 +676,8 @@ namespace JobBank.Server
 
             var cancellationToken = RegisterCancellationSource(owner, promise.Id);
 
-            PushMacroJobCore(owner, priority, promise, generator,
+            PushMacroJobCore(owner, priority, 
+                             promise, builderFactory, generator,
                              ownsCancellation: true,
                              cancellationToken);
         }
@@ -861,4 +883,18 @@ namespace JobBank.Server
                 _jobScheduling.UnregisterMacroJob(_promiseId, toCancel: false);
         }
     }
+
+    /// <summary>
+    /// Function type for <see cref="JobSchedulingSystem" />
+    /// to instantiate the output object for a macro job.
+    /// </summary>
+    /// <param name="promise">
+    /// The promise that the output will be attached to.
+    /// </param>
+    /// <returns>
+    /// Implementation of <see cref="IPromiseListBuilder" />
+    /// that will be set to <see cref="Promise.ResultOutput" />
+    /// for the macro job.
+    /// </returns>
+    public delegate IPromiseListBuilder PromiseListBuilderFactory(Promise promise);
 }

@@ -15,6 +15,13 @@ namespace JobBank.Server
     /// </summary>
     public class PromiseList : PromiseData, IPromiseListBuilder
     {
+        /// <summary>
+        /// Factory to instantiate this class for use with 
+        /// <see cref="JobSchedulingSystem" />.
+        /// </summary>
+        public static PromiseListBuilderFactory Factory { get; }
+            = _ => new PromiseList();
+
         private readonly IncrementalAsyncList<PromiseId> _promiseIds = new();
 
         bool IPromiseListBuilder.IsComplete => _promiseIds.IsComplete;
@@ -24,6 +31,7 @@ namespace JobBank.Server
 
         void IPromiseListBuilder.SetMember(int index, Promise promise)
             => _promiseIds.TrySetMember(index, promise.Id);
+        PromiseData IPromiseListBuilder.Output => this;
 
         /// <inheritdoc />
         public override string SuggestedContentType => "text/plain";
