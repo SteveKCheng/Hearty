@@ -16,6 +16,9 @@ using JobBank.Server.Mocks;
 using JobBank.Server.WebApi;
 using JobBank.Scheduling;
 using Microsoft.AspNetCore.Http;
+using System.Text.Json;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace JobBank.Server.Program
 {
@@ -156,11 +159,55 @@ namespace JobBank.Server.Program
                     return promise.Id;
                 });
 
+                endpoints.MapPostJob("multi", input => PriceMultipleAsync(jobScheduling, input));
+
                 endpoints.MapGetPromiseById();
                 endpoints.MapPostPromiseById();
                 endpoints.MapGetPromiseByPath();
             });
+        }
 
+        private static async ValueTask<PromiseId> PriceMultipleAsync(JobSchedulingSystem jobScheduling, PromiseRequest input)
+        {
+            // Cannot pass the stream directly to JsonSerializer.DeserializeAsync,
+            // because we also need to retain the inputs to store in the promise.
+            // But we might decide that is unnecessary.
+            using var stream = input.PipeReader.AsStream();
+            var requestData = await ReadStreamIntoMemorySafelyAsync(stream,
+                                                                    input.ContentLength,
+                                                                    16 * 1024 * 1024,
+                                                                    8192,
+                                                                    input.CancellationToken);
+
+            var items = JsonSerializer.Deserialize<IEnumerable<MockPricingInput>>(
+                new MemoryReadingStream(requestData));
+
+            if (items == null)
+                throw new InvalidDataException("Received a null list. ");
+
+            var promise = input.Storage.CreatePromise(new Payload(input.ContentType ?? string.Empty, requestData));
+
+            var microJobs = items.Select((MockPricingInput item) =>
+            {
+                var g = new Random(79);
+                var b = new ArrayBufferWriter<byte>();
+                JsonSerializer.Serialize(new Utf8JsonWriter(b), item);
+                var d = new Payload("application/json", b.WrittenMemory);
+                var p = input.Storage.CreatePromise(d);
+                return (p, new PromiseJob(d, g.Next(200, 7000)));
+            });
+
+            jobScheduling.PushMacroJobAndOwnCancellation(
+                _dummyQueueOwner, 4, promise, PromiseList.Factory,
+                AsAsyncEnumerable(microJobs));
+
+            return promise.Id;
+        }
+
+        private static async IAsyncEnumerable<T> AsAsyncEnumerable<T>(IEnumerable<T> sequence)
+        {
+            foreach (var item in sequence)
+                yield return item;
         }
 
         /// <summary>
