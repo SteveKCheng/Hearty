@@ -491,6 +491,34 @@ namespace JobBank.Scheduling
         private async Task LaunchJobInternalAsync(IJobWorker<TInput, TOutput> worker,
                                                   uint executionId)
         {
+            var cancellationToken = _cancellationSourceUse.Token;
+
+            // If the job is already cancelled before work begins,
+            // act as if the job (message) does not even exist
+            // in the first place, e.g. as if it had been removed
+            // from its containing queue.  This check is not
+            // strictly necessary but is good for performance.
+            //
+            // If we are cancelled, then it should not be necessary
+            // to dispose cancellation registrations, fortunately.
+            // Otherwise this cleaning up would get complicated.
+            if (cancellationToken.IsCancellationRequested)
+            {
+                worker.AbandonJob(executionId);
+                _taskBuilder.SetException(
+                    new OperationCanceledException(cancellationToken));
+
+                // Flag this variable to true for completeness.
+                //
+                // We do not care about racing on this variable
+                // even though we are outside of a lock, because
+                // no code will ever run from this job instance
+                // that would consult this variable.
+                _isDone = true;
+
+                return;
+            }
+
             try
             {
                 var initialCharge = InitialWait;
@@ -518,11 +546,10 @@ namespace JobBank.Scheduling
                                            .UpdateCurrentCharge(t),
                     this);
 
+                cancellationToken.ThrowIfCancellationRequested();
+
                 try
                 {
-                    var cancellationToken = _cancellationSourceUse.Token;
-                    cancellationToken.ThrowIfCancellationRequested();
-
                     var output = await worker.ExecuteJobAsync(executionId, this, cancellationToken)
                                              .ConfigureAwait(false);
                     _taskBuilder.SetResult(output);
