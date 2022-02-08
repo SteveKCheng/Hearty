@@ -65,6 +65,7 @@ namespace JobBank.Utilities
                                                    : (int)remaining;
             var slice = _source.Slice(_position, toRead);
             slice.CopyTo(buffer);
+            _offset += toRead;
             return toRead;
         }
 
