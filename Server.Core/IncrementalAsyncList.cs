@@ -106,6 +106,16 @@ namespace JobBank.Server
         private Exception? _exception;
 
         /// <summary>
+        /// Builds the task for the <see cref="Completion" /> property.
+        /// </summary>
+        private AsyncTaskMethodBuilder _completionBuilder;
+
+        /// <summary>
+        /// Set to true if <see cref="_completionBuilder" /> has been initialized.
+        /// </summary>
+        private bool _completionBuilderInUse;
+
+        /// <summary>
         /// Throw an exception if the argument index is negative.
         /// </summary>
         private static void ThrowIfIndexIsNegative(int index)
@@ -360,6 +370,9 @@ namespace JobBank.Server
             if (consumers is null)
                 return false;
 
+            bool completionBuilderInUse = false;
+            AsyncTaskMethodBuilder completionBuilder = default;
+
             lock (consumers)
             {
                 if (_membersCount != count)
@@ -374,6 +387,13 @@ namespace JobBank.Server
                     return false;
 
                 _exception = exception;
+
+                if (_completionBuilderInUse)
+                {
+                    completionBuilder = _completionBuilder;
+                    completionBuilderInUse = true;
+                }
+
                 _consumers = null;
             }
 
@@ -381,6 +401,24 @@ namespace JobBank.Server
             // Invoke continuations outside the lock.
             foreach (var (_, taskBuilder) in consumers)
                 taskBuilder.SetResult((default!, false));
+
+            // Notify tasks waiting on the Completion property.
+            if (completionBuilderInUse)
+            {
+                if (exception is null)
+                {
+                    completionBuilder.SetResult();
+
+                    // Do not need to keep the builder around
+                    // if there is no exception.
+                    _completionBuilderInUse = false;
+                    _completionBuilder = default;
+                }
+                else
+                {
+                    completionBuilder.SetException(exception);
+                }
+            }
 
             return true;
         }
@@ -432,6 +470,56 @@ namespace JobBank.Server
         /// The exception that the list has been terminated with, if any.
         /// </summary>
         public Exception? Exception => _exception;
+
+        /// <summary>
+        /// A task that completes when the list is terminated.
+        /// </summary>
+        /// <remarks>
+        /// If the list is terminated with an associated exception,
+        /// then this task will be faulted with that exception.
+        /// </remarks>
+        public Task Completion
+        {
+            get
+            {
+                // Get an incomplete task object if the list is not yet complete.
+                var consumers = _consumers;
+                if (consumers is not null)
+                {
+                    lock (consumers)
+                    {
+                        if (_consumers is not null)
+                        {
+                            var task = _completionBuilder.Task;
+                            _completionBuilderInUse = true;
+                            return task;
+                        }
+                    }
+                }
+
+                //
+                // Execution reaches here if the list is already complete.
+                //
+
+                var exception = _exception;
+                if (exception is null)
+                    return Task.CompletedTask;
+
+                if (Volatile.Read(ref _completionBuilderInUse))
+                    return _completionBuilder.Task;
+
+                var builder = new AsyncTaskMethodBuilder();
+                builder.SetException(exception);
+
+                // Cache the Task object holding the exception.
+                // We assume that struct tearing on _completionBuilder
+                // is harmless because it only holds a single reference.
+                _completionBuilder = builder;
+                Volatile.Write(ref _completionBuilderInUse, true);
+
+                return builder.Task;
+            }
+        }
 
         /// <inheritdoc cref="IAsyncEnumerable{T}.GetAsyncEnumerator(CancellationToken)" />
         public async IAsyncEnumerator<T> 
