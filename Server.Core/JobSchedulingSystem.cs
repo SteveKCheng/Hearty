@@ -42,46 +42,13 @@ namespace JobBank.Server
             WorkerDistribution { get; }
 
         /// <summary>
-        /// Cached "future" objects for jobs that have been submitted to at
-        /// least one job queue.
+        /// Logs important operations performed by this instance.
         /// </summary>
-        /// <remarks>
-        /// This dictionary ensures that for a given promise there is at
-        /// most one job object associated to it.  If the promise is
-        /// submitted multiple times as jobs then all the jobs share
-        /// the same job object.
-        /// </remarks>
-        private readonly Dictionary<PromiseId, 
-                                    SharedFuture<PromiseJob, PromiseData>>
-            _futures = new();
-
-        /// <summary>
-        /// Track <see cref="CancellationTokenSource" /> that are
-        /// registered together with the jobs that are not supplied
-        /// with external cancellation tokens.
-        /// </summary>
-        private readonly Dictionary<PromiseId,
-                                    SmallList<OwnerCancellation>>
-            _cancellations = new();
-
-        /// <summary>
-        /// Cached output for macro jobs.
-        /// </summary>
-        /// <remarks>
-        /// This dictionary ensures that for a given promise of a macro
-        /// job there is at most one promise output object associated to it.  
-        /// Unlike micro jobs, the job object is not shared across
-        /// multiple submissions of the same macro job, but the promise
-        /// output is.  The count of jobs is maintained so cancelling
-        /// a macro job does not cancel the promise output unless there
-        /// are no more macro jobs sharing the same output object.
-        /// </remarks>
-        private readonly Dictionary<PromiseId,
-                (IPromiseListBuilder ResultBuilder, int ProducerCount)>
-            _macroPromises = new();
-
         private readonly ILogger _logger;
 
+        /// <summary>
+        /// Translates exceptions from executing a job into promise output.
+        /// </summary>
         private readonly PromiseExceptionTranslator _exceptionTranslator;
 
         /// <summary>
@@ -136,25 +103,217 @@ namespace JobBank.Server
         /// </summary>
         private readonly Task _jobRunnerTask;
 
+        #region Registration of cancellation sources
+
         /// <summary>
-        /// Get a scheduled job entry to push into a client's queue;
-        /// the future object may be shared if the same job
-        /// has been pushed before (for another client).
+        /// Track <see cref="CancellationTokenSource" /> that are
+        /// registered together with the jobs that are not supplied
+        /// with external cancellation tokens.
+        /// </summary>
+        private readonly Dictionary<PromiseId,
+                                    SmallList<OwnerCancellation>>
+            _cancellations = new();
+
+        /// <summary>
+        /// Unregister all cancellation sources that have been registered
+        /// with a promise ID.  
+        /// </summary>
+        /// <remarks>
+        /// This method should be called once a promise has finished
+        /// processing, successful or not.
+        /// </remarks>
+        private void UnregisterCancellationSource(PromiseId promiseId)
+        {
+            SmallList<OwnerCancellation> list;
+            lock (_cancellations)
+            {
+                if (!_cancellations.Remove(promiseId, out list))
+                    return;
+            }
+
+            foreach (var item in list)
+                item.Value.Dispose();
+        }
+
+        /// <summary>
+        /// Create and register a cancellation source associated to a queue 
+        /// owner and promise ID.
+        /// </summary>
+        /// <remarks>
+        /// The registration allows cancellation to occur without
+        /// holding a reference to the <see cref="CancellationTokenSource" />,
+        /// which is impossible for remote clients.
+        /// See <see cref="TryCancelForClient" />.
+        /// </remarks>
+        /// <returns>
+        /// The cancellation token from the newly registered source.
+        /// </returns>
+        private CancellationToken RegisterCancellationSource(IJobQueueOwner owner,
+                                                             PromiseId promiseId)
+        {
+            var use = CancellationSourcePool.Rent();
+            var item = new OwnerCancellation(owner, use);
+
+            lock (_cancellations)
+            {
+                if (_cancellations.TryGetValue(promiseId, out var oldList))
+                {
+                    var a = new OwnerCancellation[oldList.Count + 1];
+                    for (int i = 0; i < oldList.Count; ++i)
+                        a[i] = oldList[i];
+                    a[oldList.Count] = item;
+                    _cancellations[promiseId] = new SmallList<OwnerCancellation>(a);
+                }
+                else
+                {
+                    _cancellations.Add(promiseId, new SmallList<OwnerCancellation>(item));
+                }
+            }
+
+            return use.Token;
+        }
+
+        /// <summary>
+        /// Cancel a job that had been pushed earlier
+        /// without an explicit cancellation token.
+        /// </summary>
+        /// <param name="owner">
+        /// The owner that had requested the job earlier. 
+        /// </param>
+        /// <param name="promiseId">
+        /// The ID of the promise associated to the job.
+        /// </param>
+        /// <returns>
+        /// False if the combination of client and promise is no longer
+        /// registered.  True if the combination is registered
+        /// and cancellation has been requested.
+        /// </returns>
+        public bool TryCancelForClient(IJobQueueOwner owner, PromiseId promiseId)
+        {
+            CancellationTokenSource? source = null;
+
+            lock (_cancellations)
+            {
+                if (_cancellations.TryGetValue(promiseId, out var oldList))
+                {
+                    foreach (var item in oldList)
+                    {
+                        if (item.Key.Equals(owner))
+                        {
+                            source = item.Value.Source;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (source is null)
+                return false;
+
+            source.Cancel();
+            return true;
+        }
+
+        #endregion
+
+        #region Micro jobs
+
+        /// <summary>
+        /// Cached "future" objects for jobs that have been submitted to at
+        /// least one job queue.
+        /// </summary>
+        /// <remarks>
+        /// This dictionary ensures that for a given promise there is at
+        /// most one job object associated to it.  If the promise is
+        /// submitted multiple times as jobs then all the jobs share
+        /// the same job object.
+        /// </remarks>
+        private readonly Dictionary<PromiseId,
+                                    SharedFuture<PromiseJob, PromiseData>>
+            _futures = new();
+
+        /// <summary>
+        /// Remove the entry mapping a promise ID to a 
+        /// scheduled (non-macro) job.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This method is to be called once the job is finished
+        /// to avoid unbounded growth in the mapping table.
+        /// </para>
+        /// <para>
+        /// The mapping table manipulated by this method is not used
+        /// for macro jobs, and so this method shall not be used
+        /// for those.
+        /// </para>
+        /// </remarks>
+        /// <param name="promiseId">
+        /// The promise ID to unregister.
+        /// </param>
+        /// <param name="unregisterCancellation">
+        /// If true, calls <see cref="UnregisterCancellationSource" />
+        /// for the same promise ID.
+        /// </param>
+        private void RemoveCachedFuture(PromiseId promiseId, bool unregisterCancellation)
+        {
+            lock (_futures)
+            {
+                _futures.Remove(promiseId);
+            }
+
+            if (unregisterCancellation)
+                UnregisterCancellationSource(promiseId);
+        }
+
+        /// <summary>
+        /// Get a scheduled job entry to push into a client's queue.
         /// </summary>
         /// <param name="account">Scheduling account corresponding to
         /// the client's queue. </param>
-        /// <param name="request">Input for the job to execute. 
-        /// This input is also used to de-duplicate jobs.
+        /// <param name="promiseId">
+        /// The promise ID to associate the job to.
+        /// </param>
+        /// <param name="request">Input for the job to execute,
+        /// on first creation.  If there is already a (shared)
+        /// job object for <paramref name="promiseId" />,
+        /// this argument is ignored.
         /// </param>
         /// <param name="charge"></param>
-        /// <returns></returns>
+        /// <param name="outputTask">
+        /// On return, the asynchronous task that completes 
+        /// with the job's result is placed here.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// A token that may be used to cancel the job,
+        /// but only for the current client.  If the job
+        /// is shared then all clients must cancel be the job
+        /// is cancelled.
+        /// </param>
+        /// <remarks>
+        /// <para>
+        /// The future object may be shared if the same job
+        /// has been pushed before (for another client).
+        /// This sharing is accomplished by this method
+        /// storing the relevant details into a table, keyed by 
+        /// <paramref name="promiseId" />.
+        /// </para>
+        /// <para>
+        /// This method is only used for non-macro jobs.
+        /// </para>
+        /// </remarks>
+        /// <returns>
+        /// The job message that the caller should arrange
+        /// to be put into the job queue.
+        /// This method does not enqueue the returned 
+        /// job message.
+        /// </returns>
         private JobMessage
-            GetJobMessage(ISchedulingAccount account, 
-                          PromiseId promiseId,
-                          PromiseJob request, 
-                          int charge,
-                          out Task<PromiseData> outputTask,
-                          CancellationToken cancellationToken)
+            RegisterJobMessage(ISchedulingAccount account, 
+                               PromiseId promiseId,
+                               PromiseJob request, 
+                               int charge,
+                               out Task<PromiseData> outputTask,
+                               CancellationToken cancellationToken)
         {
             JobMessage message;
 
@@ -189,28 +348,31 @@ namespace JobBank.Server
         }
 
         /// <summary>
-        /// Remove the entry mapping a promise ID to a scheduled job.
+        /// Re-factored code to create a non-macro job message
+        /// and have the job complete the given promise object.
         /// </summary>
-        /// <remarks>
-        /// This method is to be called once the job is finished
-        /// to avoid unbounded growth in the mapping table.
-        /// </remarks>
-        private void RemoveCachedFuture(PromiseId promiseId)
+        internal JobMessage RegisterJobMessageAndSetPromise(
+            ClientQueue queue,
+            int charge,
+            Promise promise,
+            PromiseJob job,
+            bool unregisterCancellation,
+            CancellationToken cancellationToken)
         {
-            lock (_futures)
-            {
-                _futures.Remove(promiseId);
-            }
+            var message = RegisterJobMessage(queue,
+                                        promise.Id,
+                                        job,
+                                        charge,
+                                        out var outputTask,
+                                        cancellationToken);
 
-            SmallList<OwnerCancellation> list;
-            lock (_cancellations)
-            {
-                if (!_cancellations.Remove(promiseId, out list))
-                    return;
-            }
+            promise.TryAwaitAndPostResult(
+                new ValueTask<PromiseData>(outputTask),
+                _exceptionTranslator,
+                unregisterCancellation ? p => RemoveCachedFuture(p.Id, true)
+                                       : p => RemoveCachedFuture(p.Id, false));
 
-            foreach (var item in list)
-                item.Value.Dispose();
+            return message;
         }
 
         /// <summary>
@@ -249,148 +411,12 @@ namespace JobBank.Server
 
             var queue = PriorityClasses[priority].GetOrAdd(owner);
 
-            var message = RegisterJob(queue, charge, 
-                                      promise, job, cancellationToken);
+            var message = RegisterJobMessageAndSetPromise(
+                            queue, charge, promise, job,
+                            unregisterCancellation: false,
+                            cancellationToken);
 
             queue.Enqueue(message);
-        }
-
-        /// <summary>
-        /// Create a push a "macro job" into a job queue which
-        /// dynamically expands into many "micro jobs".
-        /// </summary>
-        /// <param name="owner">The owner of the queue. </param>
-        /// <param name="priority">The desired priority class of the jobs. </param>
-        /// <param name="promise">Promise object for the macro job. </param>
-        /// <param name="generator">
-        /// Generates the micro jobs once the macro job has
-        /// been de-queued and ready to run.
-        /// </param>
-        /// <param name="cancellationToken">
-        /// Used by the caller to request cancellation of the macro job
-        /// and any micro jobs created from it.
-        /// </param>
-        public void PushMacroJob(IJobQueueOwner owner, 
-                                 int priority,
-                                 Promise promise,
-                                 IAsyncEnumerable<(Promise, PromiseJob)> generator,
-                                 CancellationToken cancellationToken)
-        {
-            // Enqueue nothing if promise is already completed
-            if (promise.IsCompleted &&
-                (promise.ResultOutput as IPromiseListBuilder)?.IsComplete == true)
-            {
-                return;
-            }                 
-
-            var queue = PriorityClasses[priority].GetOrAdd(owner);
-
-            IPromiseListBuilder resultBuilder;
-            PromiseList? promiseOutput = null;
-
-            lock (_macroPromises)
-            {
-                ref var entry = ref CollectionsMarshal.GetValueRefOrAddDefault(
-                                    _macroPromises, promise.Id, out _);
-                resultBuilder = (entry.ResultBuilder ??= (promiseOutput = new PromiseList()));
-                ++entry.ProducerCount;
-            }
-
-            if (promiseOutput is not null)
-            {
-                // FIXME should check this returns true
-                promise.AwaitAndPostResult(new ValueTask<PromiseData>(promiseOutput),
-                                           _exceptionTranslator);
-            }
-
-            var message = new MacroJobMessage(generator,
-                                              this, queue, 
-                                              promise.Id, resultBuilder,
-                                              cancellationToken);
-
-            queue.Enqueue(message);
-        }
-
-        internal JobMessage RegisterJob(
-            ClientQueue queue,
-            int charge,
-            Promise promise,
-            PromiseJob job,
-            CancellationToken cancellationToken)
-        {
-            var message = GetJobMessage(queue,
-                                        promise.Id,
-                                        job,
-                                        charge,
-                                        out var outputTask,
-                                        cancellationToken);
-
-            promise.TryAwaitAndPostResult(new ValueTask<PromiseData>(outputTask),
-                                          _exceptionTranslator,
-                                          p => RemoveCachedFuture(p.Id));
-
-            return message;
-        }
-
-        /// <summary>
-        /// Unregister the macro job/promise when it has finished expanding.
-        /// </summary>
-        /// <param name="promiseId">The promise ID for the macro job
-        /// as passed to <see cref="PushMacroJob" />, which registered
-        /// it.
-        /// </param>
-        /// <param name="toCancel">
-        /// If true, this method is called to process a job cancellation,
-        /// and it would not remove the registration entry if the same
-        /// output is being written by other non-cancelled macro job
-        /// instances.  If false, the registration entry is unconditionally
-        /// removed.
-        /// </param>
-        /// <returns>
-        /// Whether the registration entry existed and has been removed.
-        /// </returns>
-        internal bool UnregisterMacroJob(PromiseId promiseId, bool toCancel)
-        {
-            lock (_macroPromises)
-            {
-                if (toCancel)
-                {
-                    ref var entry = ref CollectionsMarshal.GetValueRefOrNullRef(
-                                        _macroPromises, promiseId);
-
-                    // Do not remove the entry from the dictionary if the
-                    // same output is being written by another macro job instance.
-                    if (Unsafe.IsNullRef(ref entry) || --entry.ProducerCount > 0)
-                        return false;
-                }
-
-                return _macroPromises.Remove(promiseId);
-            }
-        }
-
-        private CancellationToken CreateCancellationToken(IJobQueueOwner owner, 
-                                                          PromiseId promiseId)
-        {
-            var use = CancellationSourcePool.Rent();
-            var item = new OwnerCancellation(owner, use);
-
-            lock (_cancellations)
-            {
-                if (_cancellations.TryGetValue(promiseId, out var oldList))
-                {
-                    var a = new OwnerCancellation[oldList.Count + 1];
-                    for (int i = 0; i < oldList.Count; ++i)
-                        a[i] = oldList[i];
-                    a[oldList.Count] = item;
-                    _cancellations[promiseId] = new SmallList<OwnerCancellation>(a);
-                }
-                else
-                {
-                    _cancellations.Add(promiseId, new SmallList<OwnerCancellation>(item));
-                }
-            }
-
-            return use.Token;
         }
 
         /// <summary>
@@ -422,61 +448,209 @@ namespace JobBank.Server
         /// <param name="job">
         /// Produces the result output of the promise.
         /// </param>
-        public void PushJobAndSourceCancellation(IJobQueueOwner owner,
-                                                 int priority,
-                                                 int charge,
-                                                 Promise promise, 
-                                                 PromiseJob job)
+        public void PushJobAndOwnCancellation(IJobQueueOwner owner,
+                                              int priority,
+                                              int charge,
+                                              Promise promise,
+                                              PromiseJob job)
         {
-            var cancellationToken = CreateCancellationToken(owner, promise.Id);
-            PushJob(owner,
-                    priority,
-                    charge,
-                    promise,
-                    job,
-                    cancellationToken);
+            // Enqueue nothing if promise is already completed
+            if (promise.IsCompleted)
+                return;
+
+            var queue = PriorityClasses[priority].GetOrAdd(owner);
+
+            var cancellationToken = RegisterCancellationSource(owner, promise.Id);
+
+            var message = RegisterJobMessageAndSetPromise(
+                            queue, charge, promise, job,
+                            unregisterCancellation: true,
+                            cancellationToken);
+
+            queue.Enqueue(message);
         }
 
+        #endregion
+
+        #region Macro jobs
+
         /// <summary>
-        /// Cancel a job that was pushed with
-        /// <see cref="PushJobAndSourceCancellation" />.
+        /// Cached output for macro jobs.
         /// </summary>
-        /// <param name="owner">
-        /// The owner that had requested the job earlier. 
+        /// <remarks>
+        /// This dictionary ensures that for a given promise of a macro
+        /// job there is at most one promise output object associated to it.  
+        /// Unlike micro jobs, the job object is not shared across
+        /// multiple submissions of the same macro job, but the promise
+        /// output is.  The count of jobs is maintained so cancelling
+        /// a macro job does not cancel the promise output unless there
+        /// are no more macro jobs sharing the same output object.
+        /// </remarks>
+        private readonly Dictionary<PromiseId,
+                (IPromiseListBuilder ResultBuilder, 
+                 int ProducerCount,
+                 bool OwnsCancellation)>
+            _macroPromises = new();
+
+        /// <summary>
+        /// Unregister the macro job/promise when it has finished expanding.
+        /// </summary>
+        /// <param name="promiseId">The promise ID for the macro job
+        /// as passed to <see cref="PushMacroJob" />, which registered
+        /// it.
         /// </param>
-        /// <param name="promiseId">
-        /// The ID of the promise associated to the job.
+        /// <param name="toCancel">
+        /// If true, this method is called to process a job cancellation,
+        /// and it would not remove the registration entry if the same
+        /// output is being written by other non-cancelled macro job
+        /// instances.  If false, the registration entry is unconditionally
+        /// removed.
         /// </param>
         /// <returns>
-        /// False if the combination of client and promise is no longer
-        /// registered.  True if the combination is registered
-        /// and cancellation has been requested.
+        /// Whether the registration entry existed and has been removed.
         /// </returns>
-        public bool TryCancelForClient(IJobQueueOwner owner, PromiseId promiseId)
+        internal bool UnregisterMacroJob(PromiseId promiseId, bool toCancel)
         {
-            CancellationTokenSource? source = null;
-
-            lock (_cancellations)
+            bool RemoveMainEntry(PromiseId promiseId, 
+                                 bool toCancel, 
+                                 out bool unregisterCancellation)
             {
-                if (_cancellations.TryGetValue(promiseId, out var oldList))
+                unregisterCancellation = false;
+
+                lock (_macroPromises)
                 {
-                    foreach (var item in oldList)
+                    if (toCancel)
                     {
-                        if (item.Key.Equals(owner))
-                        {
-                            source = item.Value.Source;
-                            break;
-                        }
+                        ref var entry = ref CollectionsMarshal.GetValueRefOrNullRef(
+                                            _macroPromises, promiseId);
+
+                        // Do not remove the entry from the dictionary if the
+                        // same output is being written by another macro job instance.
+                        if (Unsafe.IsNullRef(ref entry) || --entry.ProducerCount > 0)
+                            return false;
                     }
+
+                    bool isRemoved = _macroPromises.Remove(promiseId, out var removedEntry);
+                    unregisterCancellation = isRemoved && removedEntry.OwnsCancellation;
+                    return isRemoved;
                 }
             }
 
-            if (source is null)
-                return false;
+            bool isRemoved = RemoveMainEntry(promiseId, toCancel, 
+                                             out bool unregisterCancellation);
+            if (unregisterCancellation)
+                UnregisterCancellationSource(promiseId);
 
-            source.Cancel();
-            return true;
+            return isRemoved;
         }
+
+        /// <summary>
+        /// Re-factored code for pushing a macro job with
+        /// or without its own cancellation source.
+        /// </summary>
+        internal void PushMacroJobCore(IJobQueueOwner owner,
+                                       int priority,
+                                       Promise promise,
+                                       IAsyncEnumerable<(Promise, PromiseJob)> generator,
+                                       bool ownsCancellation,
+                                       CancellationToken cancellationToken)
+        {
+            var queue = PriorityClasses[priority].GetOrAdd(owner);
+
+            IPromiseListBuilder resultBuilder;
+            PromiseList? promiseOutput = null;
+
+            lock (_macroPromises)
+            {
+                ref var entry = ref CollectionsMarshal.GetValueRefOrAddDefault(
+                                    _macroPromises, promise.Id, out _);
+                resultBuilder = (entry.ResultBuilder ??= (promiseOutput = new PromiseList()));
+                ++entry.ProducerCount;
+                if (ownsCancellation)
+                    entry.OwnsCancellation = true;
+            }
+
+            if (promiseOutput is not null)
+            {
+                // FIXME should check this returns true
+                promise.TryAwaitAndPostResult(
+                    new ValueTask<PromiseData>(promiseOutput),
+                    _exceptionTranslator);
+            }
+
+            var message = new MacroJobMessage(generator,
+                                              this, queue,
+                                              promise.Id, resultBuilder,
+                                              cancellationToken);
+
+            queue.Enqueue(message);
+        }
+
+        /// <summary>
+        /// Create a push a "macro job" into a job queue which
+        /// dynamically expands into many "micro jobs".
+        /// </summary>
+        /// <param name="owner">The owner of the queue. </param>
+        /// <param name="priority">The desired priority class of the jobs. </param>
+        /// <param name="promise">Promise object for the macro job. </param>
+        /// <param name="generator">
+        /// Generates the micro jobs once the macro job has
+        /// been de-queued and ready to run.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Used by the caller to request cancellation of the macro job
+        /// and any micro jobs created from it.
+        /// </param>
+        public void PushMacroJob(IJobQueueOwner owner, 
+                                 int priority,
+                                 Promise promise,
+                                 IAsyncEnumerable<(Promise, PromiseJob)> generator,
+                                 CancellationToken cancellationToken)
+        {
+            // Enqueue nothing if promise is already completed
+            if (promise.IsCompleted &&
+                (promise.ResultOutput as IPromiseListBuilder)?.IsComplete == true)
+            {
+                return;
+            }
+
+            PushMacroJobCore(owner, priority, promise, generator,
+                             ownsCancellation: false,
+                             cancellationToken);
+        }
+
+        /// <summary>
+        /// Create a push a "macro job" into a job queue which
+        /// dynamically expands into many "micro jobs",
+        /// and create and track a cancellation token for it. 
+        /// </summary>
+        /// <param name="owner">The owner of the queue. </param>
+        /// <param name="priority">The desired priority class of the jobs. </param>
+        /// <param name="promise">Promise object for the macro job. </param>
+        /// <param name="generator">
+        /// Generates the micro jobs once the macro job has
+        /// been de-queued and ready to run.
+        /// </param>
+        public void PushMacroJobAndOwnCancellation(IJobQueueOwner owner,
+                                                   int priority,
+                                                   Promise promise,
+                                                   IAsyncEnumerable<(Promise, PromiseJob)> generator)
+        {
+            // Enqueue nothing if promise is already completed
+            if (promise.IsCompleted &&
+                (promise.ResultOutput as IPromiseListBuilder)?.IsComplete == true)
+            {
+                return;
+            }
+
+            var cancellationToken = RegisterCancellationSource(owner, promise.Id);
+
+            PushMacroJobCore(owner, priority, promise, generator,
+                             ownsCancellation: true,
+                             cancellationToken);
+        }
+
+        #endregion
     }
 
     /// <summary>
@@ -621,11 +795,12 @@ namespace JobBank.Server
                         if (promise.IsCompleted)
                             continue;
 
-                        message = _jobScheduling.RegisterJob(
+                        message = _jobScheduling.RegisterJobMessageAndSetPromise(
                                         _queue,
                                         0,
                                         promise,
                                         input,
+                                        unregisterCancellation: false,
                                         _jobCancelToken);
                     }
                     catch (Exception e)
