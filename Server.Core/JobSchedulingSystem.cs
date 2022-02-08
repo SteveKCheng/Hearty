@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using JobBank.Scheduling;
@@ -43,6 +45,12 @@ namespace JobBank.Server
         /// Cached "future" objects for jobs that have been submitted to at
         /// least one job queue.
         /// </summary>
+        /// <remarks>
+        /// This dictionary ensures that for a given promise there is at
+        /// most one job object associated to it.  If the promise is
+        /// submitted multiple times as jobs then all the jobs share
+        /// the same job object.
+        /// </remarks>
         private readonly Dictionary<PromiseId, 
                                     SharedFuture<PromiseJob, PromiseData>>
             _futures = new();
@@ -55,6 +63,22 @@ namespace JobBank.Server
         private readonly Dictionary<PromiseId,
                                     SmallList<OwnerCancellation>>
             _cancellations = new();
+
+        /// <summary>
+        /// Cached output for macro jobs.
+        /// </summary>
+        /// <remarks>
+        /// This dictionary ensures that for a given promise of a macro
+        /// job there is at most one promise output object associated to it.  
+        /// Unlike micro jobs, the job object is not shared across
+        /// multiple submissions of the same macro job, but the promise
+        /// output is.  The count of jobs is maintained so cancelling
+        /// a macro job does not cancel the promise output unless there
+        /// are no more macro jobs sharing the same output object.
+        /// </remarks>
+        private readonly Dictionary<PromiseId,
+                (IPromiseListBuilder ResultBuilder, int ProducerCount)>
+            _macroPromises = new();
 
         private readonly ILogger _logger;
 
@@ -253,18 +277,35 @@ namespace JobBank.Server
                                  CancellationToken cancellationToken)
         {
             // Enqueue nothing if promise is already completed
-            if (promise.IsCompleted)
+            if (promise.IsCompleted &&
+                (promise.ResultOutput as IPromiseListBuilder)?.IsComplete == true)
+            {
                 return;
+            }                 
 
             var queue = PriorityClasses[priority].GetOrAdd(owner);
 
-            var promiseOutput = new PromiseList();
+            IPromiseListBuilder resultBuilder;
+            PromiseList? promiseOutput = null;
 
-            promise.AwaitAndPostResult(new ValueTask<PromiseData>(promiseOutput), 
-                                       _exceptionTranslator);
+            lock (_macroPromises)
+            {
+                ref var entry = ref CollectionsMarshal.GetValueRefOrAddDefault(
+                                    _macroPromises, promise.Id, out _);
+                resultBuilder = (entry.ResultBuilder ??= (promiseOutput = new PromiseList()));
+                ++entry.ProducerCount;
+            }
+
+            if (promiseOutput is not null)
+            {
+                // FIXME should check this returns true
+                promise.AwaitAndPostResult(new ValueTask<PromiseData>(promiseOutput),
+                                           _exceptionTranslator);
+            }
 
             var message = new MacroJobMessage(generator,
-                                              this, queue, promiseOutput,
+                                              this, queue, 
+                                              promise.Id, resultBuilder,
                                               cancellationToken);
 
             queue.Enqueue(message);
@@ -289,6 +330,42 @@ namespace JobBank.Server
                                           p => RemoveCachedFuture(p.Id));
 
             return message;
+        }
+
+        /// <summary>
+        /// Unregister the macro job/promise when it has finished expanding.
+        /// </summary>
+        /// <param name="promiseId">The promise ID for the macro job
+        /// as passed to <see cref="PushMacroJob" />, which registered
+        /// it.
+        /// </param>
+        /// <param name="toCancel">
+        /// If true, this method is called to process a job cancellation,
+        /// and it would not remove the registration entry if the same
+        /// output is being written by other non-cancelled macro job
+        /// instances.  If false, the registration entry is unconditionally
+        /// removed.
+        /// </param>
+        /// <returns>
+        /// Whether the registration entry existed and has been removed.
+        /// </returns>
+        internal bool UnregisterMacroJob(PromiseId promiseId, bool toCancel)
+        {
+            lock (_macroPromises)
+            {
+                if (toCancel)
+                {
+                    ref var entry = ref CollectionsMarshal.GetValueRefOrNullRef(
+                                        _macroPromises, promiseId);
+
+                    // Do not remove the entry from the dictionary if the
+                    // same output is being written by another macro job instance.
+                    if (Unsafe.IsNullRef(ref entry) || --entry.ProducerCount > 0)
+                        return false;
+                }
+
+                return _macroPromises.Remove(promiseId);
+            }
         }
 
         private CancellationToken CreateCancellationToken(IJobQueueOwner owner, 
@@ -433,8 +510,9 @@ namespace JobBank.Server
 
         private readonly JobSchedulingSystem _jobScheduling;
         private readonly ClientQueue _queue;
+        private readonly PromiseId _promiseId;
         private readonly IPromiseListBuilder _resultBuilder;
-        private readonly CancellationToken _cancellationToken;
+        private readonly CancellationToken _jobCancelToken;
 
         /// <summary>
         /// Construct the macro job message.
@@ -452,6 +530,11 @@ namespace JobBank.Server
         /// <param name="queue">
         /// The job queue that micro jobs will be pushed into.
         /// </param>
+        /// <param name="promiseId">
+        /// The promise ID for the macro job, needed to unregister
+        /// it from <paramref name="jobScheduling" /> when the macro
+        /// job has finished expanding.
+        /// </param>
         /// <param name="resultBuilder">
         /// The list of promises generated by <paramref name="generator" />
         /// will be stored/passed onto here.
@@ -466,75 +549,132 @@ namespace JobBank.Server
         internal MacroJobMessage(IAsyncEnumerable<(Promise, PromiseJob)> generator,
                                  JobSchedulingSystem jobScheduling,
                                  ClientQueue queue,
+                                 PromiseId promiseId,
                                  IPromiseListBuilder resultBuilder,
                                  CancellationToken cancellationToken)
         {
             _generator = generator;
             _jobScheduling = jobScheduling;
             _queue = queue;
+            _promiseId = promiseId;
             _resultBuilder = resultBuilder;
-            _cancellationToken = cancellationToken;
+            _jobCancelToken = cancellationToken;
         }
 
         /// <inheritdoc cref="IAsyncEnumerable{T}.GetAsyncEnumerator" />
         public async IAsyncEnumerator<JobMessage>
             GetAsyncEnumerator(CancellationToken cancellationToken = default)
         {
-            // Do not do anything if another producer has already completed.
-            if (_resultBuilder.IsComplete)
-                yield break;
-
-            // We cannot write the following loop as a straightforward
-            // "await foreach" with "yield return" inside, because
-            // we need to catch exceptions.
-            await using var enumerator = _generator.GetAsyncEnumerator(_cancellationToken);
-
             int count = 0;
             Exception? exception = null;
 
-            while (true)
+            //
+            // We cannot write the following loop as a straightforward
+            // "await foreach" with "yield return" inside, because
+            // we need to catch exceptions.  We must control the
+            // enumerator manually.
+            //
+
+            IAsyncEnumerator<(Promise, PromiseJob)>? enumerator = null;
+            try
             {
-                JobMessage message;
+                // Do not do anything if another producer has already completed.
+                if (_resultBuilder.IsComplete)
+                    yield break;
+
+                enumerator = _generator.GetAsyncEnumerator(
+                    cancellationToken.CanBeCanceled ? cancellationToken
+                                                    : _jobCancelToken);
+            }
+            catch (Exception e)
+            {
+                exception = e;
+            }
+
+            if (enumerator is not null)
+            {
+                while (true)
+                {
+                    JobMessage message;
+
+                    try
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        _jobCancelToken.ThrowIfCancellationRequested();
+
+                        // Stop generating job messages if another producer
+                        // has completely done so, or there are no more micro jobs.
+                        if (_resultBuilder.IsComplete ||
+                            !await enumerator.MoveNextAsync().ConfigureAwait(false))
+                            break;
+
+                        cancellationToken.ThrowIfCancellationRequested();
+                        _jobCancelToken.ThrowIfCancellationRequested();
+
+                        // Add the new member to the result sequence.
+                        var (promise, input) = enumerator.Current;
+                        _resultBuilder.SetMember(count, promise);
+                        count++;
+
+                        // Do not bother generating a message if the promise
+                        // is already complete by this point.
+                        if (promise.IsCompleted)
+                            continue;
+
+                        message = _jobScheduling.RegisterJob(
+                                        _queue,
+                                        0,
+                                        promise,
+                                        input,
+                                        _jobCancelToken);
+                    }
+                    catch (Exception e)
+                    {
+                        exception = e;
+                        break;
+                    }
+
+                    yield return message;
+                }
 
                 try
                 {
-                    _cancellationToken.ThrowIfCancellationRequested();
-
-                    // Stop generating job messages if another producer
-                    // has completely done so, or there are no more micro jobs.
-                    if (_resultBuilder.IsComplete || 
-                        !await enumerator.MoveNextAsync().ConfigureAwait(false))
-                        break;
-
-                    _cancellationToken.ThrowIfCancellationRequested();
-
-                    // Add the new member to the result sequence.
-                    var (promise, input) = enumerator.Current;
-                    _resultBuilder.SetMember(count, promise);
-                    count++;
-
-                    // Do not bother generating a message if the promise
-                    // is already complete by this point.
-                    if (promise.IsCompleted)
-                        continue;
-
-                    message = _jobScheduling.RegisterJob(
-                                    _queue,
-                                    0,
-                                    promise,
-                                    input,
-                                    _cancellationToken);
+                    await enumerator.DisposeAsync().ConfigureAwait(false);
                 }
                 catch (Exception e)
                 {
-                    exception = e;
-                    break;
+                    exception ??= e;
                 }
-
-                yield return message;
             }
 
-            _resultBuilder.TryComplete(count, exception);
+            if (exception is OperationCanceledException cancelException)
+            {
+                if (cancelException.CancellationToken == _jobCancelToken)
+                {
+                    // Complete _resultBuilder with the cancellation exception
+                    // only if this producer is the last to cancel.
+                    if (_jobScheduling.UnregisterMacroJob(_promiseId, toCancel: true))
+                        _resultBuilder.TryComplete(count, exception);
+
+                    yield break;
+                }
+                else if (cancelException.CancellationToken == cancellationToken)
+                {
+                    // Do not terminate _resultBuilder when cancelling locally
+                    // on this enumerator.
+                    yield break;
+                }
+            }
+
+            // When this producers finishes successfully, or the
+            // exception is not transient, complete _resultBuilder.
+            //
+            // If this producer is the first producer then unregister
+            // the promise as well.  UnregisterMacroPromise could be
+            // called unconditionally here and it would do nothing
+            // if this is not the first producer.
+            if (_resultBuilder.TryComplete(count, exception))
+                _jobScheduling.UnregisterMacroJob(_promiseId, toCancel: false);
         }
     }
 }
