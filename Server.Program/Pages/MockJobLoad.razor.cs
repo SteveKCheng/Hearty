@@ -40,7 +40,7 @@ namespace JobBank.Server.Program.Pages
                 PromiseData request = new Payload("application/json", requestJson);
 
                 var promise = _promiseStorage.CreatePromise(request);
-                var jobFunction = new PromiseJob(request, waitingTime);
+                var jobFunction = new PromisedWork(request, waitingTime);
                 _jobScheduling.PushJob(GetClient(client),
                                        priority,
                                        promise,

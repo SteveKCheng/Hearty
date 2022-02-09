@@ -69,11 +69,11 @@ namespace JobBank.Server
             }
         }
 
-        private sealed class PreInitState : TaskCompletionSource<IDistributedWorker<PromiseJob>>
+        private sealed class PreInitState : TaskCompletionSource<IDistributedWorker<PromisedWork>>
         {
-            public readonly WorkerDistribution<PromiseJob, PromiseData> WorkerDistribution;
+            public readonly WorkerDistribution<PromisedWork, PromiseData> WorkerDistribution;
 
-            public PreInitState(WorkerDistribution<PromiseJob, PromiseData> distribution)
+            public PreInitState(WorkerDistribution<PromisedWork, PromiseData> distribution)
                 => WorkerDistribution = distribution
                      ?? throw new ArgumentNullException(nameof(distribution));
 
@@ -108,9 +108,9 @@ namespace JobBank.Server
         /// is ready to be closed.
         /// </returns>
         public static async 
-            Task<(IDistributedWorker<PromiseJob> Worker, Task CloseTask)> 
+            Task<(IDistributedWorker<PromisedWork> Worker, Task CloseTask)> 
             AcceptHostAsync(
-                WorkerDistribution<PromiseJob, PromiseData> distribution,
+                WorkerDistribution<PromisedWork, PromiseData> distribution,
                 WebSocket webSocket,
                 CancellationToken cancellationToken)
         {

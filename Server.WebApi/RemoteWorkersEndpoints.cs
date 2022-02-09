@@ -59,12 +59,12 @@ namespace JobBank.Server.WebApi
     internal class RemoteWorkersWebSocketEndpoint
     {
         private readonly ILogger _logger;
-        private readonly WorkerDistribution<PromiseJob, PromiseData> _workerDistribution;
+        private readonly WorkerDistribution<PromisedWork, PromiseData> _workerDistribution;
         private readonly RemoteWorkersWebSocketOptions _options;
 
         private RemoteWorkersWebSocketEndpoint(
             ILogger<RemoteWorkersWebSocketEndpoint> logger,
-            WorkerDistribution<PromiseJob, PromiseData> workerDistribution,
+            WorkerDistribution<PromisedWork, PromiseData> workerDistribution,
             RemoteWorkersWebSocketOptions options)
         {
             _logger = logger;
@@ -110,7 +110,7 @@ namespace JobBank.Server.WebApi
         {
             var self = new RemoteWorkersWebSocketEndpoint(
                     services.GetRequiredService<ILogger<RemoteWorkersWebSocketEndpoint>>(),
-                    services.GetRequiredService<WorkerDistribution<PromiseJob, PromiseData>>(),
+                    services.GetRequiredService<WorkerDistribution<PromisedWork, PromiseData>>(),
                     options ?? new RemoteWorkersWebSocketOptions()
                 );
             return self.AcceptAsync;

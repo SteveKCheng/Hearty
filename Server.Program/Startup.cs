@@ -74,9 +74,9 @@ namespace JobBank.Server.Program
             services.AddSingleton<PathsDirectory, InMemoryPathsDirectory>();
             services.AddSingleton<JobSchedulingSystem>();
             services.AddSingleton<TimeoutProvider, SimpleTimeoutProvider>();
-            services.AddSingleton<WorkerDistribution<PromiseJob, PromiseData>>(p =>
+            services.AddSingleton<WorkerDistribution<PromisedWork, PromiseData>>(p =>
             {
-                var d = new WorkerDistribution<PromiseJob, PromiseData>();
+                var d = new WorkerDistribution<PromisedWork, PromiseData>();
 
                 var w = new MockPricingWorker(
                             logger: p.GetRequiredService<ILogger<MockPricingWorker>>(),
@@ -154,7 +154,7 @@ namespace JobBank.Server.Program
                     var promise = input.Storage.CreatePromise(request);
 
                     jobScheduling.PushJobAndOwnCancellation(_dummyQueueOwner, 5, promise,
-                        new PromiseJob(request, 100000));
+                        new PromisedWork(request, 100000));
 
                     return promise.Id;
                 });
@@ -194,7 +194,7 @@ namespace JobBank.Server.Program
                 JsonSerializer.Serialize(new Utf8JsonWriter(b), item);
                 var d = new Payload("application/json", b.WrittenMemory);
                 var p = input.Storage.CreatePromise(d);
-                return (p, new PromiseJob(d, g.Next(200, 7000)));
+                return (p, new PromisedWork(d, g.Next(200, 7000)));
             });
 
             jobScheduling.PushMacroJobAndOwnCancellation(

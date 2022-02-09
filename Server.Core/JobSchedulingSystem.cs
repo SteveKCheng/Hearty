@@ -10,8 +10,8 @@ using Microsoft.Extensions.Logging;
 
 namespace JobBank.Server
 {
-    using JobMessage = ScheduledJob<PromiseJob, PromiseData>;
-    using ClientQueue = SchedulingQueue<ScheduledJob<PromiseJob, PromiseData>>;
+    using JobMessage = ScheduledJob<PromisedWork, PromiseData>;
+    using ClientQueue = SchedulingQueue<ScheduledJob<PromisedWork, PromiseData>>;
     using OwnerCancellation = KeyValuePair<IJobQueueOwner, CancellationSourcePool.Use>;
 
     /// <summary>
@@ -38,7 +38,7 @@ namespace JobBank.Server
         /// The set of workers that can accept jobs to execute
         /// as they come off the job queues.
         /// </summary>
-        public WorkerDistribution<PromiseJob, PromiseData>
+        public WorkerDistribution<PromisedWork, PromiseData>
             WorkerDistribution { get; }
 
         /// <summary>
@@ -69,7 +69,7 @@ namespace JobBank.Server
         /// </param>        
         public JobSchedulingSystem(ILogger<JobSchedulingSystem> logger, 
                                    PromiseExceptionTranslator exceptionTranslator,
-                                   WorkerDistribution<PromiseJob, PromiseData> workerDistribution,
+                                   WorkerDistribution<PromisedWork, PromiseData> workerDistribution,
                                    int countPriorities = 10)
         {
             _logger = logger;
@@ -229,7 +229,7 @@ namespace JobBank.Server
         /// the same job object.
         /// </remarks>
         private readonly Dictionary<PromiseId,
-                            (SharedFuture<PromiseJob, PromiseData> Future, 
+                            (SharedFuture<PromisedWork, PromiseData> Future, 
                              bool OwnsCancellation)>
             _microPromises = new();
 
@@ -272,7 +272,7 @@ namespace JobBank.Server
         /// <param name="promiseId">
         /// The promise ID to associate the job to.
         /// </param>
-        /// <param name="request">Input for the job to execute,
+        /// <param name="work">Input for the job to execute,
         /// on first creation.  If there is already a (shared)
         /// job object for <paramref name="promiseId" />,
         /// this argument is ignored.
@@ -308,13 +308,13 @@ namespace JobBank.Server
         private JobMessage
             RegisterJobMessage(ISchedulingAccount account, 
                                PromiseId promiseId,
-                               PromiseJob request, 
+                               PromisedWork work, 
                                bool ownsCancellation,
                                out Task<PromiseData> outputTask,
                                CancellationToken cancellationToken)
         {
             JobMessage message;
-            SharedFuture<PromiseJob, PromiseData> future;
+            SharedFuture<PromisedWork, PromiseData> future;
 
             lock (_microPromises)
             {
@@ -347,9 +347,9 @@ namespace JobBank.Server
                 }
 
                 // Usual case: completely new job
-                message = SharedFuture<PromiseJob, PromiseData>.CreateJob(
-                        request,
-                        request.InitialWait,
+                message = SharedFuture<PromisedWork, PromiseData>.CreateJob(
+                        work,
+                        work.InitialWait,
                         account,
                         cancellationToken,
                         _timingQueue,
@@ -369,13 +369,13 @@ namespace JobBank.Server
         internal JobMessage RegisterJobMessageAndSetPromise(
             ClientQueue queue,
             Promise promise,
-            PromiseJob job,
+            PromisedWork work,
             bool ownsCancellation,
             CancellationToken cancellationToken)
         {
             var message = RegisterJobMessage(queue,
                                              promise.Id,
-                                             job,
+                                             work,
                                              ownsCancellation,
                                              out var outputTask,
                                              cancellationToken);
@@ -402,10 +402,11 @@ namespace JobBank.Server
         /// A promise which may be newly created or already existing.
         /// If newly created, the asynchronous task for the job
         /// is posted into it.  Otherwise the existing asynchronous task
-        /// is consumed, and <paramref name="job" /> is ignored.
+        /// is consumed, and <paramref name="work" /> is ignored.
         /// </param>
-        /// <param name="job">
-        /// Produces the result output of the promise.
+        /// <param name="work">
+        /// Describes the work to do in the scheduled job, 
+        /// to produce the output for the promise.
         /// </param>
         /// <param name="cancellationToken">
         /// Used by the caller to request cancellation of the job.
@@ -413,7 +414,7 @@ namespace JobBank.Server
         public void PushJob(IJobQueueOwner owner,
                             int priority,
                             Promise promise,
-                            PromiseJob job,
+                            PromisedWork work,
                             CancellationToken cancellationToken)
         {
             // Enqueue nothing if promise is already completed
@@ -423,7 +424,7 @@ namespace JobBank.Server
             var queue = PriorityClasses[priority].GetOrAdd(owner);
 
             var message = RegisterJobMessageAndSetPromise(
-                            queue, promise, job,
+                            queue, promise, work,
                             ownsCancellation: false,
                             cancellationToken);
 
@@ -453,15 +454,16 @@ namespace JobBank.Server
         /// A promise which may be newly created or already existing.
         /// If newly created, the asynchronous task for the job
         /// is posted into it.  Otherwise the existing asynchronous task
-        /// is consumed, and <paramref name="job" /> is ignored.
+        /// is consumed, and <paramref name="work" /> is ignored.
         /// </param>
-        /// <param name="job">
-        /// Produces the result output of the promise.
+        /// <param name="work">
+        /// Describes the work to do in the scheduled job, 
+        /// to produce the output for the promise.
         /// </param>
         public void PushJobAndOwnCancellation(IJobQueueOwner owner,
                                               int priority,
                                               Promise promise,
-                                              PromiseJob job)
+                                              PromisedWork work)
         {
             // Enqueue nothing if promise is already completed
             if (promise.IsCompleted)
@@ -472,7 +474,7 @@ namespace JobBank.Server
             var cancellationToken = RegisterCancellationSource(owner, promise.Id);
 
             var message = RegisterJobMessageAndSetPromise(
-                            queue, promise, job,
+                            queue, promise, work,
                             ownsCancellation: true,
                             cancellationToken);
 
@@ -561,7 +563,7 @@ namespace JobBank.Server
                                        int priority,
                                        Promise promise,
                                        PromiseListBuilderFactory builderFactory,
-                                       IAsyncEnumerable<(Promise, PromiseJob)> generator,
+                                       IAsyncEnumerable<(Promise, PromisedWork)> generator,
                                        bool ownsCancellation,
                                        CancellationToken cancellationToken)
         {
@@ -628,7 +630,7 @@ namespace JobBank.Server
                                  int priority,
                                  Promise promise,
                                  PromiseListBuilderFactory builderFactory,
-                                 IAsyncEnumerable<(Promise, PromiseJob)> generator,
+                                 IAsyncEnumerable<(Promise, PromisedWork)> generator,
                                  CancellationToken cancellationToken)
         {
             // Enqueue nothing if promise is already completed
@@ -665,7 +667,7 @@ namespace JobBank.Server
                                                    int priority,
                                                    Promise promise,
                                                    PromiseListBuilderFactory builderFactory,
-                                                   IAsyncEnumerable<(Promise, PromiseJob)> generator)
+                                                   IAsyncEnumerable<(Promise, PromisedWork)> generator)
         {
             // Enqueue nothing if promise is already completed
             if (promise.IsCompleted &&
@@ -704,7 +706,7 @@ namespace JobBank.Server
     /// </para>
     /// <para>
     /// A user-supplied generator
-    /// lists out the micro jobs as <see cref="PromiseJob" />
+    /// lists out the micro jobs as <see cref="PromisedWork" />
     /// descriptors, and this class transforms them into
     /// the messages that are put into the job queue,
     /// to implement job sharing and time accounting.
@@ -712,7 +714,7 @@ namespace JobBank.Server
     /// </remarks>
     internal class MacroJobMessage : IAsyncEnumerable<JobMessage>
     {
-        private readonly IAsyncEnumerable<(Promise, PromiseJob)> _generator;
+        private readonly IAsyncEnumerable<(Promise, PromisedWork)> _generator;
 
         private readonly JobSchedulingSystem _jobScheduling;
         private readonly ClientQueue _queue;
@@ -752,7 +754,7 @@ namespace JobBank.Server
         /// and micro jobs cannot be cancelled independently
         /// of one another.
         /// </param>
-        internal MacroJobMessage(IAsyncEnumerable<(Promise, PromiseJob)> generator,
+        internal MacroJobMessage(IAsyncEnumerable<(Promise, PromisedWork)> generator,
                                  JobSchedulingSystem jobScheduling,
                                  ClientQueue queue,
                                  PromiseId promiseId,
@@ -781,7 +783,7 @@ namespace JobBank.Server
             // enumerator manually.
             //
 
-            IAsyncEnumerator<(Promise, PromiseJob)>? enumerator = null;
+            IAsyncEnumerator<(Promise, PromisedWork)>? enumerator = null;
             try
             {
                 // Do not do anything if another producer has already completed.

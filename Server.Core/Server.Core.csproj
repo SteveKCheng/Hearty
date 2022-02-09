@@ -29,7 +29,7 @@
     <Compile Include="PromiseException.cs" />
     <Compile Include="PromiseData.cs" />
     <Compile Include="PromiseExceptionalData.cs" />
-    <Compile Include="PromiseJob.cs" />
+    <Compile Include="PromisedWork.cs" />
     <Compile Include="PromiseList.cs" />
     <Compile Include="PromisePath.cs" />
     <Compile Include="PromiseStorage.cs" />

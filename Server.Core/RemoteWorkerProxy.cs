@@ -17,7 +17,7 @@ namespace JobBank.Server
     /// are serialized and sent to the remote host for
     /// processing, over an asynchronous RPC protocol.
     /// </remarks>
-    internal sealed class RemoteWorkerProxy : IJobWorker<PromiseJob, PromiseData>
+    internal sealed class RemoteWorkerProxy : IJobWorker<PromisedWork, PromiseData>
     {
         /// <inheritdoc cref="IWorkerNotification.Name" />
         public string Name { get; }
@@ -28,7 +28,7 @@ namespace JobBank.Server
         /// <inheritdoc cref="IWorkerNotification.OnEvent" />
         public event EventHandler<WorkerEventArgs>? OnEvent;
 
-        void IJobWorker<PromiseJob, PromiseData>.AbandonJob(uint executionId)
+        void IJobWorker<PromisedWork, PromiseData>.AbandonJob(uint executionId)
         {
         }
 
@@ -70,7 +70,7 @@ namespace JobBank.Server
         internal static async ValueTask<PromiseData> 
             ForwardExecuteJobAsync<TImpl>(TImpl impl,
                                    uint executionId,
-                                   IRunningJob<PromiseJob> runningJob,
+                                   IRunningJob<PromisedWork> runningJob,
                                    CancellationToken cancellationToken)
                 where TImpl : IJobSubmission
         {
@@ -93,9 +93,9 @@ namespace JobBank.Server
         }
 
         ValueTask<PromiseData>
-            IJobWorker<PromiseJob, PromiseData>.ExecuteJobAsync(
+            IJobWorker<PromisedWork, PromiseData>.ExecuteJobAsync(
                 uint executionId,
-                IRunningJob<PromiseJob> runningJob,
+                IRunningJob<PromisedWork> runningJob,
                 CancellationToken cancellationToken)
             => ForwardExecuteJobAsync(new JobSubmissionForwarder(this), 
                                       executionId, 

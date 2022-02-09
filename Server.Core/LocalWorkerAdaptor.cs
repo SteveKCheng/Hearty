@@ -25,7 +25,7 @@ namespace JobBank.Server
     /// intended to be run in remote hosts.
     /// </para>
     /// </remarks>
-    public class LocalWorkerAdaptor : IJobWorker<PromiseJob, PromiseData>
+    public class LocalWorkerAdaptor : IJobWorker<PromisedWork, PromiseData>
     {
         public string Name { get; }
 
@@ -38,7 +38,7 @@ namespace JobBank.Server
         }
 
         public ValueTask<PromiseData> ExecuteJobAsync(uint executionId,
-                                                      IRunningJob<PromiseJob> runningJob,
+                                                      IRunningJob<PromisedWork> runningJob,
                                                       CancellationToken cancellationToken)
             => RemoteWorkerProxy.ForwardExecuteJobAsync(_impl, 
                                                         executionId, 

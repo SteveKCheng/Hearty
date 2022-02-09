@@ -1,15 +1,17 @@
 ﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
-using JobBank.Scheduling;
 
 namespace JobBank.Server
 {
     /// <summary>
-    /// Encapsulates the function to execute to generate 
-    /// the output for a promise.
+    /// Describes the work to generate the output for a promise.
     /// </summary>
-    public readonly struct PromiseJob
+    /// <remarks>
+    /// The term "work" is used for this inert data type 
+    /// to distinguish it from the many types in this framework
+    /// that have the word "job" in their names, which control
+    /// job scheduling and queuing.
+    /// </remarks>
+    public readonly struct PromisedWork
     {
         /// <summary>
         /// A string that may be used to select a sub-function 
@@ -60,10 +62,10 @@ namespace JobBank.Server
         /// <summary>
         /// Constructor.
         /// </summary>
-        public PromiseJob(PromiseData data, 
-                          int initialWait,
-                          string? route = null,
-                          object? hint = null)
+        public PromisedWork(PromiseData data, 
+                            int initialWait,
+                            string? route = null,
+                            object? hint = null)
         {
             Route = route;
             InitialWait = initialWait;
