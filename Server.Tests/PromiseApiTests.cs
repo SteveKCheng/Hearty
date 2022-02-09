@@ -10,6 +10,8 @@ using JobBank.Server.Program;
 using JobBank.Server.Mocks;
 using JobBank.Client;
 using Microsoft.Extensions.Configuration;
+using System.Text.Json;
+using System.IO;
 
 namespace JobBank.Server.Tests
 {
@@ -72,6 +74,23 @@ namespace JobBank.Server.Tests
 
                 var expected = input.Calculate();
                 Assert.Equal(expected, output);
+            }
+        }
+
+        // Unfinished: to expand into a test of streaming.
+        public void RunJobList()
+        {
+            var itemList = new List<(MockPricingInput Input, PromiseId PromiseId)>();
+
+            using var client = new JobBankClient(CreateClient());
+            var inputs = MockPricingInput.GenerateRandomSamples(DateTime.Today, 41, 50);
+
+            using (var file = File.OpenWrite("JobList.json"))
+            {
+                JsonSerializer.Serialize(file, inputs, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
             }
         }
 
