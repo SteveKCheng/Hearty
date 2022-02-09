@@ -40,10 +40,10 @@ namespace JobBank.Server.Program.Pages
                 PromiseData request = new Payload("application/json", requestJson);
 
                 var promise = _promiseStorage.CreatePromise(request);
-                var work = new PromisedWork(request) { InitialWait = waitingTime };
+                var work = new PromisedWork(request) { InitialWait = waitingTime, Promise = promise };
                 _jobScheduling.PushJob(GetClient(client),
                                        priority,
-                                       promise,
+                                       static w => w.Promise ?? throw new ArgumentNullException(),
                                        work,
                                        CancellationToken.None);
             }

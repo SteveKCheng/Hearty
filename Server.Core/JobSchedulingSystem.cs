@@ -122,7 +122,7 @@ namespace JobBank.Server
         /// This method should be called once a promise has finished
         /// processing, successful or not.
         /// </remarks>
-        private void UnregisterCancellationSource(PromiseId promiseId)
+        private void UnregisterCancellationUse(PromiseId promiseId)
         {
             SmallList<OwnerCancellation> list;
             lock (_cancellations)
@@ -148,11 +148,11 @@ namespace JobBank.Server
         /// <returns>
         /// The cancellation token from the newly registered source.
         /// </returns>
-        private CancellationToken RegisterCancellationSource(IJobQueueOwner owner,
-                                                             PromiseId promiseId)
+        private void RegisterCancellationUse(IJobQueueOwner owner,
+                                             PromiseId promiseId,
+                                             ref CancellationSourcePool.Use cancellation)
         {
-            var use = CancellationSourcePool.Rent();
-            var item = new OwnerCancellation(owner, use);
+            var item = new OwnerCancellation(owner, cancellation);
 
             lock (_cancellations)
             {
@@ -170,7 +170,7 @@ namespace JobBank.Server
                 }
             }
 
-            return use.Token;
+            cancellation = default;
         }
 
         /// <summary>
@@ -261,31 +261,37 @@ namespace JobBank.Server
             }
 
             if (unregisterCancellation)
-                UnregisterCancellationSource(promiseId);
+                UnregisterCancellationUse(promiseId);
         }
 
         /// <summary>
-        /// Get a scheduled job entry to push into a client's queue.
+        /// Get a scheduled job entry to push into a client's queue,
+        /// and set a promise to receive the result of the job.
         /// </summary>
         /// <param name="account">Scheduling account corresponding to
         /// the client's queue. </param>
-        /// <param name="promiseId">
-        /// The promise ID to associate the job to.
+        /// <param name="promiseRetriever">
+        /// Callback to the user's code to obtain the promise which 
+        /// should receive the results from the job.  The desired 
+        /// <see cref="Promise" /> object cannot be passed down directly, 
+        /// because in the rare case that an existing job raced to cancel, 
+        /// the promise object needs to be refreshed in a retry loop.
         /// </param>
         /// <param name="work">Input for the job to execute,
-        /// on first creation.  If there is already a (shared)
-        /// job object for <paramref name="promiseId" />,
-        /// this argument is ignored.
-        /// </param>
-        /// <param name="outputTask">
-        /// On return, the asynchronous task that completes 
-        /// with the job's result is placed here.
+        /// on first creation.  If there is already a shared
+        /// job object for the associated promise ID, this input
+        /// is effectively ignored.  
         /// </param>
         /// <param name="cancellationToken">
         /// A token that may be used to cancel the job,
         /// but only for the current client.  If the job
         /// is shared then all clients must cancel be the job
         /// is cancelled.
+        /// </param>
+        /// <param name="promise">
+        /// On return, this parameter is set to point to 
+        /// the new promise object, obtained from 
+        /// the last call to <paramref name="promiseRetriever" />.
         /// </param>
         /// <remarks>
         /// <para>
@@ -301,89 +307,120 @@ namespace JobBank.Server
         /// </remarks>
         /// <returns>
         /// The job message that the caller should arrange
-        /// to be put into the job queue.
-        /// This method does not enqueue the returned 
-        /// job message.
+        /// to be put into the job queue, unless the promise
+        /// has already completed, in which case the return
+        /// value is null.
         /// </returns>
-        private JobMessage
+        internal JobMessage?
             RegisterJobMessage(ISchedulingAccount account, 
-                               PromiseId promiseId,
-                               PromisedWork work, 
+                               PromiseRetriever promiseRetriever,
+                               in PromisedWork work, 
                                bool ownsCancellation,
-                               out Task<PromiseData> outputTask,
-                               CancellationToken cancellationToken)
+                               CancellationToken cancellationToken,
+                               out Promise promise)
         {
             JobMessage message;
             SharedFuture<PromisedWork, PromiseData> future;
+            Task<PromiseData>? outputTask;
 
-            lock (_microPromises)
+            promise = promiseRetriever.Invoke(work);
+
+            do
             {
-                ref var entry = ref CollectionsMarshal.GetValueRefOrNullRef(
-                                    _microPromises, promiseId);
+                var promiseId = promise.Id;
 
-                // Attach account to existing job for same promise ID if it exists
-                // and has not been cancelled.
-                if (!Unsafe.IsNullRef(ref entry))
+                // Do not register any job if the promise is already complete
+                if (promise.IsCompleted)
+                    return null;
+
+                lock (_microPromises)
                 {
-                    future = entry.Future;
+                    ref var entry = ref CollectionsMarshal.GetValueRefOrNullRef(
+                                        _microPromises, promiseId);
 
-                    // Set flag when at least one client owns cancellation
-                    ownsCancellation |= entry.OwnsCancellation;
-
-                    if (!future.IsCancelled)
+                    // Attach account to existing job for same promise ID if it exists
+                    // and has not been cancelled.
+                    if (!Unsafe.IsNullRef(ref entry))
                     {
-                        message = future.CreateJob(account, cancellationToken);
-                        outputTask = future.OutputTask;
+                        future = entry.Future;
 
-                        // Check again because cancellation can race with registering
-                        // a new client.  If the job is really not cancelled then
-                        // go ahead and share it.
-                        if (!future.IsCancelled)
+                        // Set flag when at least one client owns cancellation
+                        ownsCancellation |= entry.OwnsCancellation;
+
+                        if (future.TryShareJob(account, cancellationToken)
+                            is JobMessage existingMessage)
                         {
+                            outputTask = null;
                             entry.OwnsCancellation = ownsCancellation;
-                            return message;
+                            message = existingMessage;
+                            break;
+                        }
+
+                        // If other clients raced to cancel the job, and they
+                        // manage to do so before the new client attaches, 
+                        // then ignore the existing job, and create a new
+                        // promise object.
+                        //
+                        // The existing job will get cleaned up by the 
+                        // "post action" passed to TryAwaitAndPostResult 
+                        // below, when the cancellation propagates through
+                        // to future.OutputTask, so the existing entry in
+                        // the _microPromises dictionary should be left alone.
+                        else
+                        {
+                            promise = promiseRetriever.Invoke(work.ReplacePromise(null));
+
+                            if (promise.Id == promiseId)
+                            {
+                                throw new InvalidOperationException(
+                                    "A promise with a new ID is not being supplied from PromiseRetrieval " +
+                                    "when the preceding ID cannot be used any longer. ");
+                            }
+
+                            continue;
                         }
                     }
+
+                    // Usual case: completely new job
+                    message = SharedFuture<PromisedWork, PromiseData>.CreateJob(
+                            work,
+                            work.InitialWait,
+                            account,
+                            cancellationToken,
+                            _timingQueue,
+                            out future);
+
+                    outputTask = future.OutputTask;
+                    _microPromises[promiseId] = (future, ownsCancellation);
+                    break;
                 }
+            } while (true);
 
-                // Usual case: completely new job
-                message = SharedFuture<PromisedWork, PromiseData>.CreateJob(
-                        work,
-                        work.InitialWait,
-                        account,
-                        cancellationToken,
-                        _timingQueue,
-                        out future);
+            // Only attach outputTask to the promise if this is a new job
+            if (outputTask is not null)
+            {
+                bool awaiting = promise.TryAwaitAndPostResult(
+                                    new ValueTask<PromiseData>(outputTask),
+                                    _exceptionTranslator,
+                                    p => RemoveCachedFuture(p.Id));
 
-                outputTask = future.OutputTask;
-                _microPromises[promiseId] = (future, ownsCancellation);
+                // awaiting == false should not happen unless some code outside
+                // of this class is posting to the promise.  In that case, recover
+                // by reversing our registration.  Since the job message has not
+                // been queued yet, there should be no harm.
+                if (!awaiting)
+                {
+                    RemoveCachedFuture(promise.Id);
+                    return null;
+                }
             }
-
-            return message;
-        }
-
-        /// <summary>
-        /// Re-factored code to create a non-macro job message
-        /// and have the job complete the given promise object.
-        /// </summary>
-        internal JobMessage RegisterJobMessageAndSetPromise(
-            ClientQueue queue,
-            Promise promise,
-            PromisedWork work,
-            bool ownsCancellation,
-            CancellationToken cancellationToken)
-        {
-            var message = RegisterJobMessage(queue,
-                                             promise.Id,
-                                             work,
-                                             ownsCancellation,
-                                             out var outputTask,
-                                             cancellationToken);
-
-            promise.TryAwaitAndPostResult(
-                new ValueTask<PromiseData>(outputTask),
-                _exceptionTranslator,
-                p => RemoveCachedFuture(p.Id));
+            else
+            {
+                // Check again if the promise completed, and if so,
+                // the caller should not enqueue the message.
+                if (promise.IsCompleted)
+                    return null;
+            }
 
             return message;
         }
@@ -398,37 +435,40 @@ namespace JobBank.Server
         /// The desired priority that the job should be enqueued into.  It is expressed
         /// using the same integer key as used by <see cref="PriorityClasses" />.
         /// </param>
-        /// <param name="promise">
-        /// A promise which may be newly created or already existing.
-        /// If newly created, the asynchronous task for the job
-        /// is posted into it.  Otherwise the existing asynchronous task
-        /// is consumed, and <paramref name="work" /> is ignored.
+        /// <param name="promiseRetriever">
+        /// Callback to the user's code to obtain the promise which 
+        /// should receive the results from the job.  The desired 
+        /// <see cref="Promise" /> object cannot be passed down directly, 
+        /// because in the rare case that an existing job raced to cancel, 
+        /// the promise object needs to be refreshed in a retry loop.
         /// </param>
         /// <param name="work">
         /// Describes the work to do in the scheduled job, 
-        /// to produce the output for the promise.
+        /// to produce the output for the promise.  This argument
+        /// will effectively be ignored if the promise already
+        /// has a job associated with it.
         /// </param>
         /// <param name="cancellationToken">
         /// Used by the caller to request cancellation of the job.
         /// </param>
-        public void PushJob(IJobQueueOwner owner,
-                            int priority,
-                            Promise promise,
-                            PromisedWork work,
-                            CancellationToken cancellationToken)
+        public Promise PushJob(IJobQueueOwner owner,
+                               int priority,
+                               PromiseRetriever promiseRetriever,
+                               in PromisedWork work,
+                               CancellationToken cancellationToken)
         {
-            // Enqueue nothing if promise is already completed
-            if (promise.IsCompleted)
-                return;
-
             var queue = PriorityClasses[priority].GetOrAdd(owner);
 
-            var message = RegisterJobMessageAndSetPromise(
-                            queue, promise, work,
+            var message = RegisterJobMessage(
+                            queue, promiseRetriever, work,
                             ownsCancellation: false,
-                            cancellationToken);
+                            cancellationToken,
+                            out var promise);
 
-            queue.Enqueue(message);
+            if (message is not null)
+                queue.Enqueue(message.GetValueOrDefault());
+
+            return promise;
         }
 
         /// <summary>
@@ -450,35 +490,42 @@ namespace JobBank.Server
         /// The desired priority that the job should be enqueued into.  It is expressed
         /// using the same integer key as used by <see cref="PriorityClasses" />.
         /// </param>
-        /// <param name="promise">
-        /// A promise which may be newly created or already existing.
-        /// If newly created, the asynchronous task for the job
-        /// is posted into it.  Otherwise the existing asynchronous task
-        /// is consumed, and <paramref name="work" /> is ignored.
+        /// <param name="promiseRetriever">
+        /// Callback to the user's code to obtain the promise which 
+        /// should receive the results from the job.  The desired 
+        /// <see cref="Promise" /> object cannot be passed down directly, 
+        /// because in the rare case that an existing job raced to cancel, 
+        /// the promise object needs to be refreshed in a retry loop.
         /// </param>
         /// <param name="work">
         /// Describes the work to do in the scheduled job, 
-        /// to produce the output for the promise.
+        /// to produce the output for the promise.  This argument
+        /// will effectively be ignored if the promise already
+        /// has a job associated with it.
         /// </param>
-        public void PushJobAndOwnCancellation(IJobQueueOwner owner,
-                                              int priority,
-                                              Promise promise,
-                                              PromisedWork work)
+        public Promise PushJobAndOwnCancellation(IJobQueueOwner owner,
+                                                 int priority,
+                                                 PromiseRetriever promiseRetriever,
+                                                 in PromisedWork work)
         {
-            // Enqueue nothing if promise is already completed
-            if (promise.IsCompleted)
-                return;
-
             var queue = PriorityClasses[priority].GetOrAdd(owner);
 
-            var cancellationToken = RegisterCancellationSource(owner, promise.Id);
+            var cancellation = CancellationSourcePool.Rent();
 
-            var message = RegisterJobMessageAndSetPromise(
-                            queue, promise, work,
+            var message = RegisterJobMessage(
+                            queue, promiseRetriever, work,
                             ownsCancellation: true,
-                            cancellationToken);
+                            cancellation.Token,
+                            out var promise);
 
-            queue.Enqueue(message);
+            // N.B. We are okay to not return the cancellation source to
+            //      to pool in case of an exception.
+            RegisterCancellationUse(owner, promise.Id, ref cancellation);
+
+            if (message is not null)
+                queue.Enqueue(message.GetValueOrDefault());
+
+            return promise;
         }
 
         #endregion
@@ -550,7 +597,7 @@ namespace JobBank.Server
             bool isRemoved = RemoveMainEntry(promiseId, toCancel, 
                                              out bool unregisterCancellation);
             if (unregisterCancellation)
-                UnregisterCancellationSource(promiseId);
+                UnregisterCancellationUse(promiseId);
 
             return isRemoved;
         }
@@ -676,7 +723,9 @@ namespace JobBank.Server
                 return;
             }
 
-            var cancellationToken = RegisterCancellationSource(owner, promise.Id);
+            var cancellation = CancellationSourcePool.Rent();
+            var cancellationToken = cancellation.Token;
+            RegisterCancellationUse(owner, promise.Id, ref cancellation);
 
             PushMacroJobCore(owner, priority, 
                              promise, builderFactory, generator,
@@ -803,7 +852,7 @@ namespace JobBank.Server
             {
                 while (true)
                 {
-                    JobMessage message;
+                    JobMessage? message;
 
                     try
                     {
@@ -824,17 +873,19 @@ namespace JobBank.Server
                         _resultBuilder.SetMember(count, promise);
                         count++;
 
-                        // Do not bother generating a message if the promise
-                        // is already complete by this point.
-                        if (promise.IsCompleted)
-                            continue;
+                        // FIXME Source enumeration needs to provide PromiseRetriever
+                        input = input.ReplacePromise(promise);
 
-                        message = _jobScheduling.RegisterJobMessageAndSetPromise(
+                        message = _jobScheduling.RegisterJobMessage(
                                         _queue,
-                                        promise,
+                                        static w => w.Promise!,
                                         input,
                                         ownsCancellation: false,
-                                        _jobCancelToken);
+                                        _jobCancelToken,
+                                        out _);
+
+                        if (message is null)
+                            continue;
                     }
                     catch (Exception e)
                     {
@@ -842,7 +893,7 @@ namespace JobBank.Server
                         break;
                     }
 
-                    yield return message;
+                    yield return message.GetValueOrDefault();
                 }
 
                 try
@@ -899,4 +950,48 @@ namespace JobBank.Server
     /// for the macro job.
     /// </returns>
     public delegate IPromiseListBuilder PromiseListBuilderFactory(Promise promise);
+
+    /// <summary>
+    /// Invoked by <see cref="JobSchedulingSystem" /> to obtain
+    /// a promise object that will receive the output from a job.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Unfortunately, the instance of <see cref="Promise" />
+    /// cannot be passed directly to the methods of 
+    /// <see cref="JobSchedulingSystem" /> because of a fundamental
+    /// race condition in scheduling jobs that can be shared.  Any 
+    /// promise that gets passed in may receive a cancellation
+    /// result (i.e. <see cref="OperationCanceledException"/> 
+    /// represented as <see cref="PromiseData" />) if the preceding
+    /// clients of the shared job all cancelled, before a new incoming
+    /// client manages to attach itself to the same job.
+    /// </para>
+    /// <para>
+    /// The race condition can only be resolved inside the implementation
+    /// of <see cref="JobSchedulingSystem" />, not by its caller.
+    /// Since promise outputs are immutable, when the race happens, 
+    /// <see cref="JobSchedulingSystem" /> must request a fresh
+    /// <see cref="Promise" /> object to receive the results of
+    /// the restarted job.  It does so using this delegate.
+    /// </para>
+    /// <para>
+    /// Under the normal situations when the cancellation race does
+    /// not occur, the caller may place the promise it wishes
+    /// to receive the result into <see cref="PromisedWork.Promise" />,
+    /// and this function can return it back.
+    /// </para>
+    /// </remarks>
+    /// <param name="work">
+    /// The description of the work that <see cref="JobSchedulingSystem" />
+    /// has been asked to schedule.  This argument is a copy of 
+    /// what the caller of <see cref="JobSchedulingSystem" /> has
+    /// passed in, except that the property <see cref="PromisedWork.Promise" />
+    /// will be set to null if a fresh promise object is needed.
+    /// </param>
+    /// <returns>
+    /// The promise object that is to receive the result of the work,
+    /// via <see cref="Promise.TryAwaitAndPostResult" />.
+    /// </returns>
+    public delegate Promise PromiseRetriever(PromisedWork work);
 }

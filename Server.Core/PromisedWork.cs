@@ -56,6 +56,11 @@ namespace JobBank.Server
         /// <summary>
         /// The promise object that originated this work.
         /// </summary>
+        /// <remarks>
+        /// This property may be used for logging.  It is also
+        /// useful to implement <see cref="PromiseRetriever" />
+        /// while avoiding allocating objects unnecessarily.
+        /// </remarks>
         public Promise? Promise { get; init; }
 
         /// <summary>
@@ -95,5 +100,22 @@ namespace JobBank.Server
             Promise = default;
             InitialWait = default;
         }
+
+        /// <summary>
+        /// Make a copy of this structure with the
+        /// <see cref="Promise" /> property replaced.
+        /// </summary>
+        /// <param name="promise">
+        /// New value for the <see cref="Promise" /> property.
+        /// </param>
+        public PromisedWork ReplacePromise(Promise? promise)
+            => new(this.Data)
+            {
+                Route = this.Route,
+                Hint = this.Hint,
+                Path = this.Path,
+                Promise = promise,
+                InitialWait = this.InitialWait
+            };
     }
 }

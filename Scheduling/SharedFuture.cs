@@ -102,9 +102,18 @@ namespace JobBank.Scheduling
         /// and must remove it from its cache.
         /// </para>
         /// <para>
-        /// Since the <see cref="CancellationTokenSource" /> is internally
+        /// Since the <see cref="CancellationTokenSource" /> may be internally
         /// recycled, for safety, the internal <see cref="CancellationToken" /> 
         /// to trigger the cancellation is not exposed directly.
+        /// </para>
+        /// <para>
+        /// Furthermore, there is a race condition, owing to how
+        /// cancellation is implemented, in that the cancellation
+        /// token may trigger at a slightly later time then when
+        /// this object considers itself cancelled, i.e. when all
+        /// of its clients trigger their cancellation tokens
+        /// (those passed in to <see cref="CreateJob" /> or
+        /// <see cref="TryShareJob" />).
         /// </para>
         /// </remarks>
         public bool IsCancelled => (_activeCount <= 0);
@@ -355,26 +364,38 @@ namespace JobBank.Scheduling
         }
 
         /// <summary>
-        /// Create a new job <see cref="ScheduledJob{TInput, TOutput}" />
-        /// to push into a job-scheduling queue. 
+        /// Create a new job to push into a job-scheduling queue. 
         /// </summary>
         /// <param name="input">The input describing the job. </param>
         /// <param name="initialCharge">The initial estimate of the
         /// time to execute the job, in milliseconds.
         /// </param>
         /// <param name="cancellationToken">
-        /// Can be triggered to cancel the job.
+        /// Cancellation token for the initial client that it can trigger
+        /// when it is no longer interested in the returned job.  
+        /// The job may remain running if it is subsequently 
+        /// shared with other clients before the first client cancels.
         /// </param>
         /// <param name="account">
-        /// Where to charge back for the time taken when the job is executed.
-        /// There must be an "original" account, passed as a parameter here.
-        /// More accounts can share the charges by adding them implicitly
-        /// through <see cref="CreateJob(ISchedulingAccount)" />.
+        /// Where to charge back for the time taken when the job is executed,
+        /// There must be an "original" account, representing the initial
+        /// client, passed as a parameter here.
+        /// More accounts can share the charges by attaching them implicitly
+        /// through <see cref="TryShareJob" />.
         /// </param>
         /// <param name="timingQueue">
         /// Used to periodically fire timers to update the estimate
         /// of the time needed to execute the job.
         /// </param>
+        /// <param name="future">
+        /// The instance of this class that has been created and set
+        /// into the property <see cref="ScheduledJob{TInput, TOutput}.Future" />
+        /// of the returned structure.
+        /// </param>
+        /// <returns>
+        /// The new future object paired with the accounting information,
+        /// generally used as a job message in a job queuing system.
+        /// </returns>
         public static ScheduledJob<TInput, TOutput> 
             CreateJob(in TInput input,
                       int initialCharge,
@@ -392,26 +413,87 @@ namespace JobBank.Scheduling
         }
 
         /// <summary>
-        /// Create a representative of this job 
-        /// <see cref="ScheduledJob{TInput, TOutput}" />
+        /// Represent an existing job for a new client, 
         /// to push into a job-scheduling queue. 
         /// </summary>
+        /// <param name="account">
+        /// Where to charge back for the time taken when the job is executed,
+        /// for the new client. 
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Cancellation token for the new client that it can trigger
+        /// when it is no longer interested in the returned job.  
+        /// The job may remain running if the other clients of the same
+        /// job have yet cancelled.
+        /// </param>
         /// <remarks>
+        /// <para>
         /// If the same job gets scheduled multiple times (by different clients),
-        /// each time there is a different representative that points to the same
+        /// each time there is a different representative 
+        /// (of type <see cref="ScheduledJob{TInput, TOutput}" />
+        /// that points to the same instance of 
         /// <see cref="SharedFuture{TInput, TOutput}" />.
+        /// </para>
+        /// <para>
+        /// There can be an unavoidable race condition in that this future object
+        /// gets cancelled by current clients (i.e. <see cref="IsCancelled" />
+        /// becomes true) while this method is attempting to attach a new client.
+        /// When that happens, the caller, if it wants the cancelled job restarted,
+        /// but create a new instance of this class through <see cref="CreateJob" />.
+        /// </para>
+        /// <para>
+        /// The race condition can be reliably and correctly detected
+        /// by checking <see cref="IsCancelled" /> to be true 
+        /// (assuming <paramref name="cancellationToken" /> has not been triggered).
+        /// When it happens, this method does not add the new client.
+        /// </para>
         /// </remarks>
-        public ScheduledJob<TInput, TOutput> CreateJob(ISchedulingAccount account,
-                                                       CancellationToken cancellationToken)
+        /// <returns>
+        /// When the client has been successfully attached, this method
+        /// returns this same future object paired with the accounting 
+        /// information of the new client.  The value is generally used as a 
+        /// job message in a job queuing system.  When this method
+        /// fails to attach the client because the future object has
+        /// already been cancelled by its other clients, the return value
+        /// is null.
+        /// </returns>
+        public ScheduledJob<TInput, TOutput>? 
+            TryShareJob(ISchedulingAccount account,
+                        CancellationToken cancellationToken)
         {
+            // Increment _activeCount atomically unless it is already <= 0
+            int activeCount = _activeCount;
+            bool success;
+            do
+            {
+                var c = activeCount;
+
+                if (c <= 0)
+                    return null;
+
+                activeCount = Interlocked.CompareExchange(ref _activeCount, c + 1, c);
+                success = (activeCount == c);
+            } while (!success);
+
+            // Now, _activeCount must be at least 1.  The cancellation tokens
+            // may have concurrently triggered, but from this object's point
+            // of view, it can never be cancelled yet.
+            //
+            // Next, register cancellation processing, upon which the new
+            // client could possibly cancel.  If we manage to catch it,
+            // by detecting that _activeCount is zero, then effectively
+            // we are just backing out of the increment to _activeCount
+            // that was performed just above.
+            var cancelRegistration = RegisterForCancellation(cancellationToken);
+            if (_activeCount == 0)
+                return null;
+
+            // Install a new SchedulingAccountSplitter unless it already
+            // exists because this future object is already shared.
+            // We need a retry loop because we do not want to hold a spin
+            // lock during object allocation and initialization.
             var existingAccount = _account;
-
             SchedulingAccountSplitter? splitter;
-
-            // Install SchedulingAccountSplitter when there is more than
-            // one account.  We need a retry loop because we do not 
-            // want to hold a spin lock during object allocation and
-            // initialization.
             while ((splitter = existingAccount as SchedulingAccountSplitter) is null)
             {
                 int currentWait = _currentWait;
@@ -444,31 +526,19 @@ namespace JobBank.Scheduling
                 }
             }
 
-            int activeCount = 0;
-
-            // Do not bother with cancellations if the future is already done
-            if (!_isDone)
-            {
-                // Increment _activeCount atomically unless it is already <= 0
-                activeCount = _activeCount;
-                bool success;
-                do
-                {
-                    var c = activeCount;
-                    if (c <= 0)
-                        break;
-                    activeCount = Interlocked.CompareExchange(ref _activeCount, c + 1, c);
-                    success = (activeCount == c);
-                } while (!success);
-            }
-
-            var cancellationRegistration =
-                (activeCount > 0) ? RegisterForCancellation(cancellationToken)
-                                  : default;
-
-            // N.B. This call re-adjusts charges on all accounts,
-            //      and so cannot be called during the retry loop.
-            splitter.AddMember(account, cancellationRegistration);
+            // Finally, attach the new client for the purposes of charging
+            // execution time. This call re-adjusts charges on all accounts,
+            // and so cannot be called during the retry loop above.
+            //
+            // Note that SchedulingAccountSplitter locks internally so
+            // updates to charges are serialized and cannot be missed. 
+            //
+            // If the new client has just cancelled and has been unlucky
+            // to not have been caught in the earlier checks on _activeCount,
+            // it will get charged execution time for the brief moment
+            // it has "shared" in the work, but otherwise this object
+            // will behave correctly.
+            splitter.AddMember(account, cancelRegistration);
 
             return new ScheduledJob<TInput, TOutput>(this, account);
         }

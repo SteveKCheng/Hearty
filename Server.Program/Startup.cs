@@ -153,8 +153,9 @@ namespace JobBank.Server.Program
 
                     var promise = input.Storage.CreatePromise(request);
 
-                    jobScheduling.PushJobAndOwnCancellation(_dummyQueueOwner, 5, promise,
-                        new PromisedWork(request) { InitialWait = 100000 });
+                    jobScheduling.PushJobAndOwnCancellation(_dummyQueueOwner, 5, 
+                        static w => w.Promise ?? throw new ArgumentNullException(),
+                        new PromisedWork(request) { InitialWait = 100000, Promise = promise });
 
                     return promise.Id;
                 });
