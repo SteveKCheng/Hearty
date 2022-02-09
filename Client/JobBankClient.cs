@@ -47,6 +47,10 @@ namespace JobBank.Client
         /// <summary>
         /// Post a job for the server to queue up and run.
         /// </summary>
+        /// <returns>
+        /// ID of the remote promise which is used by the server
+        /// to uniquely identify the job request.
+        /// </returns>
         public async Task<PromiseId> PostJobAsync(string routeKey, 
                                                   HttpContent content,
                                                   CancellationToken cancellationToken = default)
@@ -74,6 +78,26 @@ namespace JobBank.Client
             return promiseId;
         }
 
+        /// <summary>
+        /// Wait for and obtain the result contained by a remote promise.
+        /// </summary>
+        /// <param name="promiseId">The ID of the desired promise on the
+        /// server.
+        /// </param>
+        /// <param name="contentType">The desired content type of result
+        /// to receive. </param>
+        /// <param name="timeout">
+        /// Directs this method to stop waiting if the 
+        /// the server does not make the result available by this
+        /// time interval.
+        /// </param>
+        /// <param name="cancellation">
+        /// Can be triggered to cancel the request.
+        /// </param>
+        /// <returns>
+        /// Forward-only read-only stream providing the bytes of 
+        /// the desired result.
+        /// </returns>
         public async Task<Stream> GetContentAsync(PromiseId promiseId, 
                                                   string contentType,
                                                   TimeSpan timeout,
