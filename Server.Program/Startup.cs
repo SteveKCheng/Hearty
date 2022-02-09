@@ -154,7 +154,7 @@ namespace JobBank.Server.Program
                     var promise = input.Storage.CreatePromise(request);
 
                     jobScheduling.PushJobAndOwnCancellation(_dummyQueueOwner, 5, promise,
-                        new PromisedWork(request, 100000));
+                        new PromisedWork(request) { InitialWait = 100000 });
 
                     return promise.Id;
                 });
@@ -194,7 +194,7 @@ namespace JobBank.Server.Program
                 JsonSerializer.Serialize(new Utf8JsonWriter(b), item);
                 var d = new Payload("application/json", b.WrittenMemory);
                 var p = input.Storage.CreatePromise(d);
-                return (p, new PromisedWork(d, g.Next(200, 7000)));
+                return (p, new PromisedWork(d) { InitialWait = g.Next(200, 7000) });
             });
 
             jobScheduling.PushMacroJobAndOwnCancellation(

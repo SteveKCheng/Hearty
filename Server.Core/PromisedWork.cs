@@ -31,7 +31,7 @@ namespace JobBank.Server
         /// delegates here.
         /// </para>
         /// </remarks>
-        public string? Route { get; }
+        public string? Route { get; init; }
 
         /// <summary>
         /// Alternative representation of the input to the 
@@ -45,32 +45,55 @@ namespace JobBank.Server
         /// same process then the input can be direct objects that 
         /// do not need further de-serialization.
         /// </remarks>
-        public object? Hint { get; }
+        public object? Hint { get; init; }
+
+        /// <summary>
+        /// A condensed string representation, expected to be
+        /// unique within a context, of the promise or the work.
+        /// </summary>
+        public string? Path { get; init; }
+
+        /// <summary>
+        /// The promise object that originated this work.
+        /// </summary>
+        public Promise? Promise { get; init; }
 
         /// <summary>
         /// A generic and serializable representation of the 
         /// inputs to the job.
         /// </summary>
+        /// <remarks>
+        /// This object may not necessarily be 
+        /// <see cref="Promise.RequestOutput" />, if the promise
+        /// is designed to not faithfully preserve its inputs
+        /// (for storage efficiency).
+        /// </remarks>
         public PromiseData Data { get; }
 
         /// <summary>
         /// The initial estimate of the amount of time the job
         /// would take, in milliseconds.
         /// </summary>
-        public int InitialWait { get; }
+        public int InitialWait { get; init; }
 
         /// <summary>
-        /// Constructor.
+        /// Encapsulate certain input data to submit as work 
+        /// for a promise.
         /// </summary>
-        public PromisedWork(PromiseData data, 
-                            int initialWait,
-                            string? route = null,
-                            object? hint = null)
+        /// <param name="data">Sets <see cref="Data" />.
+        /// </param>
+        /// <remarks>
+        /// Only <see cref="Data" /> is a required property;
+        /// all other properties of the work are optional.
+        /// </remarks>
+        public PromisedWork(PromiseData data)
         {
-            Route = route;
-            InitialWait = initialWait;
-            Hint = hint;
             Data = data;
+            Route = default;
+            Hint = default;
+            Path = default;
+            Promise = default;
+            InitialWait = default;
         }
     }
 }

@@ -40,11 +40,11 @@ namespace JobBank.Server.Program.Pages
                 PromiseData request = new Payload("application/json", requestJson);
 
                 var promise = _promiseStorage.CreatePromise(request);
-                var jobFunction = new PromisedWork(request, waitingTime);
+                var work = new PromisedWork(request) { InitialWait = waitingTime };
                 _jobScheduling.PushJob(GetClient(client),
                                        priority,
                                        promise,
-                                       jobFunction,
+                                       work,
                                        CancellationToken.None);
             }
         }
