@@ -136,8 +136,8 @@ namespace JobBank.Server
         }
 
         /// <summary>
-        /// Create and register a cancellation source associated to a queue 
-        /// owner and promise ID.
+        /// Create and register a pooled 
+        /// cancellation source associated to a queue owner and promise ID.
         /// </summary>
         /// <remarks>
         /// The registration allows cancellation to occur without
@@ -145,32 +145,69 @@ namespace JobBank.Server
         /// which is impossible for remote clients.
         /// See <see cref="TryCancelForClient" />.
         /// </remarks>
+        /// <param name="owner">
+        /// The queue owner to associate the cancellation source with.
+        /// </param>
+        /// <param name="promise">
+        /// The promise whose job execution is being targeted for potential
+        /// cancellation.  The promise object is required and not just
+        /// its ID, because this method checks if it has raced to complete.
+        /// If so, this method may be executing concurrently or after
+        /// the call to <see cref="UnregisterCancellationUse" /> which
+        /// cleans up the existing entries, and this method must ensure
+        /// that the new registration is not left dangling.
+        /// </param>
+        /// <param name="cancellation">
+        /// Refers to the pooled cancellation source.  On successful
+        /// return, this parameter is reset to indicate to the caller
+        /// that it no longer owns the resource.
+        /// </param>
         /// <returns>
-        /// The cancellation token from the newly registered source.
+        /// True if the pooled cancellation source has been registered.
+        /// False if it has been disposed because the promise has completed.
         /// </returns>
-        private void RegisterCancellationUse(IJobQueueOwner owner,
-                                             PromiseId promiseId,
+        private bool RegisterCancellationUse(IJobQueueOwner owner,
+                                             Promise promise,
                                              ref CancellationSourcePool.Use cancellation)
         {
+            if (promise.IsCompleted)
+            {
+                cancellation.Dispose();
+                return false;
+            }
+
             var item = new OwnerCancellation(owner, cancellation);
+            var promiseId = promise.Id;
 
             lock (_cancellations)
             {
-                if (_cancellations.TryGetValue(promiseId, out var oldList))
+                ref var list = ref CollectionsMarshal.GetValueRefOrAddDefault(
+                                _cancellations, promiseId, out bool exists);
+
+                if (exists)
                 {
-                    var a = new OwnerCancellation[oldList.Count + 1];
-                    for (int i = 0; i < oldList.Count; ++i)
-                        a[i] = oldList[i];
-                    a[oldList.Count] = item;
-                    _cancellations[promiseId] = new SmallList<OwnerCancellation>(a);
+                    var a = new OwnerCancellation[list.Count + 1];
+                    for (int i = 0; i < list.Count; ++i)
+                        a[i] = list[i];
+                    a[list.Count] = item;
+                    list = new SmallList<OwnerCancellation>(a);
                 }
                 else
                 {
-                    _cancellations.Add(promiseId, new SmallList<OwnerCancellation>(item));
+                    list = new SmallList<OwnerCancellation>(item);
                 }
             }
 
             cancellation = default;
+
+            // Undo if the promise could have raced to complete and clean up
+            if (promise.IsCompleted)
+            {
+                UnregisterCancellationUse(promiseId);
+                return false;
+            }
+                
+            return true;
         }
 
         /// <summary>
@@ -519,8 +556,9 @@ namespace JobBank.Server
                             out var promise);
 
             // N.B. We are okay to not return the cancellation source to
-            //      to pool in case of an exception.
-            RegisterCancellationUse(owner, promise.Id, ref cancellation);
+            //      to pool when an exception occurs (which does not
+            //      occur on normal operation).
+            RegisterCancellationUse(owner, promise, ref cancellation);
 
             if (message is not null)
                 queue.Enqueue(message.GetValueOrDefault());
@@ -725,7 +763,7 @@ namespace JobBank.Server
 
             var cancellation = CancellationSourcePool.Rent();
             var cancellationToken = cancellation.Token;
-            RegisterCancellationUse(owner, promise.Id, ref cancellation);
+            RegisterCancellationUse(owner, promise, ref cancellation);
 
             PushMacroJobCore(owner, priority, 
                              promise, builderFactory, generator,
