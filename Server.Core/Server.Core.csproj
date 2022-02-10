@@ -24,6 +24,7 @@
     <Compile Include="LocalWorkerAdaptor.cs" />
     <Compile Include="PathsDirectory.cs" />
     <Compile Include="Payload.cs" />
+    <Compile Include="PipeExtensions.cs" />
     <Compile Include="Promise.cs" />
     <Compile Include="Promise.Subscription.cs" />
     <Compile Include="PromiseException.cs" />

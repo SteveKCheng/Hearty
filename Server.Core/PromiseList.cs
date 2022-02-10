@@ -41,7 +41,11 @@ namespace JobBank.Server
 
         /// <inheritdoc />
         public override ValueTask<Stream> GetByteStreamAsync(string contentType, CancellationToken cancellationToken)
-            => ValueTask.FromResult(GetPipeReader(contentType, cancellationToken).AsStream());
+        {
+            var pipe = new Pipe();
+            _ = GenerateListIntoPipeAsync(pipe.Writer, toComplete: true, cancellationToken);
+            return ValueTask.FromResult(pipe.Reader.AsStream());
+        }
 
         /// <inheritdoc />
         public override ValueTask<ReadOnlySequence<byte>> GetPayloadAsync(string contentType, CancellationToken cancellationToken)
@@ -56,50 +60,68 @@ namespace JobBank.Server
         }
 
         /// <inheritdoc />
-        public override async ValueTask<PipeReader> GetPipeReaderAsync(string contentType, long position, CancellationToken cancellationToken)
+        public override ValueTask WriteToPipeAsync(string contentType, PipeWriter writer, long position, CancellationToken cancellationToken)
         {
-            var pipeReader = GetPipeReader(contentType, cancellationToken);
+            if (position != 0)
+                throw new NotSupportedException();
 
-            // Skip bytes at beginning
-            while (position > 0)
-            {
-                var readResult = await pipeReader.ReadAsync(cancellationToken)
-                                                 .ConfigureAwait(false);
-                if (readResult.IsCompleted)
-                    break;
-                var skip = Math.Min(position, readResult.Buffer.Length);
-                pipeReader.AdvanceTo(readResult.Buffer.GetPosition(skip));
-                position -= skip;
-            }
-
-            return pipeReader;
-        }
-
-        private PipeReader GetPipeReader(string contentType, CancellationToken cancellationToken)
-        {
-            var pipe = new Pipe();
-            _ = GenerateListIntoPipeAsync(pipe.Writer, cancellationToken);
-            return pipe.Reader;
+            var t = GenerateListIntoPipeAsync(writer, toComplete: false, cancellationToken);
+            return new ValueTask(t);
         }
 
         /// <summary>
         /// Asynchronously write the list of promise IDs in plain-text form into a pipe.
         /// </summary>
-        private async Task GenerateListIntoPipeAsync(PipeWriter writer, CancellationToken cancellationToken)
+        private async Task GenerateListIntoPipeAsync(PipeWriter writer, 
+                                                     bool toComplete, 
+                                                     CancellationToken cancellationToken)
         {
+            Exception? completionException = null;
+
             try
             {
-                var buffer = new byte[PromiseId.MaxChars + 2];
-                var memory = new Memory<byte>(buffer);
-
                 int index = 0;
+                long totalBytes = 0;
+                long flushWatermark = 0;
 
                 while (true)
                 {
                     int numBytes;
+                    PromiseId promiseId;
+                    bool isValid;
 
-                    var (promiseId, isValid) = await _promiseIds.TryGetMemberAsync(
-                                                        index, cancellationToken);
+                    var memberTask = _promiseIds.TryGetMemberAsync(index, 
+                                                                   cancellationToken);
+
+                    try
+                    {
+                        // If reading the next member would block, flush the
+                        // pipe so that the reader can see all the preceding members
+                        // without delay. 
+                        // 
+                        // Also flush periodically to avoid the sending buffers from
+                        // growing too much.  But, do not flush on every iteration;
+                        // otherwise a reader over the network might get one packet
+                        // for every entry!
+                        if (!memberTask.IsCompleted || 
+                            (totalBytes - flushWatermark) > short.MaxValue)
+                        {
+                            flushWatermark = totalBytes;
+                            await writer.FlushAsync(cancellationToken)
+                                        .ConfigureAwait(false);
+                        }
+                    }
+                    finally
+                    {
+                        // Await in a finally block to avoid compiler warning
+                        // that ValueTask would get abandoned when an exception
+                        // is thrown, even though in this particulation implementation
+                        // it would be harmless.
+                        (promiseId, isValid) = await memberTask.ConfigureAwait(false);
+                    }
+
+                    var buffer = writer.GetMemory(PromiseId.MaxChars + 2);
+
                     if (!isValid)
                     {
                         // Exceptions from the promise list are reported as part of the
@@ -108,9 +130,9 @@ namespace JobBank.Server
                         {
                             bool isCancellation = exception is OperationCanceledException;
                             string text = isCancellation ? "<CANCELLED>\r\n" : "<FAILED>\r\n";
-                            numBytes = Encoding.ASCII.GetBytes(text, memory.Span);
-                            await writer.WriteAsync(memory[..numBytes], cancellationToken)
-                                        .ConfigureAwait(false);
+                            numBytes = Encoding.ASCII.GetBytes(text, buffer.Span);
+                            writer.Advance(numBytes);
+                            totalBytes += numBytes;
                         }
 
                         break;
@@ -118,23 +140,32 @@ namespace JobBank.Server
                     
                     ++index;
 
-                    numBytes = promiseId.FormatAscii(memory);
+                    numBytes = promiseId.FormatAscii(buffer);
 
                     // Terminate each entry by Internet-standard new-line
-                    buffer[numBytes++] = (byte)'\r';
-                    buffer[numBytes++] = (byte)'\n';
+                    static int AppendNewLine(Span<byte> line)
+                    {
+                        line[0] = (byte)'\r';
+                        line[1] = (byte)'\n';
+                        return 2;
+                    }
+                    numBytes += AppendNewLine(buffer.Span[numBytes..]);
 
-                    await writer.WriteAsync(memory[..numBytes], cancellationToken)
+                    writer.Advance(numBytes);
+                    totalBytes += numBytes;
+                }
+            }
+            catch (Exception e) when (toComplete)
+            {
+                completionException = e;
+            }
+            finally
+            {
+                if (toComplete)
+                {
+                    await writer.CompleteAsync(completionException)
                                 .ConfigureAwait(false);
                 }
-
-                await writer.CompleteAsync()
-                            .ConfigureAwait(false);
-            }
-            catch (Exception e)
-            {
-                await writer.CompleteAsync(e)
-                            .ConfigureAwait(false);
             }
         }
     }

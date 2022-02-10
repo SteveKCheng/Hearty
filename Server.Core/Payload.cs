@@ -63,11 +63,10 @@ namespace JobBank.Server
         }
 
         /// <inheritdoc />
-        public override ValueTask<PipeReader> GetPipeReaderAsync(string contentType, long position, CancellationToken cancellationToken)
+        public override ValueTask WriteToPipeAsync(string contentType, PipeWriter writer, long position, CancellationToken cancellationToken)
         {
             VerifyContentType(contentType);
-            var pipeReader = PipeReader.Create(Body.Slice(position));
-            return ValueTask.FromResult(pipeReader);
+            return writer.WriteAsync(Body.Slice(position), cancellationToken);
         }
 
         /// <inheritdoc />

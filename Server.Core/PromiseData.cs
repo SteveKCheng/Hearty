@@ -42,13 +42,63 @@ namespace JobBank.Server
         protected virtual void Dispose() { }
 
         /// <summary>
-        /// Prepare to incrementally read the byte stream for the payload
-        /// with efficient buffer management.
+        /// Upload the stream of bytes for the payload into a pipe, asynchronously.
         /// </summary>
-        public abstract ValueTask<PipeReader> 
-            GetPipeReaderAsync(string contentType, 
-                               long position,
-                               CancellationToken cancellationToken);
+        /// <remarks>
+        /// <para>
+        /// This method is designed for transmitting 
+        /// the payload to a remote host, by more precise 
+        /// and efficient control of buffering than is possible with 
+        /// <see cref="GetByteStreamAsync" />.  The caller, with
+        /// knowledge of the transmission mechanism, can influence
+        /// buffering through the implementation of <see cref="PipeWriter" />
+        /// that it passes in.  
+        /// </para>
+        /// <para>
+        /// The callee does not have the freedom to choose its 
+        /// implementation of <see cref="PipeWriter" />.  But that
+        /// is probably irrelevant:  the callee must have some
+        /// kind of backing storage for the payload, as it must be
+        /// persisted between multiple calls to any methods of this class,
+        /// and so a pipe (which is only good to consume once)
+        /// could not form the native representation of the payload anyway.
+        /// </para>
+        /// <para>
+        /// Nevertheless, if the caller desires to consume and parse 
+        /// the payload in-process, it can simply create a <see cref="Pipe" />
+        /// to obtain a <see cref="PipeReader" /> to read the payload from.
+        /// In fact, <see cref="GetByteStreamAsync" /> might be implemented
+        /// exactly this way.
+        /// </para>
+        /// </remarks>
+        /// <param name="contentType">
+        /// Desired content type of the payload.
+        /// </param>
+        /// <param name="writer">
+        /// The pipe to write the data into.
+        /// </param>
+        /// <param name="position">
+        /// The position, measured in number of bytes 
+        /// from the beginning, to start writing the payload from.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be used to interrupt the writing into the pipe.
+        /// </param>
+        /// <returns>
+        /// Asynchronous task that completes when the desired content
+        /// has been written to the pipe, though not necessarily flushed.
+        /// This method shall not complete the writing end of the pipe
+        /// to let the caller to arrange for more bytes to send to
+        /// the same pipe.  If an exception occurs it should be propagated
+        /// out of this method as any other asynchronous function, and not
+        /// captured as pipe completion.  If the pipe is closed from its
+        /// reading end, the asynchronous task may complete normally.
+        /// </returns>
+        public abstract ValueTask
+            WriteToPipeAsync(string contentType,
+                             PipeWriter writer,
+                             long position, 
+                             CancellationToken cancellationToken);
 
         /// <summary>
         /// Prepare to read the byte stream for the payload.

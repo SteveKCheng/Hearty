@@ -137,16 +137,11 @@ namespace JobBank.Server.WebApi
                 httpResponse.ContentLength = output.ContentLength;
 
                 var writer = httpResponse.BodyWriter;
-                var reader = await output.GetPipeReaderAsync(output.SuggestedContentType, 
-                                                             position: 0,
-                                                             CancellationToken.None)
-                                         .ConfigureAwait(false);
-                await reader.CopyToAsync(httpResponse.BodyWriter)
-                            .ConfigureAwait(false);
-
-                httpResponse.BodyWriter.Complete();
+                await output.WriteToPipeAsync(output.SuggestedContentType,
+                                              writer, position: 0,
+                                              cancellationToken: CancellationToken.None);
+                await writer.CompleteAsync();
             }
-
         }
 
         /// <summary>
@@ -428,14 +423,16 @@ namespace JobBank.Server.WebApi
                                             .ConfigureAwait(false);
             var output = result.NormalOutput;
 
-            var pipeReader = await output.GetPipeReaderAsync(output.SuggestedContentType, 0, cancellationToken)
-                                         .ConfigureAwait(false);
-
             httpResponse.StatusCode = StatusCodes.Status200OK;
             httpResponse.ContentType = output.SuggestedContentType;
             httpResponse.ContentLength = output.ContentLength;
 
-            await pipeReader.CopyToAsync(httpResponse.BodyWriter, cancellationToken);
+            await output.WriteToPipeAsync(output.SuggestedContentType,
+                                          httpResponse.BodyWriter,
+                                          0,
+                                          cancellationToken)
+                        .ConfigureAwait(false);
+            await httpResponse.BodyWriter.CompleteAsync();
         }
     }
 }
