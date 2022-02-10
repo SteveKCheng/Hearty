@@ -308,12 +308,28 @@ namespace JobBank.Server
         /// </exception>
         private static void VerifyPromiseIsDifferent(Promise newPromise, PromiseId oldId)
         {
-            if (newPromise.Id == oldId)
+            if (EnsureNonNullPromise(newPromise).Id == oldId)
             {
                 throw new InvalidOperationException(
                     "A promise with a new ID is not being supplied from PromiseRetrieval " +
                     "when the preceding ID cannot be used any longer. ");
             }
+        }
+
+        /// <summary>
+        /// If the passed in promise object is null, 
+        /// throw an exception saying that <see cref="PromiseRetriever" />
+        /// returned null, to help in diagnosing errors in using the API.
+        /// </summary>
+        private static Promise EnsureNonNullPromise(Promise promise)
+        {
+            if (promise is null)
+            {
+                throw new ArgumentNullException(paramName: null,
+                                                message: "PromiseRetriever returned null. ");
+            }
+
+            return promise;
         }
 
         /// <summary>
@@ -374,7 +390,7 @@ namespace JobBank.Server
             Task<PromiseData>? outputTask;
             JobMessage? message;
 
-            promise = promiseRetriever.Invoke(work);
+            promise = EnsureNonNullPromise(promiseRetriever.Invoke(work));
 
             // Retry loop for concurrently cancelled promises
             while ((message = TryRegisterJobMessage(account, promise, work, 
@@ -694,7 +710,7 @@ namespace JobBank.Server
 
             bool isNewJob;
 
-            var promise = promiseRetriever.Invoke(work);
+            var promise = EnsureNonNullPromise(promiseRetriever.Invoke(work));
 
             // Retry loop for concurrently cancelled promises
             while ((resultBuilder = TryRegisterMacroJob(promise, 
