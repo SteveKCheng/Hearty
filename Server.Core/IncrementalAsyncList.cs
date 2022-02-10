@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -240,10 +241,11 @@ namespace JobBank.Server
                     return GetMemberImmediately(index, count);
 
                 // Re-use existing task or create new task
-                bool hasTaskBuilder = consumers.TryGetValue(index, out var taskBuilder);
+                ref var taskBuilder = ref CollectionsMarshal.GetValueRefOrAddDefault(
+                                        consumers,
+                                        index,
+                                        out _);
                 task = taskBuilder.Task;
-                if (!hasTaskBuilder)
-                    consumers.Add(index, taskBuilder);
             }
 
             // Add timeout and cancellation token on top of the
