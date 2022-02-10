@@ -376,6 +376,7 @@ namespace JobBank.Server
 
             promise = promiseRetriever.Invoke(work);
 
+            // Retry loop for concurrently cancelled promises
             while ((message = TryRegisterJobMessage(account, promise, work, 
                                                     ownsCancellation, cancellationToken,
                                                     out outputTask)) is null)
@@ -679,94 +680,158 @@ namespace JobBank.Server
         /// Re-factored code for pushing a macro job with
         /// or without its own cancellation source.
         /// </summary>
-        internal Promise PushMacroJobCore(IJobQueueOwner owner,
-                                          int priority,
-                                          PromiseRetriever promiseRetriever,
-                                          PromisedWork work,
-                                          PromiseListBuilderFactory builderFactory,
-                                          MacroJobExpansion expansion,
-                                          bool ownsCancellation,
-                                          CancellationToken cancellationToken,
-                                          out IPromiseListBuilder? resultBuilder)
+        private Promise PushMacroJobCore(IJobQueueOwner owner,
+                                         int priority,
+                                         PromiseRetriever promiseRetriever,
+                                         PromisedWork work,
+                                         PromiseListBuilderFactory builderFactory,
+                                         MacroJobExpansion expansion,
+                                         bool ownsCancellation,
+                                         CancellationToken cancellationToken,
+                                         out IPromiseListBuilder? resultBuilder)
         {
             var queue = PriorityClasses[priority].GetOrAdd(owner);
+
             bool isNewJob;
 
             var promise = promiseRetriever.Invoke(work);
 
-            do
+            // Retry loop for concurrently cancelled promises
+            while ((resultBuilder = TryRegisterMacroJob(promise, 
+                                       builderFactory, 
+                                       ownsCancellation, 
+                                       out isNewJob)) is null && isNewJob)
             {
-                isNewJob = false;
+                // Like in RegisterJobMessage, do not take locks on
+                // _macroPromises while invoking this callback function.
+                var oldPromiseId = promise.Id;
+                promise = promiseRetriever.Invoke(work.ReplacePromise(null));
+                VerifyPromiseIsDifferent(promise, oldPromiseId);
+            }
 
-                lock (_macroPromises)
+            // A non-null resultBuilder means there may be something to enqueue,
+            // because it has not finished yet.
+            if (resultBuilder is not null)
+            {
+                bool toEnqueue = true;
+                if (isNewJob)
                 {
-                    var promiseId = promise.Id;
-                    ref var entry = ref CollectionsMarshal.GetValueRefOrAddDefault(
-                                        _macroPromises, promiseId, out _);
-
-                    if (entry.ResultBuilder is null)
-                    {
-                        // Not re-using existing result builder
-                        entry.ResultBuilder = builderFactory.Invoke(promise);
-                        isNewJob = true;
-                    }
-                    else if (entry.ResultBuilder.IsCancelled)
-                    {
-                        // Cannot re-use existing result builder because
-                        // it has been cancelled.
-                        promise = promiseRetriever.Invoke(work.ReplacePromise(null));
-                        VerifyPromiseIsDifferent(promise, promiseId);
-                        continue;
-                    }
-                    else if (entry.ResultBuilder.IsComplete)
-                    {
-                        // No need to register any job if sharing an existing
-                        // promise and the results builder is already complete.
-                        resultBuilder = null;
-                        return promise;
-                    }
-
-                    resultBuilder = entry.ResultBuilder;
-                    ++entry.ProducerCount;
-
-                    // Set flag when at least one client owns cancellation
-                    entry.OwnsCancellation |= ownsCancellation;
-
-                    break;
+                    // Need to set the result builder into the promise for a new job
+                    toEnqueue = promise.TryAwaitAndPostResult(
+                                        ValueTask.FromResult(resultBuilder.Output),
+                                        _exceptionTranslator);
                 }
-            } while (true);
 
-            bool toEnqueue = true;
-            if (isNewJob)
-            {
-                // Need to set the result builder into the promise for a new job
-                toEnqueue = promise.TryAwaitAndPostResult(
-                                    ValueTask.FromResult(resultBuilder.Output),
-                                    _exceptionTranslator);
-            }
+                // A (shared) result builder could have raced to complete.
+                // If that happens do not enqueue anything, for efficiency.
+                toEnqueue = toEnqueue && !resultBuilder.IsComplete;
 
-            // A (shared) result builder could have raced to complete.
-            // If that happens do not enqueue anything, for efficiency.
-            toEnqueue = toEnqueue && !resultBuilder.IsComplete;
+                if (toEnqueue)
+                {
+                    var message = new MacroJobMessage(expansion,
+                                                      this, queue,
+                                                      promise.Id, resultBuilder,
+                                                      cancellationToken);
 
-            if (toEnqueue)
-            {
-                var message = new MacroJobMessage(expansion,
-                                                  this, queue,
-                                                  promise.Id, resultBuilder,
-                                                  cancellationToken);
-
-                queue.Enqueue(message);
-            }
-            else
-            {
-                // When not enqueuing, we need to undo the registration
-                // that would have been cleaned up by MacroJobMessage.
-                UnregisterMacroJob(promise.Id, toCancel: false);
-                resultBuilder = null;
+                    queue.Enqueue(message);
+                }
+                else
+                {
+                    // When not enqueuing, we need to undo the registration
+                    // that would have been cleaned up by MacroJobMessage.
+                    UnregisterMacroJob(promise.Id, toCancel: false);
+                    resultBuilder = null;
+                }
             }
 
             return promise;
+        }
+
+        /// <summary>
+        /// One iteration in the retry loop of <see cref="PushMacroJobCore" />.
+        /// </summary>
+        private IPromiseListBuilder? TryRegisterMacroJob(
+                                        Promise promise,
+                                        PromiseListBuilderFactory builderFactory,
+                                        bool ownsCancellation,
+                                        out bool isNewJob)
+        {
+            var promiseId = promise.Id;
+            bool lockTaken = false;
+
+            try
+            {
+                Monitor.Enter(_macroPromises, ref lockTaken);
+
+            redo:
+                ref var entry = ref CollectionsMarshal.GetValueRefOrNullRef(
+                                    _macroPromises, promiseId);
+
+                if (Unsafe.IsNullRef(ref entry))
+                {
+                    isNewJob = true;
+
+                    // Need to create a result builder for a new job.
+                    // Temporarily release the lock to invoke the callback.
+                    lockTaken = false;
+                    Monitor.Exit(_macroPromises);
+                    var resultBuilder = builderFactory.Invoke(promise)
+                                        ?? throw new ArgumentNullException(
+                                            paramName: null,
+                                            message: "PromiseListBuilderFactory returned null. ");
+                    Monitor.Enter(_macroPromises, ref lockTaken);
+
+                    // ref var entry may have been invalidated by concurrent
+                    // calls to this method.
+                    ref var newEntry = ref CollectionsMarshal.GetValueRefOrAddDefault(
+                                        _macroPromises, promiseId, out bool exists);
+
+                    // A concurrent caller has already added the entry.
+                    // Restart as if it had already existed earlier,
+                    // and discard resultBuilder.
+                    //
+                    // Ideally, we would just re-assign the entry ref variable,
+                    // and hence would not have to look up the dictionary again,
+                    // but C#'s scoping rules for ref-assignment are too
+                    // conservative and do not allow that.
+                    if (exists)
+                        goto redo;
+
+                    // Populate the new entry.
+                    newEntry.ResultBuilder = resultBuilder;
+                    newEntry.ProducerCount = 1;
+                    newEntry.OwnsCancellation = ownsCancellation;
+                    return resultBuilder;
+                }
+                else if (entry.ResultBuilder.IsCancelled)
+                {
+                    // Cannot re-use existing result builder because
+                    // it has been cancelled.
+                    isNewJob = true;
+                    return null;
+                }
+                else if (entry.ResultBuilder.IsComplete)
+                {
+                    // No need to register any job if sharing an existing
+                    // promise and the results builder is already complete.
+                    isNewJob = false;
+                    return null;
+                }
+                else
+                {
+                    // Update existing entry for a shared job.
+                    isNewJob = false;
+                    var resultBuilder = entry.ResultBuilder;
+                    ++entry.ProducerCount;
+                    entry.OwnsCancellation |= ownsCancellation;
+                    return resultBuilder;
+                }
+            }
+            finally
+            {
+                if (lockTaken)
+                    Monitor.Exit(_macroPromises);
+            }
         }
 
         /// <summary>
