@@ -70,6 +70,11 @@ namespace JobBank.Server
 
         public bool IsCompleted => _isFulfilled != 0;
 
+        /// <summary>
+        /// True if the promise has completed and its output is transient.
+        /// </summary>
+        public bool IsTransient => IsCompleted && (RequestOutput?.IsTransient ?? false);
+
         public PromiseId Id { get; }
 
         public Promise(DateTime creationTime, PromiseId id, PromiseData request)

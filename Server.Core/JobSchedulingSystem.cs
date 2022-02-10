@@ -371,75 +371,24 @@ namespace JobBank.Server
                                CancellationToken cancellationToken,
                                out Promise promise)
         {
-            JobMessage message;
-            SharedFuture<PromisedWork, PromiseData> future;
             Task<PromiseData>? outputTask;
+            JobMessage? message;
 
             promise = promiseRetriever.Invoke(work);
 
-            do
+            while ((message = TryRegisterJobMessage(account, promise, work, 
+                                                    ownsCancellation, cancellationToken,
+                                                    out outputTask)) is null)
             {
-                var promiseId = promise.Id;
-
-                // Do not register any job if the promise is already complete
-                if (promise.IsCompleted)
+                if (!promise.IsTransient)
                     return null;
 
-                lock (_microPromises)
-                {
-                    ref var entry = ref CollectionsMarshal.GetValueRefOrNullRef(
-                                        _microPromises, promiseId);
-
-                    // Attach account to existing job for same promise ID if it exists
-                    // and has not been cancelled.
-                    if (!Unsafe.IsNullRef(ref entry))
-                    {
-                        future = entry.Future;
-
-                        // Set flag when at least one client owns cancellation
-                        ownsCancellation |= entry.OwnsCancellation;
-
-                        if (future.TryShareJob(account, cancellationToken)
-                            is JobMessage existingMessage)
-                        {
-                            outputTask = null;
-                            entry.OwnsCancellation = ownsCancellation;
-                            message = existingMessage;
-                            break;
-                        }
-
-                        // If other clients raced to cancel the job, and they
-                        // manage to do so before the new client attaches, 
-                        // then ignore the existing job, and create a new
-                        // promise object.
-                        //
-                        // The existing job will get cleaned up by the 
-                        // "post action" passed to TryAwaitAndPostResult 
-                        // below, when the cancellation propagates through
-                        // to future.OutputTask, so the existing entry in
-                        // the _microPromises dictionary should be left alone.
-                        else
-                        {
-                            promise = promiseRetriever.Invoke(work.ReplacePromise(null));
-                            VerifyPromiseIsDifferent(promise, promiseId);
-                            continue;
-                        }
-                    }
-
-                    // Usual case: completely new job
-                    message = SharedFuture<PromisedWork, PromiseData>.CreateJob(
-                            work,
-                            work.InitialWait,
-                            account,
-                            cancellationToken,
-                            _timingQueue,
-                            out future);
-
-                    outputTask = future.OutputTask;
-                    _microPromises[promiseId] = (future, ownsCancellation);
-                    break;
-                }
-            } while (true);
+                // We are careful to not invoke this callback inside the lock
+                // on _microPromises, taken by TryRegisterJobMessage.
+                var oldPromiseId = promise.Id;
+                promise = promiseRetriever.Invoke(work.ReplacePromise(null));
+                VerifyPromiseIsDifferent(promise, oldPromiseId);
+            }
 
             // Only attach outputTask to the promise if this is a new job
             if (outputTask is not null)
@@ -465,6 +414,76 @@ namespace JobBank.Server
                 // the caller should not enqueue the message.
                 if (promise.IsCompleted)
                     return null;
+            }
+
+            return message;
+        }
+
+        /// <summary>
+        /// One iteration in the retry loop of <see cref="RegisterJobMessage" />.
+        /// </summary>
+        private JobMessage? TryRegisterJobMessage(ISchedulingAccount account,
+                                                  Promise promise,
+                                                  in PromisedWork work,
+                                                  bool ownsCancellation,
+                                                  CancellationToken cancellationToken,
+                                                  out Task<PromiseData>? outputTask)
+        {
+            JobMessage message;
+            SharedFuture<PromisedWork, PromiseData> future;
+            outputTask = null;
+
+            // Do not register any job if the promise is already complete
+            if (promise.IsCompleted)
+                return null;
+
+            var promiseId = promise.Id;
+
+            lock (_microPromises)
+            {
+                ref var entry = ref CollectionsMarshal.GetValueRefOrAddDefault(
+                                    _microPromises, promiseId, out bool exists);
+
+                // Attach account to existing job for same promise ID if it exists
+                // and has not been cancelled.
+                if (exists)
+                {
+                    future = entry.Future;
+
+                    // Set flag when at least one client owns cancellation
+                    ownsCancellation |= entry.OwnsCancellation;
+
+                    if (future.TryShareJob(account, cancellationToken)
+                        is not JobMessage existingMessage)
+                    {
+                        return null;
+                    }
+
+                    entry.OwnsCancellation = ownsCancellation;
+                    message = existingMessage;
+                }
+                else
+                {
+                    // Usual case: completely new job
+                    try
+                    {
+                        message = SharedFuture<PromisedWork, PromiseData>.CreateJob(
+                                work,
+                                work.InitialWait,
+                                account,
+                                cancellationToken,
+                                _timingQueue,
+                                out future);
+                    }
+                    catch
+                    {
+                        _microPromises.Remove(promiseId);
+                        throw;
+                    }
+
+                    outputTask = future.OutputTask;
+                    entry = (future, ownsCancellation);
+                }
             }
 
             return message;

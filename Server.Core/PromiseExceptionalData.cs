@@ -52,6 +52,8 @@ namespace JobBank.Server
         /// </summary>
         public override bool IsFailure => true;
 
+        public override bool IsTransient => _payload.Cancelling;
+
         private enum Format
         {
             Text,

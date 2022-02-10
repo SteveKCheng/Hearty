@@ -170,5 +170,19 @@ namespace JobBank.Server
         /// </para>
         /// </remarks>
         public virtual bool IsFailure { get => false; }
+
+        /// <summary>
+        /// Whether this data is transient result that should be 
+        /// automatically re-tried if the containing 
+        /// promise is requested to be "run" (not merely queried).
+        /// </summary>
+        /// <remarks>
+        /// This property is a key characteristic of cancellation.
+        /// If a job associated to this promise has been cancelled
+        /// (by other clients), requesting it as a job should restart
+        /// the job.  Other kinds of failures may mark themselves
+        /// as transient as well.
+        /// </remarks>
+        public virtual bool IsTransient => false;
     }
 }
