@@ -26,6 +26,9 @@ namespace JobBank.Server
 
         bool IPromiseListBuilder.IsComplete => _promiseIds.IsComplete;
 
+        bool IPromiseListBuilder.IsCancelled =>
+            _promiseIds.IsComplete && _promiseIds.Exception is OperationCanceledException;
+
         bool IPromiseListBuilder.TryComplete(int count, Exception? exception)
             => _promiseIds.TryComplete(count, exception);
 

@@ -186,7 +186,8 @@ namespace JobBank.Server.Program
             if (items == null)
                 throw new InvalidDataException("Received a null list. ");
 
-            var promise = input.Storage.CreatePromise(new Payload(input.ContentType ?? string.Empty, requestData));
+            var request = new Payload(input.ContentType ?? string.Empty, requestData);
+            var promise = input.Storage.CreatePromise(request);
 
             var microJobs = items.Select((MockPricingInput item) =>
             {
@@ -200,7 +201,9 @@ namespace JobBank.Server.Program
             });
 
             jobScheduling.PushMacroJobAndOwnCancellation(
-                _dummyQueueOwner, 4, promise, PromiseList.Factory,
+                _dummyQueueOwner, 4, static w => w.Promise! ?? throw new ArgumentNullException(), 
+                new PromisedWork(request) { Promise = promise }, 
+                PromiseList.Factory,
                 AsAsyncEnumerable(microJobs));
 
             return promise.Id;

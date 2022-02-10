@@ -69,6 +69,12 @@ namespace JobBank.Server
         bool IsComplete { get; }
 
         /// <summary>
+        /// Whether this list being built has been terminated by
+        /// cancellation.
+        /// </summary>
+        bool IsCancelled { get; }
+
+        /// <summary>
         /// Get the object that can be used to read what has
         /// been built by this object, as a promise output.
         /// </summary>
