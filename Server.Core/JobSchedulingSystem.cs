@@ -623,6 +623,16 @@ namespace JobBank.Server
         #region Macro jobs
 
         /// <summary>
+        /// Type of value for the <see cref="_macroPromises" /> dictionary.
+        /// </summary>
+        private struct MacroPromisesEntry
+        {
+            public IPromiseListBuilder ResultBuilder;
+            public int ProducerCount;
+            public bool OwnsCancellation;
+        }
+
+        /// <summary>
         /// Cached output for macro jobs.
         /// </summary>
         /// <remarks>
@@ -634,10 +644,7 @@ namespace JobBank.Server
         /// a macro job does not cancel the promise output unless there
         /// are no more macro jobs sharing the same output object.
         /// </remarks>
-        private readonly Dictionary<PromiseId,
-                (IPromiseListBuilder ResultBuilder, 
-                 int ProducerCount,
-                 bool OwnsCancellation)>
+        private readonly Dictionary<PromiseId, MacroPromisesEntry>
             _macroPromises = new();
 
         /// <summary>
@@ -772,6 +779,38 @@ namespace JobBank.Server
                                         bool ownsCancellation,
                                         out bool isNewJob)
         {
+            // This code is separated into a local function to avoid
+            // "goto" for re-doing operations due to concurrency conflict.
+            static IPromiseListBuilder? ProcessExistingEntry(ref MacroPromisesEntry entry,
+                                                             bool ownsCancellation,
+                                                             out bool isNewJob)
+            {
+                if (entry.ResultBuilder.IsCancelled)
+                {
+                    // Cannot re-use existing result builder because
+                    // it has been cancelled.
+                    isNewJob = true;
+                    return null;
+                }
+                else if (entry.ResultBuilder.IsComplete)
+                {
+                    // No need to register any job if sharing an existing
+                    // promise and the results builder is already complete.
+                    isNewJob = false;
+                    return null;
+                }
+                else
+                {
+                    // Update existing entry for a shared job.
+                    var resultBuilder = entry.ResultBuilder;
+                    ++entry.ProducerCount;
+                    entry.OwnsCancellation |= ownsCancellation;
+
+                    isNewJob = false;
+                    return resultBuilder;
+                }
+            }
+
             var promiseId = promise.Id;
             bool lockTaken = false;
 
@@ -779,14 +818,12 @@ namespace JobBank.Server
             {
                 Monitor.Enter(_macroPromises, ref lockTaken);
 
-            redo:
                 ref var entry = ref CollectionsMarshal.GetValueRefOrNullRef(
                                     _macroPromises, promiseId);
 
+                // Promise is not presently registered.
                 if (Unsafe.IsNullRef(ref entry))
                 {
-                    isNewJob = true;
-
                     // Need to create a result builder for a new job.
                     // Temporarily release the lock to invoke the callback.
                     lockTaken = false;
@@ -805,42 +842,28 @@ namespace JobBank.Server
                     // A concurrent caller has already added the entry.
                     // Restart as if it had already existed earlier,
                     // and discard resultBuilder.
-                    //
-                    // Ideally, we would just re-assign the entry ref variable,
-                    // and hence would not have to look up the dictionary again,
-                    // but C#'s scoping rules for ref-assignment are too
-                    // conservative and do not allow that.
                     if (exists)
-                        goto redo;
+                    {
+                        return ProcessExistingEntry(ref newEntry,
+                                                    ownsCancellation,
+                                                    out isNewJob);
+                    }
 
                     // Populate the new entry.
                     newEntry.ResultBuilder = resultBuilder;
                     newEntry.ProducerCount = 1;
                     newEntry.OwnsCancellation = ownsCancellation;
+
+                    isNewJob = true;
                     return resultBuilder;
                 }
-                else if (entry.ResultBuilder.IsCancelled)
-                {
-                    // Cannot re-use existing result builder because
-                    // it has been cancelled.
-                    isNewJob = true;
-                    return null;
-                }
-                else if (entry.ResultBuilder.IsComplete)
-                {
-                    // No need to register any job if sharing an existing
-                    // promise and the results builder is already complete.
-                    isNewJob = false;
-                    return null;
-                }
+
+                // Promise is already registered.
                 else
                 {
-                    // Update existing entry for a shared job.
-                    isNewJob = false;
-                    var resultBuilder = entry.ResultBuilder;
-                    ++entry.ProducerCount;
-                    entry.OwnsCancellation |= ownsCancellation;
-                    return resultBuilder;
+                    return ProcessExistingEntry(ref entry,
+                                                ownsCancellation,
+                                                out isNewJob);
                 }
             }
             finally
