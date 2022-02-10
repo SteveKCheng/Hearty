@@ -13,6 +13,7 @@ namespace JobBank.Server
     using JobMessage = ScheduledJob<PromisedWork, PromiseData>;
     using ClientQueue = SchedulingQueue<ScheduledJob<PromisedWork, PromiseData>>;
     using OwnerCancellation = KeyValuePair<IJobQueueOwner, CancellationSourcePool.Use>;
+    using MacroJobExpansion = IAsyncEnumerable<(PromiseRetriever, PromisedWork)>;
 
     /// <summary>
     /// Schedules execution of promises using a hierarchy of job queues.
@@ -648,7 +649,7 @@ namespace JobBank.Server
                                        int priority,
                                        Promise promise,
                                        PromiseListBuilderFactory builderFactory,
-                                       IAsyncEnumerable<(Promise, PromisedWork)> generator,
+                                       MacroJobExpansion expansion,
                                        bool ownsCancellation,
                                        CancellationToken cancellationToken)
         {
@@ -683,7 +684,7 @@ namespace JobBank.Server
                     _exceptionTranslator);
             }
 
-            var message = new MacroJobMessage(generator,
+            var message = new MacroJobMessage(expansion,
                                               this, queue,
                                               promise.Id, resultBuilder,
                                               cancellationToken);
@@ -700,12 +701,12 @@ namespace JobBank.Server
         /// <param name="promise">Promise object for the macro job. </param>
         /// <param name="builderFactory">Provides the implementation
         /// of <see cref="IPromiseListBuilder" /> for gathering the
-        /// promises generated from <paramref name="generator" />,
+        /// promises generated from <paramref name="expansion" />,
         /// and storing them into <paramref name="promise" />.
         /// </param>
-        /// <param name="generator">
-        /// Generates the micro jobs once the macro job has
-        /// been de-queued and ready to run.
+        /// <param name="expansion">
+        /// Expands the macro job into the micro jobs once 
+        /// it has been de-queued and ready to run.
         /// </param>
         /// <param name="cancellationToken">
         /// Used by the caller to request cancellation of the macro job
@@ -715,7 +716,7 @@ namespace JobBank.Server
                                  int priority,
                                  Promise promise,
                                  PromiseListBuilderFactory builderFactory,
-                                 IAsyncEnumerable<(Promise, PromisedWork)> generator,
+                                 MacroJobExpansion expansion,
                                  CancellationToken cancellationToken)
         {
             // Enqueue nothing if promise is already completed
@@ -726,7 +727,7 @@ namespace JobBank.Server
             }
 
             PushMacroJobCore(owner, priority, 
-                             promise, builderFactory, generator,
+                             promise, builderFactory, expansion,
                              ownsCancellation: false,
                              cancellationToken);
         }
@@ -741,18 +742,18 @@ namespace JobBank.Server
         /// <param name="promise">Promise object for the macro job. </param>
         /// <param name="builderFactory">Provides the implementation
         /// of <see cref="IPromiseListBuilder" /> for gathering the
-        /// promises generated from <paramref name="generator" />,
+        /// promises generated from <paramref name="expansion" />,
         /// and storing them into <paramref name="promise" />.
         /// </param>
-        /// <param name="generator">
-        /// Generates the micro jobs once the macro job has
-        /// been de-queued and ready to run.
+        /// <param name="expansion">
+        /// Expands the macro job into the micro jobs once 
+        /// it has been de-queued and ready to run.
         /// </param>
         public void PushMacroJobAndOwnCancellation(IJobQueueOwner owner,
                                                    int priority,
                                                    Promise promise,
                                                    PromiseListBuilderFactory builderFactory,
-                                                   IAsyncEnumerable<(Promise, PromisedWork)> generator)
+                                                   MacroJobExpansion expansion)
         {
             // Enqueue nothing if promise is already completed
             if (promise.IsCompleted &&
@@ -766,7 +767,7 @@ namespace JobBank.Server
             RegisterCancellationUse(owner, promise, ref cancellation);
 
             PushMacroJobCore(owner, priority, 
-                             promise, builderFactory, generator,
+                             promise, builderFactory, expansion,
                              ownsCancellation: true,
                              cancellationToken);
         }
@@ -801,7 +802,7 @@ namespace JobBank.Server
     /// </remarks>
     internal class MacroJobMessage : IAsyncEnumerable<JobMessage>
     {
-        private readonly IAsyncEnumerable<(Promise, PromisedWork)> _generator;
+        private readonly MacroJobExpansion _expansion;
 
         private readonly JobSchedulingSystem _jobScheduling;
         private readonly ClientQueue _queue;
@@ -812,7 +813,7 @@ namespace JobBank.Server
         /// <summary>
         /// Construct the macro job message.
         /// </summary>
-        /// <param name="generator">
+        /// <param name="expansion">
         /// User-supplied generator that lists out
         /// the promise objects and work descriptions for
         /// the micro jobs.
@@ -831,7 +832,7 @@ namespace JobBank.Server
         /// job has finished expanding.
         /// </param>
         /// <param name="resultBuilder">
-        /// The list of promises generated by <paramref name="generator" />
+        /// The list of promises generated by <paramref name="expansion" />
         /// will be stored/passed onto here.
         /// </param>
         /// <param name="cancellationToken">
@@ -841,14 +842,14 @@ namespace JobBank.Server
         /// and micro jobs cannot be cancelled independently
         /// of one another.
         /// </param>
-        internal MacroJobMessage(IAsyncEnumerable<(Promise, PromisedWork)> generator,
+        internal MacroJobMessage(MacroJobExpansion expansion,
                                  JobSchedulingSystem jobScheduling,
                                  ClientQueue queue,
                                  PromiseId promiseId,
                                  IPromiseListBuilder resultBuilder,
                                  CancellationToken cancellationToken)
         {
-            _generator = generator;
+            _expansion = expansion;
             _jobScheduling = jobScheduling;
             _queue = queue;
             _promiseId = promiseId;
@@ -870,14 +871,14 @@ namespace JobBank.Server
             // enumerator manually.
             //
 
-            IAsyncEnumerator<(Promise, PromisedWork)>? enumerator = null;
+            IAsyncEnumerator<(PromiseRetriever, PromisedWork)>? enumerator = null;
             try
             {
                 // Do not do anything if another producer has already completed.
                 if (_resultBuilder.IsComplete)
                     yield break;
 
-                enumerator = _generator.GetAsyncEnumerator(
+                enumerator = _expansion.GetAsyncEnumerator(
                     cancellationToken.CanBeCanceled ? cancellationToken
                                                     : _jobCancelToken);
             }
@@ -906,22 +907,21 @@ namespace JobBank.Server
                         cancellationToken.ThrowIfCancellationRequested();
                         _jobCancelToken.ThrowIfCancellationRequested();
 
-                        // Add the new member to the result sequence.
-                        var (promise, input) = enumerator.Current;
-                        _resultBuilder.SetMember(count, promise);
-                        count++;
-
-                        // FIXME Source enumeration needs to provide PromiseRetriever
-                        input = input.ReplacePromise(promise);
+                        var (promiseRetriever, input) = enumerator.Current;
 
                         message = _jobScheduling.RegisterJobMessage(
                                         _queue,
-                                        static w => w.Promise!,
+                                        promiseRetriever,
                                         input,
                                         ownsCancellation: false,
                                         _jobCancelToken,
-                                        out _);
+                                        out var promise);
 
+                        // Add the new member to the result sequence.
+                        _resultBuilder.SetMember(count, promise);
+                        count++;
+
+                        // Do not schedule work if promise is already complete
                         if (message is null)
                             continue;
                     }

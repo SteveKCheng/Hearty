@@ -195,7 +195,8 @@ namespace JobBank.Server.Program
                 JsonSerializer.Serialize(new Utf8JsonWriter(b), item);
                 var d = new Payload("application/json", b.WrittenMemory);
                 var p = input.Storage.CreatePromise(d);
-                return (p, new PromisedWork(d) { InitialWait = g.Next(200, 7000) });
+                PromiseRetriever r = static w => w.Promise!;
+                return (r, new PromisedWork(d) { InitialWait = g.Next(200, 7000), Promise = p });
             });
 
             jobScheduling.PushMacroJobAndOwnCancellation(
