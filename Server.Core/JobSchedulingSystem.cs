@@ -812,64 +812,54 @@ namespace JobBank.Server
             }
 
             var promiseId = promise.Id;
-            bool lockTaken = false;
 
-            try
+            lock (_macroPromises)
             {
-                Monitor.Enter(_macroPromises, ref lockTaken);
-
                 ref var entry = ref CollectionsMarshal.GetValueRefOrNullRef(
                                     _macroPromises, promiseId);
 
-                // Promise is not presently registered.
-                if (Unsafe.IsNullRef(ref entry))
-                {
-                    // Need to create a result builder for a new job.
-                    // Temporarily release the lock to invoke the callback.
-                    lockTaken = false;
-                    Monitor.Exit(_macroPromises);
-                    var resultBuilder = builderFactory.Invoke(promise)
-                                        ?? throw new ArgumentNullException(
-                                            paramName: null,
-                                            message: "PromiseListBuilderFactory returned null. ");
-                    Monitor.Enter(_macroPromises, ref lockTaken);
-
-                    // ref var entry may have been invalidated by concurrent
-                    // calls to this method.
-                    ref var newEntry = ref CollectionsMarshal.GetValueRefOrAddDefault(
-                                        _macroPromises, promiseId, out bool exists);
-
-                    // A concurrent caller has already added the entry.
-                    // Restart as if it had already existed earlier,
-                    // and discard resultBuilder.
-                    if (exists)
-                    {
-                        return ProcessExistingEntry(ref newEntry,
-                                                    ownsCancellation,
-                                                    out isNewJob);
-                    }
-
-                    // Populate the new entry.
-                    newEntry.ResultBuilder = resultBuilder;
-                    newEntry.ProducerCount = 1;
-                    newEntry.OwnsCancellation = ownsCancellation;
-
-                    isNewJob = true;
-                    return resultBuilder;
-                }
-
                 // Promise is already registered.
-                else
+                if (!Unsafe.IsNullRef(ref entry))
                 {
                     return ProcessExistingEntry(ref entry,
                                                 ownsCancellation,
                                                 out isNewJob);
                 }
             }
-            finally
+
+            // The usual case: the promise is not already registered.
+            //
+            // Create a result builder for a new job.
+            // Temporarily release the lock to invoke the callback.
+            var resultBuilder = builderFactory.Invoke(promise)
+                                ?? throw new ArgumentNullException(
+                                    paramName: null,
+                                    message: "PromiseListBuilderFactory returned null. ");
+
+            lock (_macroPromises)
             {
-                if (lockTaken)
-                    Monitor.Exit(_macroPromises);
+                // ref var entry may have been invalidated by concurrent
+                // calls to this method.
+                ref var newEntry = ref CollectionsMarshal.GetValueRefOrAddDefault(
+                                    _macroPromises, promiseId, out bool exists);
+
+                // A concurrent caller has already added the entry.
+                // Restart as if it had already existed earlier,
+                // and discard resultBuilder.
+                if (exists)
+                {
+                    return ProcessExistingEntry(ref newEntry,
+                                                ownsCancellation,
+                                                out isNewJob);
+                }
+
+                // Populate the new entry.
+                newEntry.ResultBuilder = resultBuilder;
+                newEntry.ProducerCount = 1;
+                newEntry.OwnsCancellation = ownsCancellation;
+
+                isNewJob = true;
+                return resultBuilder;
             }
         }
 
