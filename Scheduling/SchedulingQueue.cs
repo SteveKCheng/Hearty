@@ -281,7 +281,10 @@ namespace JobBank.Scheduling
                         return true;
 
                     if (waiting)
+                    {
+                        Deactivate(temporary: true);
                         return false;
+                    }
 
                     if (!_queue.TryDequeue(out entry))
                     {

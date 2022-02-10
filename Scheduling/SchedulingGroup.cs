@@ -294,7 +294,9 @@ namespace JobBank.Scheduling
 #pragma warning restore CS8762
                     }
 
-                    var eventArgs = DeactivateChildCore(child, out bool lastDeactivated);
+                    var eventArgs = DeactivateChildCore(child, 
+                                                        temporary: false, 
+                                                        out bool lastDeactivated);
 
                     if (eventArgs != null || lastDeactivated)
                     {
@@ -422,6 +424,7 @@ namespace JobBank.Scheduling
 
                     firstActivated = (CountActiveSources == 1);
                     eventArgs = _eventHandler != null ? new(true, 
+                                                            false,
                                                             unchecked(++_eventCounter), 
                                                             child.Attachment) 
                                                       : null;
@@ -450,6 +453,7 @@ namespace JobBank.Scheduling
         /// value is null if the event handler should not be invoked.
         /// </returns>
         private SchedulingActivationEventArgs? DeactivateChildCore(SchedulingFlow<T> child,
+                                                                   bool temporary,
                                                                    out bool lastDeactivated)
         {
             if (child.IsActive)
@@ -457,7 +461,8 @@ namespace JobBank.Scheduling
                 _priorityHeap.Delete(child.PriorityHeapIndex);
                 child.RefillEpoch = _countRefills;
                 lastDeactivated = (_priorityHeap.Count == 0);
-                return _eventHandler != null ? new(false, 
+                return _eventHandler != null ? new(activated: false, 
+                                                   temporary,
                                                    unchecked(++_eventCounter), 
                                                    child.Attachment) 
                                              : null;
@@ -473,7 +478,7 @@ namespace JobBank.Scheduling
         /// <param name="child">
         /// The child scheduling unit.  This instance must be its parent.
         /// </param>
-        internal void DeactivateChild(SchedulingFlow<T> child)
+        internal void DeactivateChild(SchedulingFlow<T> child, bool temporary)
         {
             SchedulingActivationEventArgs? eventArgs;
             bool lastDeactivated;
@@ -483,7 +488,9 @@ namespace JobBank.Scheduling
                 if (!CheckCorrectParent(child, optional: true))
                     return;
 
-                eventArgs = DeactivateChildCore(child, out lastDeactivated);
+                eventArgs = DeactivateChildCore(child, 
+                                                temporary, 
+                                                out lastDeactivated);
             }
 
             NotifyDeactivation(lastDeactivated);
@@ -518,7 +525,9 @@ namespace JobBank.Scheduling
                 if (!CheckCorrectParent(child, optional: true))
                     return;
 
-                eventArgs = DeactivateChildCore(child, out lastDeactivated);
+                eventArgs = DeactivateChildCore(child, 
+                                                temporary: false, 
+                                                out lastDeactivated);
 
                 // Reset weight and statistics while holding the lock
                 child.RefillEpoch = 0;

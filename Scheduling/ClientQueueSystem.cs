@@ -96,6 +96,10 @@ namespace JobBank.Scheduling
 
                 if (!args.Activated)
                 {
+                    // Ignore if de-activation is temporary
+                    if (args.IsTemporary)
+                        return;
+
                     toQueueForExpiry = !entry.IsInExpiryQueue;
                     entry.IsInExpiryQueue = true;
                 }

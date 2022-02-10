@@ -232,7 +232,12 @@ namespace JobBank.Scheduling
         /// If this instance currently has no parent scheduling group, 
         /// this method does nothing.
         /// </remarks>
-        protected void Deactivate() => Parent?.DeactivateChild(this);
+        /// <param name="temporary">
+        /// Whether this de-activation should be considered temporary.
+        /// See <see cref="SchedulingActivationEventArgs.IsTemporary" />.
+        /// </param>
+        protected void Deactivate(bool temporary = false) 
+            => Parent?.DeactivateChild(this, temporary);
 
         /// <summary>
         /// Adjust the debit balance of this scheduling unit to affect

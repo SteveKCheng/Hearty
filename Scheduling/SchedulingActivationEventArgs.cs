@@ -6,12 +6,27 @@ namespace JobBank.Scheduling
     /// Describes a flow that is being activated or de-activating
     /// from its parent scheduling group.
     /// </summary>
-    public struct SchedulingActivationEventArgs
+    public readonly struct SchedulingActivationEventArgs
     {
         /// <summary>
         /// Whether the child flow if being activated or de-activated.
         /// </summary>
         public bool Activated { get; }
+
+        /// <summary>
+        /// Whether the child flow considers its de-activation
+        /// to be temporary.
+        /// </summary>
+        /// <remarks>
+        /// A de-activation may be considered to be temporary
+        /// if the flow is about to de-queue an item, but 
+        /// whose value is not yet available because it is
+        /// waiting for asynchronous processing.  A non-temporary
+        /// de-activation would be for a queue that is exhausted
+        /// of items.  This distinction is useful for expiring
+        /// empty queues automatically.
+        /// </remarks>
+        public bool IsTemporary { get; }
 
         /// <summary>
         /// Counts how many activation or de-activation
@@ -39,10 +54,12 @@ namespace JobBank.Scheduling
         public object? Attachment { get; }
 
         internal SchedulingActivationEventArgs(bool activated, 
+                                               bool isTemporary,
                                                uint counter, 
                                                object? attachment)
         {
             Activated = activated;
+            IsTemporary = isTemporary;
             Counter = counter;
             Attachment = attachment;
         }
