@@ -56,9 +56,9 @@ namespace JobBank.Server
 
         private enum Format
         {
-            Text,
-            Json,
-            MessagePack
+            Text = 0,
+            Json = 1,
+            MessagePack = 2
         }
 
         private static Format GetFormat(string contentType)
@@ -122,5 +122,19 @@ namespace JobBank.Server
             var payload = GetPayload(contentType, cancellationToken).Slice(position);
             return writer.WriteAsync(payload, cancellationToken);
         }
+
+        /// <inheritdoc />
+        public override ContentFormatInfo GetFormatInfo(int format)
+            => (Format)format switch
+            {
+                Format.Text => new("text/plain", ContentPreference.Fair),
+                Format.Json => new("application/json", ContentPreference.Good),
+                Format.MessagePack => new("application/messagepack", ContentPreference.Best),
+                _ => throw new ArgumentOutOfRangeException(nameof(format))
+            };
+
+        /// <inheritdoc />
+        public override long? GetContentLength(int format) => null;
+
     }
 }

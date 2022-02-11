@@ -95,5 +95,14 @@ namespace JobBank.Server
         {
             throw new NotImplementedException();
         }
+
+        /// <inheritdoc />
+        public override ContentFormatInfo GetFormatInfo(int format)
+            => new(SuggestedContentType,
+                   ContentPreference.Best,
+                   ContentSeekability.Bytes);
+
+        /// <inheritdoc />
+        public override long? GetContentLength(int format) => Body.Length;
     }
 }

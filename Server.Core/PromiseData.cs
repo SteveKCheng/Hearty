@@ -151,6 +151,38 @@ namespace JobBank.Server
         public virtual long? ContentLength { get => null; }
 
         /// <summary>
+        /// Get the number of (alternative) formats for the data.
+        /// </summary>
+        /// <remarks>
+        /// This value must be at least one.
+        /// </remarks>
+        public virtual int CountFormats => 1;
+
+        /// <summary>
+        /// Get a description of an available data format.
+        /// </summary>
+        /// <param name="format">
+        /// Integer index selecting the format, ranging from 0 to
+        /// <see cref="CountFormats" /> minus one.
+        /// </param>
+        /// <returns>
+        /// Description of the selected format, used for content negotiation.
+        /// </returns>
+        public abstract ContentFormatInfo GetFormatInfo(int format);
+
+        /// <summary>
+        /// Get the length of the data, in bytes, for a given format.
+        /// </summary>
+        /// <param name="format">
+        /// Integer index selecting the format, ranging from 0 to
+        /// <see cref="CountFormats" /> minus one.
+        /// </param>
+        /// <returns>
+        /// The length in bytes, if it is available. 
+        /// </returns>
+        public abstract long? GetContentLength(int format);
+
+        /// <summary>
         /// Whether this data represents a failure condition.
         /// </summary>
         /// <remarks>
