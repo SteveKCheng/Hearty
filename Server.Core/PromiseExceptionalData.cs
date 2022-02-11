@@ -111,12 +111,6 @@ namespace JobBank.Server
             => ValueTask.FromResult(GetPayload(contentType, cancellationToken));
 
         /// <inheritdoc />
-        public override ValueTask<IAsyncEnumerator<ReadOnlyMemory<byte>>> GetPayloadStreamAsync(string contentType, int position, CancellationToken cancellationToken)
-        {
-            throw new NotSupportedException();
-        }
-
-        /// <inheritdoc />
         public override ValueTask WriteToPipeAsync(string contentType, PipeWriter writer, long position, CancellationToken cancellationToken)
         {
             var payload = GetPayload(contentType, cancellationToken).Slice(position);

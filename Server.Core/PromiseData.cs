@@ -105,7 +105,7 @@ namespace JobBank.Server
         /// </summary>
         public abstract ValueTask<Stream>
             GetByteStreamAsync(string contentType,
-                           CancellationToken cancellationToken);
+                               CancellationToken cancellationToken);
 
         /// <summary>
         /// Get the payload as a contiguous block of bytes.
@@ -113,15 +113,6 @@ namespace JobBank.Server
         public abstract ValueTask<ReadOnlySequence<byte>> 
             GetPayloadAsync(string contentType, 
                             CancellationToken cancellationToken);
-
-        /// <summary>
-        /// Get the sequence of results where each item can be treated as a "message" 
-        /// consisting of one block of bytes.
-        /// </summary>
-        public abstract ValueTask<IAsyncEnumerator<ReadOnlyMemory<byte>>> 
-            GetPayloadStreamAsync(string contentType,
-                                  int position,
-                                  CancellationToken cancellationToken);
 
         /// <summary>
         /// The IANA media type that is the default choice for the payload.

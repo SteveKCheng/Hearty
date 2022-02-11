@@ -91,12 +91,6 @@ namespace JobBank.Server
         }
 
         /// <inheritdoc />
-        public override ValueTask<IAsyncEnumerator<ReadOnlyMemory<byte>>> GetPayloadStreamAsync(string contentType, int position, CancellationToken cancellationToken)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
         public override ContentFormatInfo GetFormatInfo(int format)
             => new(SuggestedContentType,
                    ContentPreference.Best,
