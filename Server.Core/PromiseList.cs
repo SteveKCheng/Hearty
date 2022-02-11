@@ -163,8 +163,5 @@ namespace JobBank.Server
         /// <inheritdoc />
         public override ContentFormatInfo GetFormatInfo(int format)
             => new("text/plain", isContainer: true, ContentPreference.Fair);
-
-        /// <inheritdoc />
-        public override long? GetContentLength(int format) => null;
     }
 }

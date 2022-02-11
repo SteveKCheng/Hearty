@@ -165,7 +165,7 @@ namespace JobBank.Server
         /// <returns>
         /// The length in bytes, if it is available. 
         /// </returns>
-        public abstract long? GetContentLength(int format);
+        public virtual long? GetContentLength(int format) => null;
 
         /// <summary>
         /// Whether this data represents a failure condition.

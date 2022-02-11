@@ -123,9 +123,5 @@ namespace JobBank.Server
                 Format.MessagePack => new("application/messagepack", ContentPreference.Best),
                 _ => throw new ArgumentOutOfRangeException(nameof(format))
             };
-
-        /// <inheritdoc />
-        public override long? GetContentLength(int format) => null;
-
     }
 }
