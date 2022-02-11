@@ -11,8 +11,8 @@ namespace JobBank.Server;
 /// It adopts a simplified version of content negotation from HTTP,
 /// geared towards programmatically generated data.
 /// </remarks>
-public readonly struct ContentFormatInfo : IComparable<ContentFormatInfo>
-                                         , IEquatable<ContentFormatInfo>
+public readonly partial struct ContentFormatInfo : IComparable<ContentFormatInfo>
+                                                 , IEquatable<ContentFormatInfo>
 {
     /// <summary>
     /// The type of the content provided, identified by an IANA "media type" label.

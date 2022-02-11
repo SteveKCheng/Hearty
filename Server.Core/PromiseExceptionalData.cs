@@ -55,7 +55,8 @@ namespace JobBank.Server
         {
             Json = 0,
             MessagePack = 1,
-            Text = 2
+            Text = 2,
+            Count
         }
 
         private static byte[] FormatAsText(ExceptionPayload payload)
@@ -103,6 +104,9 @@ namespace JobBank.Server
             var payload = GetPayload(format, cancellationToken).Slice(position);
             return writer.WriteAsync(payload, cancellationToken);
         }
+
+        /// <inheritdoc />
+        public override int CountFormats => (int)Format.Count;
 
         /// <inheritdoc />
         public override ContentFormatInfo GetFormatInfo(int format)

@@ -1,5 +1,7 @@
-﻿using System;
+﻿using Microsoft.Extensions.Primitives;
+using System;
 using System.Buffers;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Pipelines;
@@ -185,7 +187,63 @@ namespace JobBank.Server
         /// <returns>
         /// Description of the selected format, used for content negotiation.
         /// </returns>
+        /// <remarks>
+        /// The format at index 0 must be the format to be 
+        /// offered by default to clients if they do not filter.
+        /// </remarks>
         public abstract ContentFormatInfo GetFormatInfo(int format);
+
+        /// <summary>
+        /// Format specifications from <see cref="PromiseData" /> encapsulated
+        /// into a read-only list.
+        /// </summary>
+        public readonly struct ContentFormatInfoList : IReadOnlyList<ContentFormatInfo>
+        {
+            private readonly PromiseData _parent;
+
+            internal ContentFormatInfoList(PromiseData parent) => _parent = parent;
+
+            /// <summary>
+            /// Returns the value from <see cref="PromiseData.GetFormatInfo(int)" />.
+            /// </summary>
+            public ContentFormatInfo this[int index] => _parent.GetFormatInfo(index);
+
+            /// <summary>
+            /// Returns the value of <see cref="PromiseData.CountFormats" />.
+            /// </summary>
+            public int Count => _parent.CountFormats;
+
+            /// <inheritdoc cref="IEnumerable{T}.GetEnumerator" />
+            public IEnumerator<ContentFormatInfo> GetEnumerator()
+            {
+                for (int i = 0; i < Count; ++i)
+                    yield return this[i];
+            }
+
+            IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+        }
+
+        /// <summary>
+        /// Choose a format of output from this instance
+        /// that best matches a set of requested patterns.
+        /// </summary>
+        /// <param name="requestedTypes">
+        /// The list of IANA media types, or patterns of media types,
+        /// accepted by the client.  The strings follow the format 
+        /// of the "Accept" header in the HTTP/1.1 specification.
+        /// If empty, this method simply returns 0, referring
+        /// to the first element of <paramref name="responses" />.
+        /// </param>
+        /// <returns>
+        /// The index of the format, ranging from 0 to 
+        /// <see cref="CountFormats" /> minus one, 
+        /// that best matches the client's requests, 
+        /// or -1 if none of the available formats is acceptable
+        /// from <paramref name="requestedTypes" />.
+        /// </returns>
+        public int NegotiateFormat(StringValues requestedTypes)
+            => ContentFormatInfo.Negotiate(new ContentFormatInfoList(this), 
+                                           requestedTypes);
 
         /// <summary>
         /// Get the length of the data, in bytes, for a given format.
