@@ -268,8 +268,15 @@ namespace JobBank.Server.WebApi
 
             var timeout = ParseTimeout(httpRequest.Query);
 
+            var parameters = new QueryParameters
+            {
+                PromiseId = promiseId,
+                Timeout = timeout,
+                AcceptedContentTypes = httpRequest.Headers.Accept
+            };
+
             return RespondToGetPromiseAsync(services, httpResponse, 
-                                            promiseId, timeout, 
+                                            parameters, 
                                             client, cancellationToken);
         }
 
@@ -333,6 +340,19 @@ namespace JobBank.Server.WebApi
             return timeout;
         }
 
+        /// <summary>
+        /// Input parameters from the client's query 
+        /// to <see cref="RespondToGetPromiseAsync" />.
+        /// </summary>
+        private readonly struct QueryParameters
+        {
+            public PromiseId PromiseId { get; init; }
+
+            public TimeSpan Timeout { get; init; }
+
+            public StringValues AcceptedContentTypes { get; init; }
+        }
+
         private static Task GetPromiseByPathAsync(Services services,
                                                   HttpContext httpContext,
                                                   IPromiseClientInfo client)
@@ -351,8 +371,15 @@ namespace JobBank.Server.WebApi
                 return Task.CompletedTask;
             }
 
+            var parameters = new QueryParameters
+            {
+                PromiseId = promiseId,
+                Timeout = timeout,
+                AcceptedContentTypes = httpRequest.Headers.Accept
+            };
+
             return RespondToGetPromiseAsync(services, httpResponse,
-                                            promiseId, timeout,
+                                            parameters,
                                             client, cancellationToken);
         }
 
@@ -401,33 +428,41 @@ namespace JobBank.Server.WebApi
 
         private static async Task RespondToGetPromiseAsync(Services services,
                                                            HttpResponse httpResponse,
-                                                           PromiseId promiseId,
-                                                           TimeSpan timeout,
+                                                           QueryParameters parameters,
                                                            IPromiseClientInfo client,
                                                            CancellationToken cancellationToken)
         {
-            var promise = services.PromiseStorage.GetPromiseById(promiseId);
+            var promise = services.PromiseStorage.GetPromiseById(parameters.PromiseId);
             if (promise == null)
             {
                 httpResponse.StatusCode = StatusCodes.Status404NotFound;
                 return;
             }
 
-            if (timeout == TimeSpan.Zero && !promise.IsCompleted)
+            if (parameters.Timeout == TimeSpan.Zero && !promise.IsCompleted)
             {
                 httpResponse.StatusCode = StatusCodes.Status204NoContent;
                 return;
             }
 
-            using var result = await promise.GetResultAsync(client, timeout, cancellationToken)
+            using var result = await promise.GetResultAsync(client, 
+                                                            parameters.Timeout, 
+                                                            cancellationToken)
                                             .ConfigureAwait(false);
             var output = result.NormalOutput;
 
-            httpResponse.StatusCode = StatusCodes.Status200OK;
-            httpResponse.ContentType = output.ContentType;
-            httpResponse.ContentLength = output.ContentLength;
+            int format = output.NegotiateFormat(parameters.AcceptedContentTypes);
+            if (format < 0)
+            {
+                httpResponse.StatusCode = StatusCodes.Status406NotAcceptable;
+                return;
+            }
 
-            await output.WriteToPipeAsync(format: 0,
+            httpResponse.StatusCode = StatusCodes.Status200OK;
+            httpResponse.ContentType = output.GetFormatInfo(format).MediaType;
+            httpResponse.ContentLength = output.GetContentLength(format);
+
+            await output.WriteToPipeAsync(format,
                                           httpResponse.BodyWriter,
                                           0,
                                           cancellationToken)
