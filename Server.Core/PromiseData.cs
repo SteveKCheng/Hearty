@@ -131,8 +131,6 @@ namespace JobBank.Server
         /// The total number of bytes in the data expressed in 
         /// the default format, if known.
         /// </summary>
-        public virtual int? ItemsCount { get => null; }
-
         public long? ContentLength => GetContentLength(0);
 
         /// <summary>
@@ -166,6 +164,19 @@ namespace JobBank.Server
         /// The length in bytes, if it is available. 
         /// </returns>
         public virtual long? GetContentLength(int format) => null;
+
+        /// <summary>
+        /// Get the number of items, for formats containing 
+        /// multi-valued data.
+        /// </summary>
+        /// <param name="format">
+        /// Integer index selecting the format, ranging from 0 to
+        /// <see cref="CountFormats" /> minus one.
+        /// </param>
+        /// Null if the data is not multi-valued or the number
+        /// of items is not known at this point.
+        /// </returns>
+        public virtual long? GetItemsCount(int format) => null;
 
         /// <summary>
         /// Whether this data represents a failure condition.
