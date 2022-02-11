@@ -128,18 +128,12 @@ namespace JobBank.Server
         public string ContentType => GetFormatInfo(0).MediaType;
 
         /// <summary>
-        /// The number of items that would come from the object returned
-        /// by <see cref="GetPayloadStreamAsync" />, starting from the beginning, 
-        /// if known.
+        /// The total number of bytes in the data expressed in 
+        /// the default format, if known.
         /// </summary>
         public virtual int? ItemsCount { get => null; }
 
-        /// <summary>
-        /// The total number of bytes that would come from the object returned
-        /// by <see cref="GetPipeStreamAsync" />, starting from the beginning, 
-        /// if known.
-        /// </summary>
-        public virtual long? ContentLength { get => null; }
+        public long? ContentLength => GetContentLength(0);
 
         /// <summary>
         /// Get the number of (alternative) formats for the data.

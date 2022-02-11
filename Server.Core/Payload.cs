@@ -22,9 +22,6 @@ namespace JobBank.Server
         private readonly string _contentType;
 
         /// <inheritdoc />
-        public override long? ContentLength => Body.Length;
-
-        /// <inheritdoc />
         public override bool IsFailure { get; }
 
         /// <summary>
