@@ -19,7 +19,7 @@ namespace JobBank.Server
         /// Content (media) type describing the data format of <see cref="Body"/>,
         /// specified in the same way as HTTP and MIME.
         /// </summary>
-        public override string SuggestedContentType { get; }
+        private readonly string _contentType;
 
         /// <inheritdoc />
         public override long? ContentLength => Body.Length;
@@ -43,7 +43,7 @@ namespace JobBank.Server
         /// </param>
         public Payload(string contentType, in ReadOnlySequence<byte> body, bool isFailure = false)
         {
-            SuggestedContentType = contentType;
+            _contentType = contentType;
             Body = body;
             IsFailure = isFailure;
         }
@@ -79,7 +79,7 @@ namespace JobBank.Server
 
         private void VerifyContentType(string contentType)
         {
-            if (contentType != SuggestedContentType)
+            if (contentType != _contentType)
                 throw new NotSupportedException($"Requested content type {contentType} not supported for this promise output. ");
         }
 
@@ -92,7 +92,7 @@ namespace JobBank.Server
 
         /// <inheritdoc />
         public override ContentFormatInfo GetFormatInfo(int format)
-            => new(SuggestedContentType,
+            => new(_contentType,
                    ContentPreference.Best,
                    ContentSeekability.Bytes);
 

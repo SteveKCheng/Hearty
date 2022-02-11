@@ -22,9 +22,6 @@ namespace JobBank.Server
     {
         private readonly ExceptionPayload _payload;
 
-        /// <inheritdoc />
-        public override string SuggestedContentType => "application/json";
-
         /// <summary>
         /// Encodes strings to UTF-8 without the so-called "byte order mark".
         /// </summary>
@@ -56,9 +53,9 @@ namespace JobBank.Server
 
         private enum Format
         {
-            Text = 0,
-            Json = 1,
-            MessagePack = 2
+            Json = 0,
+            MessagePack = 1,
+            Text = 2
         }
 
         private static Format GetFormat(string contentType)

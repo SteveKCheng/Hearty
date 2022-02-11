@@ -115,7 +115,7 @@ namespace JobBank.Server
                             CancellationToken cancellationToken);
 
         /// <summary>
-        /// The IANA media type that is the default choice for the payload.
+        /// The IANA media type that is the default suggestion for the payload.
         /// </summary>
         /// <remarks>
         /// This class allows an implementation to support negotiation for different
@@ -125,7 +125,7 @@ namespace JobBank.Server
         /// can refer to.
         /// </remarks>
         /// </summary>
-        public abstract string SuggestedContentType { get; }
+        public string ContentType => GetFormatInfo(0).MediaType;
 
         /// <summary>
         /// The number of items that would come from the object returned

@@ -37,9 +37,6 @@ namespace JobBank.Server
         PromiseData IPromiseListBuilder.Output => this;
 
         /// <inheritdoc />
-        public override string SuggestedContentType => "text/plain";
-
-        /// <inheritdoc />
         public override ValueTask<Stream> GetByteStreamAsync(string contentType, CancellationToken cancellationToken)
         {
             var pipe = new Pipe();

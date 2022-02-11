@@ -133,11 +133,11 @@ namespace JobBank.Server.WebApi
 
                 var output = translator.Invoke(null, exception);
 
-                httpResponse.ContentType = output.SuggestedContentType;
+                httpResponse.ContentType = output.ContentType;
                 httpResponse.ContentLength = output.ContentLength;
 
                 var writer = httpResponse.BodyWriter;
-                await output.WriteToPipeAsync(output.SuggestedContentType,
+                await output.WriteToPipeAsync(output.ContentType,
                                               writer, position: 0,
                                               cancellationToken: CancellationToken.None);
                 await writer.CompleteAsync();
@@ -424,10 +424,10 @@ namespace JobBank.Server.WebApi
             var output = result.NormalOutput;
 
             httpResponse.StatusCode = StatusCodes.Status200OK;
-            httpResponse.ContentType = output.SuggestedContentType;
+            httpResponse.ContentType = output.ContentType;
             httpResponse.ContentLength = output.ContentLength;
 
-            await output.WriteToPipeAsync(output.SuggestedContentType,
+            await output.WriteToPipeAsync(output.ContentType,
                                           httpResponse.BodyWriter,
                                           0,
                                           cancellationToken)

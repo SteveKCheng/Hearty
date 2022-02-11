@@ -74,7 +74,7 @@ namespace JobBank.Server
                                    CancellationToken cancellationToken)
                 where TImpl : IJobSubmission
         {
-            var contentType = runningJob.Input.Data.SuggestedContentType;
+            var contentType = runningJob.Input.Data.ContentType;
 
             var reply = await impl.RunJobAsync(new JobRequestMessage
             {
