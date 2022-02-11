@@ -71,8 +71,10 @@ namespace JobBank.Server
         /// exactly this way.
         /// </para>
         /// </remarks>
-        /// <param name="contentType">
-        /// Desired content type of the payload.
+        /// <param name="format">
+        /// The desired format of the data to write.  Must be 
+        /// in the range of 0 to <see cref="CountFormats" />
+        /// minus one.
         /// </param>
         /// <param name="writer">
         /// The pipe to write the data into.
@@ -95,7 +97,7 @@ namespace JobBank.Server
         /// reading end, the asynchronous task may complete normally.
         /// </returns>
         public abstract ValueTask
-            WriteToPipeAsync(string contentType,
+            WriteToPipeAsync(int format,
                              PipeWriter writer,
                              long position, 
                              CancellationToken cancellationToken);
@@ -103,15 +105,47 @@ namespace JobBank.Server
         /// <summary>
         /// Prepare to read the byte stream for the payload.
         /// </summary>
+        /// <param name="format">
+        /// The desired format of the data to present in
+        /// the stream.  Must be in the range of 0 to 
+        /// <see cref="CountFormats" /> minus one.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be used to cancel retrieval of the stream, if
+        /// it must be asynchronous.
+        /// </param>
+        /// <returns>
+        /// Asynchronous task that provides the readable I/O stream.
+        /// The stream should positioned at the beginning;
+        /// if the format supports seeking by bytes
+        /// (indicated by <see cref="ContentSeekability.Bytes" />
+        /// <see cref="ContentSeekability.Both" />), then the stream
+        /// should be seekable.  The stream should also report
+        /// its length if <see cref="GetContentLength(int)" />
+        /// returns non-null for the same format.
+        /// </returns>
         public abstract ValueTask<Stream>
-            GetByteStreamAsync(string contentType,
+            GetByteStreamAsync(int format,
                                CancellationToken cancellationToken);
 
         /// <summary>
-        /// Get the payload as a contiguous block of bytes.
+        /// Get the payload as blocks of bytes in memory.
         /// </summary>
+        /// <param name="format">
+        /// The desired format of the data to present.  Must 
+        /// be in the range of 0 to <see cref="CountFormats" /> minus one.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be used to cancel retrieving and/or generating
+        /// the blocks of bytes.
+        /// </param>
+        /// <returns>
+        /// The payload as a sequence of blocks of bytes,
+        /// which may in fact be what is internally stored
+        /// by the implementation.
+        /// </returns>
         public abstract ValueTask<ReadOnlySequence<byte>> 
-            GetPayloadAsync(string contentType, 
+            GetPayloadAsync(int format, 
                             CancellationToken cancellationToken);
 
         /// <summary>

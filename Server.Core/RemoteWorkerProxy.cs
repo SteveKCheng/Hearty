@@ -84,7 +84,7 @@ namespace JobBank.Server
                 ExecutionId = executionId,
                 Data = await runningJob.Input
                                        .Data
-                                       .GetPayloadAsync(contentType, cancellationToken)
+                                       .GetPayloadAsync(format: 0, cancellationToken)
                                        .ConfigureAwait(false)
             }, cancellationToken).ConfigureAwait(false);
 

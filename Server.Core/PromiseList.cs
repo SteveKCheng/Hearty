@@ -37,7 +37,7 @@ namespace JobBank.Server
         PromiseData IPromiseListBuilder.Output => this;
 
         /// <inheritdoc />
-        public override ValueTask<Stream> GetByteStreamAsync(string contentType, CancellationToken cancellationToken)
+        public override ValueTask<Stream> GetByteStreamAsync(int format, CancellationToken cancellationToken)
         {
             var pipe = new Pipe();
             _ = GenerateListIntoPipeAsync(pipe.Writer, toComplete: true, cancellationToken);
@@ -45,13 +45,13 @@ namespace JobBank.Server
         }
 
         /// <inheritdoc />
-        public override ValueTask<ReadOnlySequence<byte>> GetPayloadAsync(string contentType, CancellationToken cancellationToken)
+        public override ValueTask<ReadOnlySequence<byte>> GetPayloadAsync(int format, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
 
         /// <inheritdoc />
-        public override ValueTask WriteToPipeAsync(string contentType, PipeWriter writer, long position, CancellationToken cancellationToken)
+        public override ValueTask WriteToPipeAsync(int format, PipeWriter writer, long position, CancellationToken cancellationToken)
         {
             if (position != 0)
                 throw new NotSupportedException();

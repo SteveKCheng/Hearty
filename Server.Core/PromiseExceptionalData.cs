@@ -58,16 +58,6 @@ namespace JobBank.Server
             Text = 2
         }
 
-        private static Format GetFormat(string contentType)
-        {
-            if (string.Equals(contentType, "application/json", StringComparison.OrdinalIgnoreCase))
-                return Format.Json;
-            else if (string.Equals(contentType, "application/messagepack", StringComparison.OrdinalIgnoreCase))
-                return Format.MessagePack;
-            else
-                return Format.Text;
-        }
-
         private static byte[] FormatAsText(ExceptionPayload payload)
         {
             var builder = new StringBuilder();
@@ -81,36 +71,36 @@ namespace JobBank.Server
         }
 
         /// <inheritdoc />
-        public override ValueTask<Stream> GetByteStreamAsync(string contentType, CancellationToken cancellationToken)
+        public override ValueTask<Stream> GetByteStreamAsync(int format, CancellationToken cancellationToken)
         {
-            var payload = GetPayload(contentType, cancellationToken);
+            var payload = GetPayload(format, cancellationToken);
             Stream stream = new MemoryReadingStream(payload);
             return ValueTask.FromResult(stream);
         }
 
-        private ReadOnlySequence<byte> GetPayload(string contentType, CancellationToken cancellationToken)
+        private ReadOnlySequence<byte> GetPayload(int format, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var bytes = GetFormat(contentType) switch
+            var bytes = (Format)format switch
             {
                 Format.Text => FormatAsText(_payload),
                 Format.MessagePack => MessagePackSerializer.Serialize(_payload),
                 Format.Json => JsonSerializer.SerializeToUtf8Bytes(_payload),
-                _ => throw new NotImplementedException()
+                _ => throw new ArgumentOutOfRangeException(nameof(format))
             };
 
             return new ReadOnlySequence<byte>(bytes);
         }
 
         /// <inheritdoc />
-        public override ValueTask<ReadOnlySequence<byte>> GetPayloadAsync(string contentType, CancellationToken cancellationToken)
-            => ValueTask.FromResult(GetPayload(contentType, cancellationToken));
+        public override ValueTask<ReadOnlySequence<byte>> GetPayloadAsync(int format, CancellationToken cancellationToken)
+            => ValueTask.FromResult(GetPayload(format, cancellationToken));
 
         /// <inheritdoc />
-        public override ValueTask WriteToPipeAsync(string contentType, PipeWriter writer, long position, CancellationToken cancellationToken)
+        public override ValueTask WriteToPipeAsync(int format, PipeWriter writer, long position, CancellationToken cancellationToken)
         {
-            var payload = GetPayload(contentType, cancellationToken).Slice(position);
+            var payload = GetPayload(format, cancellationToken).Slice(position);
             return writer.WriteAsync(payload, cancellationToken);
         }
 

@@ -137,7 +137,7 @@ namespace JobBank.Server.WebApi
                 httpResponse.ContentLength = output.ContentLength;
 
                 var writer = httpResponse.BodyWriter;
-                await output.WriteToPipeAsync(output.ContentType,
+                await output.WriteToPipeAsync(format: 0,
                                               writer, position: 0,
                                               cancellationToken: CancellationToken.None);
                 await writer.CompleteAsync();
@@ -427,7 +427,7 @@ namespace JobBank.Server.WebApi
             httpResponse.ContentType = output.ContentType;
             httpResponse.ContentLength = output.ContentLength;
 
-            await output.WriteToPipeAsync(output.ContentType,
+            await output.WriteToPipeAsync(format: 0,
                                           httpResponse.BodyWriter,
                                           0,
                                           cancellationToken)

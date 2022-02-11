@@ -60,30 +60,21 @@ namespace JobBank.Server
         }
 
         /// <inheritdoc />
-        public override ValueTask WriteToPipeAsync(string contentType, PipeWriter writer, long position, CancellationToken cancellationToken)
+        public override ValueTask WriteToPipeAsync(int format, PipeWriter writer, long position, CancellationToken cancellationToken)
         {
-            VerifyContentType(contentType);
             return writer.WriteAsync(Body.Slice(position), cancellationToken);
         }
 
         /// <inheritdoc />
-        public override ValueTask<Stream> GetByteStreamAsync(string contentType, CancellationToken cancellationToken)
+        public override ValueTask<Stream> GetByteStreamAsync(int format, CancellationToken cancellationToken)
         {
-            VerifyContentType(contentType);
             Stream stream = new MemoryReadingStream(Body);
             return ValueTask.FromResult(stream);
         }
 
-        private void VerifyContentType(string contentType)
-        {
-            if (contentType != _contentType)
-                throw new NotSupportedException($"Requested content type {contentType} not supported for this promise output. ");
-        }
-
         /// <inheritdoc />
-        public override ValueTask<ReadOnlySequence<byte>> GetPayloadAsync(string contentType, CancellationToken cancellationToken)
+        public override ValueTask<ReadOnlySequence<byte>> GetPayloadAsync(int format, CancellationToken cancellationToken)
         {
-            VerifyContentType(contentType);
             return ValueTask.FromResult(Body);
         }
 
