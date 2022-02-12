@@ -1,8 +1,12 @@
 ﻿using JobBank.Common;
+using Microsoft.AspNetCore.WebUtilities;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -121,7 +125,52 @@ namespace JobBank.Client
 
             return await content.ReadAsStreamAsync().ConfigureAwait(false);
         }
-        
+
+        public async Task<IAsyncEnumerable<T>> GetItemStreamAsync<T>(PromiseId promiseId,
+                                                                     string contentType,
+                                                                     PayloadProcessor<T> processor,
+                                                                     CancellationToken cancellationToken = default)
+        {
+            var url = $"jobs/v1/id/{promiseId}";
+
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("multipart/parallel"));
+
+            var response = await _httpClient.SendAsync(request)
+                                            .ConfigureAwait(false);
+            
+
+            response.EnsureSuccessStatusCode();
+            var content = response.Content;
+            var responseContentType = content.Headers.ContentType;
+
+            if (!VerifyContentType(responseContentType, "multipart/parallel"))
+                throw new InvalidDataException("The Content-Type returned in the response is unexpected. ");
+
+            var boundary = responseContentType!.Parameters.SingleOrDefault(
+                            param => string.Equals(param.Name, "boundary", StringComparison.OrdinalIgnoreCase))
+                            ?.Value ?? throw new InvalidDataException("Multi-part message is missing its boundary parameter. ");
+
+            var multipartReader = new MultipartReader(boundary, 
+                                                      content.ReadAsStream(cancellationToken));
+            return MakeItemsAsyncEnumerable(multipartReader, processor, cancellationToken);
+        }
+
+        private static async IAsyncEnumerable<T> MakeItemsAsyncEnumerable<T>(
+            MultipartReader reader, 
+            PayloadProcessor<T> processor,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            MultipartSection? section;
+            while ((section = await reader.ReadNextSectionAsync(cancellationToken)
+                                          .ConfigureAwait(false)) is not null)
+            {
+                T item = await processor.Invoke(section.ContentType, section.Body, cancellationToken)
+                                        .ConfigureAwait(false);
+                yield return item;
+            }
+        }
+
         private static bool VerifyContentType(MediaTypeHeaderValue? actual, string expected)
         {
             if (actual != null)
@@ -135,4 +184,8 @@ namespace JobBank.Client
             return true;
         }
     }
+
+    public delegate ValueTask<T> PayloadProcessor<T>(string? contentType,
+                                                     Stream stream,
+                                                     CancellationToken cancellationToken);
 }
