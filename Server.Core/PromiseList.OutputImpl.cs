@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO.Pipelines;
+using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -105,6 +106,22 @@ public partial class PromiseList
         }
     }
 
+    private class DummyPromiseClientInfo : IPromiseClientInfo
+    {
+        public string UserName => "current-user";
+
+        public ClaimsPrincipal? User => null;
+
+        public uint OnSubscribe(Subscription subscription)
+        {
+            return 0;
+        }
+
+        public void OnUnsubscribe(Subscription subscription, uint index)
+        {
+        }
+    }
+
     /// <summary>
     /// Hooks to write out <see cref="PromiseList" /> as a multi-part stream.
     /// </summary>
@@ -162,7 +179,10 @@ public partial class PromiseList
             if (promise is null)
                 throw new InvalidOperationException($"Promise with ID {promiseId} does not exist even though it has been put as part of the results. ");
 
-            var output = promise.RequestOutput!;
+            var result = await promise.GetResultAsync(new DummyPromiseClientInfo(),
+                                                      null, cancellationToken)
+                                      .ConfigureAwait(false);
+            var output = result.NormalOutput;
 
             // RFC 2046 says that Content-Transfer-Encoding is "7bit" by default!
             // However, HTTP clients have to be prepared to receive and send
