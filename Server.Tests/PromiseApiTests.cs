@@ -12,6 +12,8 @@ using JobBank.Client;
 using Microsoft.Extensions.Configuration;
 using System.Text.Json;
 using System.IO;
+using System.Threading;
+using System.Linq;
 
 namespace JobBank.Server.Tests
 {
@@ -77,21 +79,45 @@ namespace JobBank.Server.Tests
             }
         }
 
-        // Unfinished: to expand into a test of streaming.
-        public void RunJobList()
+        [Fact]
+        public async Task RunJobList()
         {
-            var itemList = new List<(MockPricingInput Input, PromiseId PromiseId)>();
-
             using var client = new JobBankClient(CreateClient());
-            var inputs = MockPricingInput.GenerateRandomSamples(DateTime.Today, 41, 50);
+            var inputs = MockPricingInput.GenerateRandomSamples(DateTime.Today, 41, 50)
+                                         .ToList();
 
-            using (var file = File.OpenWrite("JobList.json"))
+            var content = new StreamWriterContent(stream => JsonSerializer.SerializeAsync(stream, inputs));
+
+            var promiseId = await client.PostJobAsync("multi", content);
+
+            var responses = await client.GetItemStreamAsync(promiseId,
+                                                            contentType: "application/json",
+                                                            DeserializeMockPricingOutput,
+                                                            default);
+            int i = 0;
+            await foreach (var item in responses)
             {
-                JsonSerializer.Serialize(file, inputs, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
+                var input = inputs[i++];
+                var expected = input.Calculate();
+                Assert.Equal(expected, item);
             }
+        }
+
+        private static ValueTask<MockPricingOutput> 
+            DeserializeMockPricingOutput(string? contentType, 
+                                         Stream stream, 
+                                         CancellationToken cancellationToken)
+        {
+            return JsonSerializer.DeserializeAsync<MockPricingOutput>(stream, cancellationToken: cancellationToken);
+
+            /*
+            var memStream = new MemoryStream();
+            await stream.CopyToAsync(memStream);
+            memStream.Position = 0;
+            var s = new StreamReader(memStream, Encoding.UTF8).ReadToEnd();
+            var output = JsonSerializer.Deserialize<MockPricingOutput>(s);
+            return output;
+            */
         }
 
         public void Dispose()

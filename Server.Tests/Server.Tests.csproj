@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <Compile Include="PromiseApiTests.cs" />
+    <Compile Include="StreamWriterContent.cs" />
   </ItemGroup>
 
   <ItemGroup>
