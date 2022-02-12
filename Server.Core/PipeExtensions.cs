@@ -83,6 +83,7 @@ namespace JobBank.Server
         /// no separator characters.
         /// </summary>
         /// <param name="destination">The output destination. </param>
+        /// <param name="value">The integer to write. </param>
         /// <returns>
         /// The number of bytes written.
         /// </returns>
@@ -91,6 +92,23 @@ namespace JobBank.Server
         {
             var span = destination.GetSpan(28);
             Utf8Formatter.TryFormat(value, span, out int bytesWritten);
+            destination.Advance(bytesWritten);
+            return bytesWritten;
+        }
+
+        /// <summary>
+        /// Write out the textual representation of a promise ID in ASCII.
+        /// </summary>
+        /// <param name="destination">The output destination. </param>
+        /// <param name="value">The promise ID to write. </param>
+        /// <returns>
+        /// The number of bytes written.
+        /// </returns>
+        public static int WriteAsciiPromiseId(this IBufferWriter<byte> destination,
+                                              PromiseId value)
+        {
+            var span = destination.GetSpan(PromiseId.MaxChars);
+            int bytesWritten = value.FormatAscii(span);
             destination.Advance(bytesWritten);
             return bytesWritten;
         }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using JobBank.Common;
+using System;
 using System.IO.Pipelines;
 using System.Security.Claims;
 using System.Threading;
@@ -190,6 +191,11 @@ public partial class PromiseList
             // bother sending this header.  It just adds inefficiency.
             //
             //   writer.WriteUtf8String("Content-Transfer-Encoding: Binary\r\n");
+
+            writer.WriteUtf8String(JobBankHttpHeaders.PromiseId);
+            writer.WriteUtf8String(": ");
+            writer.WriteAsciiPromiseId(promiseId);
+            writer.WriteCrLf();
 
             writer.WriteUtf8String("Content-Type: ");
             writer.WriteUtf8String(output.ContentType);
