@@ -35,6 +35,7 @@
     <Compile Include="PromiseExceptionalData.cs" />
     <Compile Include="PromisedWork.cs" />
     <Compile Include="PromiseList.cs" />
+    <Compile Include="PromiseList.OutputImpl.cs" />
     <Compile Include="PromisePath.cs" />
     <Compile Include="PromiseStorage.cs" />
     <Compile Include="ReadOnlyMediaTypeHeaderValue.cs" />

@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Buffers;
-using System.Collections.Generic;
 using System.IO;
 using System.IO.Pipelines;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -13,14 +11,9 @@ namespace JobBank.Server
     /// The output of a "macro job" which expands to an
     /// asynchronously-produced sequence of other promises.
     /// </summary>
-    public class PromiseList : PromiseData, IPromiseListBuilder
+    public partial class PromiseList : PromiseData, IPromiseListBuilder
     {
-        /// <summary>
-        /// Factory to instantiate this class for use with 
-        /// <see cref="JobSchedulingSystem" />.
-        /// </summary>
-        public static PromiseListBuilderFactory Factory { get; }
-            = _ => new PromiseList();
+        #region Implementation of IPromiseListBuilder
 
         private readonly IncrementalAsyncList<PromiseId> _promiseIds = new();
 
@@ -36,11 +29,30 @@ namespace JobBank.Server
             => _promiseIds.TrySetMember(index, promise.Id);
         PromiseData IPromiseListBuilder.Output => this;
 
+        #endregion
+
+        private readonly PromiseStorage _promiseStorage;
+
+        /// <summary>
+        /// Construct with an initially empty and uncompleted list.
+        /// </summary>
+        /// <param name="promiseStorage">
+        /// Needed to look up promises given their IDs, as
+        /// they are set through <see cref="IPromiseListBuilder" />.
+        /// </param>
+        public PromiseList(PromiseStorage promiseStorage)
+        {
+            _promiseStorage = promiseStorage;
+        }
+
         /// <inheritdoc />
         public override ValueTask<Stream> GetByteStreamAsync(int format, CancellationToken cancellationToken)
         {
             var pipe = new Pipe();
-            _ = GenerateListIntoPipeAsync(pipe.Writer, toComplete: true, cancellationToken);
+            _ = GenerateIntoPipeAsync(pipe.Writer, 
+                                      GetOutputImpl(format),
+                                      toComplete: true, 
+                                      cancellationToken);
             return ValueTask.FromResult(pipe.Reader.AsStream());
         }
 
@@ -56,24 +68,39 @@ namespace JobBank.Server
             if (position != 0)
                 throw new NotSupportedException();
 
-            var t = GenerateListIntoPipeAsync(writer, toComplete: false, cancellationToken);
+            var t = GenerateIntoPipeAsync(writer,
+                                          GetOutputImpl(format),
+                                          toComplete: false, 
+                                          cancellationToken);
             return new ValueTask(t);
         }
 
         /// <summary>
-        /// Asynchronously write the list of promise IDs in plain-text form into a pipe.
+        /// Asynchronously generate the list of items into a pipe.
         /// </summary>
-        private async Task GenerateListIntoPipeAsync(PipeWriter writer, 
-                                                     bool toComplete, 
-                                                     CancellationToken cancellationToken)
+        /// <param name="writer">Where to write to. </param>
+        /// <param name="impl">The virtual methods to write
+        /// items in a particular format.
+        /// </param>
+        /// <param name="toComplete">
+        /// If true, this method completes the pipe, possibly 
+        /// with an exception, when all items are written.  
+        /// If false, the pipe is left uncompleted.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be used to interrupt writing.
+        /// </param>
+        private async Task GenerateIntoPipeAsync(PipeWriter writer, 
+                                                 OutputImpl impl,
+                                                 bool toComplete, 
+                                                 CancellationToken cancellationToken)
         {
             Exception? completionException = null;
 
             try
             {
                 int index = 0;
-                long totalBytes = 0;
-                long flushWatermark = 0;
+                int unflushedBytes = 0;
 
                 while (true)
                 {
@@ -94,12 +121,11 @@ namespace JobBank.Server
                         // growing too much.  But, do not flush on every iteration;
                         // otherwise a reader over the network might get one packet
                         // for every entry!
-                        if (!memberTask.IsCompleted || 
-                            (totalBytes - flushWatermark) > short.MaxValue)
+                        if (!memberTask.IsCompleted || unflushedBytes > short.MaxValue)
                         {
-                            flushWatermark = totalBytes;
                             await writer.FlushAsync(cancellationToken)
                                         .ConfigureAwait(false);
+                            unflushedBytes = 0;
                         }
                     }
                     finally
@@ -111,39 +137,27 @@ namespace JobBank.Server
                         (promiseId, isValid) = await memberTask.ConfigureAwait(false);
                     }
 
-                    var buffer = writer.GetMemory(PromiseId.MaxChars + 2);
-
                     if (!isValid)
                     {
-                        // Exceptions from the promise list are reported as part of the
-                        // normal payload, and are not considered to fail the pipe.
-                        if (_promiseIds.Exception is Exception exception)
-                        {
-                            bool isCancellation = exception is OperationCanceledException;
-                            string text = isCancellation ? "<CANCELLED>\r\n" : "<FAILED>\r\n";
-                            numBytes = Encoding.ASCII.GetBytes(text, buffer.Span);
-                            writer.Advance(numBytes);
-                            totalBytes += numBytes;
-                        }
-
+                        await impl.WriteEndAsync(this,
+                                                 writer,
+                                                 _promiseIds.Exception,
+                                                 cancellationToken)
+                                  .ConfigureAwait(false);
                         break;
                     }
                     
                     ++index;
 
-                    numBytes = promiseId.FormatAscii(buffer);
+                    numBytes = await impl.WriteItemAsync(this,
+                                                         writer,
+                                                         promiseId,
+                                                         cancellationToken)
+                                         .ConfigureAwait(false);
 
-                    // Terminate each entry by Internet-standard new-line
-                    static int AppendNewLine(Span<byte> line)
-                    {
-                        line[0] = (byte)'\r';
-                        line[1] = (byte)'\n';
-                        return 2;
-                    }
-                    numBytes += AppendNewLine(buffer.Span[numBytes..]);
-
-                    writer.Advance(numBytes);
-                    totalBytes += numBytes;
+                    unflushedBytes = (numBytes >= 0)
+                                        ? unflushedBytes + numBytes
+                                        : 0;
                 }
             }
             catch (Exception e) when (toComplete)
@@ -160,12 +174,35 @@ namespace JobBank.Server
             }
         }
 
+        #region Output formats
+
+        /// <inheritdoc />
+        public override int CountFormats => 2;
+
         /// <inheritdoc />
         public override ContentFormatInfo GetFormatInfo(int format)
-            => new("text/plain", isContainer: true, ContentPreference.Fair);
+        {
+            return format switch
+            {
+                0 => new("text/plain", isContainer: true, ContentPreference.Fair),
+                1 => new("multipart/parallel; boundary=#", isContainer: true, ContentPreference.Good),
+                _ => throw new ArgumentOutOfRangeException(nameof(format))
+            };
+        }
 
         /// <inheritdoc />
         public override long? GetItemsCount(int format)
             => _promiseIds.IsComplete ? _promiseIds.Count : null;
+
+
+        private static OutputImpl GetOutputImpl(int format)
+            => format switch
+            {
+                0 => PlainTextImpl.Instance,
+                1 => MultiPartImpl.Instance,
+                _ => throw new ArgumentOutOfRangeException(nameof(format))
+            };
+
+        #endregion
     }
 }

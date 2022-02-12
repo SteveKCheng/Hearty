@@ -203,7 +203,7 @@ namespace JobBank.Server.Program
             jobScheduling.PushMacroJobAndOwnCancellation(
                 _dummyQueueOwner, 4, static w => w.Promise! ?? throw new ArgumentNullException(), 
                 new PromisedWork(request) { Promise = promise }, 
-                PromiseList.Factory,
+                _ => new PromiseList(input.Storage),
                 AsAsyncEnumerable(microJobs));
 
             return promise.Id;
