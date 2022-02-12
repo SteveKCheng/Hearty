@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net5.0</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
     <Nullable>enable</Nullable>
     <RootNamespace>JobBank.Tests</RootNamespace>
     <AssemblyName>JobBank.Tests</AssemblyName>
@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <Compile Include="AsyncBarrier.cs" />
+    <Compile Include="ContentNegotiationTests.cs" />
     <Compile Include="PriorityHeapTests.cs" />
     <Compile Include="SchedulingTests.Exact.cs" />
     <Compile Include="SchedulingTests.Parallel.cs" />
@@ -34,6 +35,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Scheduling\Scheduling.csproj" />
+    <ProjectReference Include="..\Server.Core\Server.Core.csproj" />
     <ProjectReference Include="..\WebSockets\WebSockets.csproj" />
     <ProjectReference Include="..\Work\Work.csproj" />
   </ItemGroup>
