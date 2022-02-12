@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Buffers;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Primitives;
 
 namespace JobBank.Server
@@ -153,98 +151,80 @@ namespace JobBank.Server
         /// which has the highest score against its 
         /// matching patterns is selected as the best candidate.
         /// </remarks>
-        [SkipLocalsInit]
         public static int Negotiate<TList>(TList responses, StringValues requests)
             where TList : IReadOnlyList<ContentFormatInfo>
         {
             int responsesCount = responses.Count;
+            if (responsesCount == 0)
+                return -1;
 
-            // Split up comma-delimited elements in each "line" of requests,
-            // without allocating memory for sub-strings or arrays.
-            Span<(int,int)> segments = stackalloc (int,int)[64];
-            int segmentsCount = 0;
-            for (int j = 0; j < requests.Count; ++j)
-            {
-                // Stores offset+length for each element
-                segmentsCount += SplitElements(requests[j], segments[segmentsCount..]);
+            //
+            // It is more natural to process the responses in the outer
+            // loop, and the requests in the inner loop.  However, 
+            // parsing the requests is complicated and mildly expensive,
+            // so we put them in the outer loop instead, and the responses
+            // are processed in the inner loop.
+            //
 
-                // Mark end of this line
-                CheckedAppend(segments, (-1, 0), ref segmentsCount);
-            }
-
-            if (segmentsCount <= requests.Count)
-                return responsesCount > 0 ? 0 : -1;
-
+            bool hasRequest = false;
             int bestScore = 0;
             int bestCandidate = 0;
 
-            for (int i = 0; i < responsesCount; ++i)
+            // Loop over each request line
+            for (int j = 0; j < requests.Count; ++j)
             {
-                var response = responses[i];
-                var parsedResponse = new ReadOnlyMediaTypeHeaderValue(response.MediaType);
+                StringSegment line = requests[j];
+                StringSegment request;
 
-                int currentScore = 0;
-                int requestsIndex = 0;
-
-                // Loop over each request element after splitting at commas
-                for (int k = 0; k < segmentsCount; ++k)
+                // Loop over comma-delimited elements in the request line
+                while ((request = TryReadNextElement(ref line)).Length > 0)
                 {
-                    var (offset, length) = segments[k];
+                    hasRequest = true;
+                    var parsedRequest = new ReadOnlyMediaTypeHeaderValue(request);
 
-                    // Marker indicates to go to the next line
-                    if (offset < 0)
+                    // Loop over available responses to compute a response
+                    // candidate matching the current request pattern with
+                    // the highest score.
+                    int requestScore = 0;
+                    int candidate = 0;
+                    for (int i = 0; i < responsesCount; ++i)
                     {
-                        ++requestsIndex;
-                        continue;
+                        var response = responses[i];
+                        var parsedResponse = new ReadOnlyMediaTypeHeaderValue(response.MediaType);
+
+                        int score = ScoreFormat(parsedResponse, parsedRequest,
+                                                response.Preference);
+
+                        // Argument max
+                        if (score > requestScore)
+                        {
+                            requestScore = score;
+                            candidate = i;
+                        }
                     }
 
-                    var parsedRequest = new ReadOnlyMediaTypeHeaderValue(
-                                            requests[requestsIndex], offset, length);
-                    int score = ScoreFormat(parsedResponse, parsedRequest, 
-                                            response.Preference);
-                    currentScore = Math.Max(currentScore, score);
-                }
-
-                if (currentScore > bestScore)
-                {
-                    bestScore = currentScore;
-                    bestCandidate = i;
+                    // Update best score over the request patterns seen so far.
+                    // In case of ties, choose the candidate that occurs first
+                    // in the list of responses.
+                    if (requestScore > bestScore ||
+                        requestScore == bestScore && candidate < bestCandidate)
+                    {
+                        bestScore = requestScore;
+                        bestCandidate = candidate;
+                    }
                 }
             }
 
-            return bestScore > 0 ? bestCandidate : -1;
+            return (bestScore > 0 || !hasRequest) ? bestCandidate : -1;
         }
 
         #region Splitting comma-delimited elements in the HTTP Accept header
 
         /// <summary>
-        /// Append to a linear list inside a buffer, checking if the buffer has room first.
-        /// </summary>
-        /// <typeparam name="T">The type of items to append. </typeparam>
-        /// <param name="buffer">Storage for the elements of the list. </param>
-        /// <param name="value">The value to append to the list. </param>
-        /// <param name="count">
-        /// The current count of items in the list. 
-        /// On successful return, it is incremented.
-        /// </param>
-        /// <exception cref="InvalidOperationException">
-        /// There is not enough room in the buffer.
-        /// </exception>
-        private static void CheckedAppend<T>(in Span<T> buffer, T value, ref int count)
-        {
-            int c = count;
-            int i = c++;
-            if (i >= buffer.Length)
-                throw new InvalidOperationException("The number of elements exceeds implementation-defined limits. ");
-            buffer[i] = value;
-            count = c;
-        }
-
-        /// <summary>
         /// Scan backwards in a string and skip over 
         /// a consecutive run of ASCII whitespace, if any.
         /// </summary>
-        private static int SkipWhitespaceBackwards(string line, int index)
+        private static int SkipWhitespaceBackwards(StringSegment line, int index)
         {
             int stop;
             for (stop = index; stop > 0; --stop)
@@ -262,7 +242,7 @@ namespace JobBank.Server
         /// Scan forward in a string and skip over 
         /// a consecutive run of ASCII whitespace, if any.
         /// </summary>
-        private static int SkipWhitespaceForwards(string line, int index)
+        private static int SkipWhitespaceForwards(StringSegment line, int index)
         {
             int stop;
             for (stop = index; index < line.Length; ++stop)
@@ -308,16 +288,18 @@ namespace JobBank.Server
         /// Find the next comma in a string that would terminate
         /// the current comma-delimited element, if any.
         /// </summary>
-        private static int SplitAtFirstComma(string line, int start)
+        private static int FindNextComma(StringSegment line)
         {
+            int start = 0;
+
             while (true)
             {
                 int comma = line.IndexOf(',', start);
                 if (comma < 0)
                     return -1;
 
-                int quote = line.IndexOf('"', start);
-                if (quote < 0 || quote > comma)
+                int quote = line.IndexOf('"', start, comma - start);
+                if (quote < 0)
                     return comma;
 
                 start = SkipPastEndQuote(line, quote + 1);
@@ -325,45 +307,42 @@ namespace JobBank.Server
         }
 
         /// <summary>
-        /// Determine all the comma-delimited elements in a HTTP header line,
-        /// trimming empty elements and whitespace.
+        /// Read the next element in a HTTP header line, that is
+        /// terminated by a unquoted comma, trimming empty elements
+        /// and whitespace.
         /// </summary>
-        /// <param name="line">
-        /// The string value in a HTTP header line.
-        /// </param>
-        /// <param name="segments">
-        /// A buffer which holds the specification of sub-strings for
-        /// each of the comma-delimited elements found.  This function
-        /// will write to this buffer starting from the beginning,
-        /// where each element in the buffer is the tuple (offset, length)
-        /// where offset is the index in <paramref name="line" />
-        /// where the sub-string starts, and length is the length of
-        /// that sub-string.
+        /// <param name="input">
+        /// The string to parse for the next comma-delimited element.
+        /// On return, it will be modified to point to the rest
+        /// of the line after the comma, if found.
         /// </param>
         /// <returns>
-        /// The number of comma-delimited elements found and recorded
-        /// into <paramref name="segments" />.
+        /// The next element in the HTTP header line,
+        /// or the empty string if there is no next element.
         /// </returns>
-        private static int SplitElements(string line, in Span<(int, int)> segments)
+        private static StringSegment TryReadNextElement(ref StringSegment input)
         {
-            int count = 0;
-            int start = 0;
+            var line = input;
 
-            do
+            while (line.Length > 0)
             {
-                int end = SplitAtFirstComma(line, start);
-                if (end < 0)
-                    end = line.Length;
+                int split = FindNextComma(line);
+                if (split < 0)
+                    split = line.Length;
 
-                int left = SkipWhitespaceForwards(line, start);
-                int right = SkipWhitespaceBackwards(line, end);
+                int left = SkipWhitespaceForwards(line, 0);
+                int right = SkipWhitespaceBackwards(line, split);
+
+                ++split;
+                var current = line;
+                input = line = (split < line.Length) ? line.Substring(split)
+                                                     : StringSegment.Empty;
+
                 if (left < right)
-                    CheckedAppend(segments, (left, right - left), ref count);
+                    return current.Substring(left, right - left);
+            }
 
-                start = end + 1;
-            } while (start < line.Length);
-
-            return count;
+            return StringSegment.Empty;
         }
 
         #endregion
