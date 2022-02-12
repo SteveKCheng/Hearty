@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -181,6 +182,42 @@ namespace JobBank.Server.Mocks
         /// </returns>
         public byte[] SerializeToJsonUtf8Bytes()
             => JsonSerializer.SerializeToUtf8Bytes(this);
+
+        /// <summary>
+        /// Make some checks on the validity of this input.
+        /// </summary>
+        /// <param name="messages">
+        /// If there are validity errors, they are described in
+        /// this container, which will be set on return.
+        /// </param>
+        /// <returns>
+        /// True if there are no errors.  False when there are errors.
+        /// </returns>
+        public bool Validate([NotNullWhen(false)] out IList<string>? messages)
+        {
+            List<string>? m = null;
+
+            static void AddMessage(ref List<string>? messages, string text)
+            {
+                messages ??= new List<string>(capacity: 4);
+                messages.Add(text);
+            }
+
+            if (!(Volatility > 0.0))
+                AddMessage(ref m, "Volatility must be positive. ");
+
+            if (!(SpotPrice > 0.0))
+                AddMessage(ref m, "Spot price must be positive. ");
+
+            if (!(StrikePrice > 0.0))
+                AddMessage(ref m, "Strike price must be positive. ");
+
+            if (!(MaturityDate - ValuationDate > TimeSpan.Zero))
+                AddMessage(ref m, "Maturity time must be after valuation time. ");
+
+            messages = m;
+            return m is null;
+        }
 
         /// <summary>
         /// Calculate the outputs corresponding to this

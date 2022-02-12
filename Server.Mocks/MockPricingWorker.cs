@@ -111,6 +111,10 @@ namespace JobBank.Server.Mocks
                           .ConfigureAwait(false);
 
                 var pricingInput = DeserializePricingInput(request);
+
+                if (!pricingInput.Validate(out _))
+                    throw new InvalidDataException("The pricing input is invalid. ");
+
                 var pricingOutput = pricingInput.Calculate();
 
                 cancellationToken.ThrowIfCancellationRequested();
