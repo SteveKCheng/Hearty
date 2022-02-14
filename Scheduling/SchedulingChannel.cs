@@ -24,7 +24,7 @@ namespace JobBank.Scheduling
         {
             if (_channelReader.TryRead(out item))
             {
-                charge = item.InitialCharge;
+                charge = item.GetInitialCharge();
                 return true;
             }
                 

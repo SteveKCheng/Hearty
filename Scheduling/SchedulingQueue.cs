@@ -163,7 +163,7 @@ namespace JobBank.Scheduling
                 if (task.IsCompletedSuccessfully && task.Result == true)
                 {
                     item = enumerator.Current;
-                    charge = item.InitialCharge;
+                    charge = item.GetInitialCharge();
                     _currentEnumeratorTask = SafelyAdvanceAsyncEnumerator(enumerator);
                     return true;
                 }
@@ -303,7 +303,7 @@ namespace JobBank.Scheduling
                 }
 
                 item = entry.Single;
-                charge = item.InitialCharge;
+                charge = item.GetInitialCharge();
 
                 DeactivateOnEmptyQueue();
 

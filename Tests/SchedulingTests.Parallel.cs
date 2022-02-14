@@ -45,6 +45,8 @@ namespace JobBank.Tests
         /// The index of the child queue that this job is put into.
         /// </summary>
         public int ChildIndex { get; init; }
+
+        int ISchedulingExpense.GetInitialCharge() => InitialCharge;
     }
 
     internal class BasicSchedulingGroup : SchedulingGroup<DummyJob>
