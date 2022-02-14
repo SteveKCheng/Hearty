@@ -123,7 +123,7 @@ namespace JobBank.Scheduling
                     int deltaCharge = newCharge - oldCharge;
 
                     foreach (var member in _members)
-                        account.UpdateCurrentItem(oldCharge, deltaCharge);
+                        member.Account.UpdateCurrentItem(oldCharge, deltaCharge);
                 }
 
                 account.UpdateCurrentItem(null, newCharge);
