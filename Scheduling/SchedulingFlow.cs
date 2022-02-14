@@ -199,17 +199,9 @@ namespace JobBank.Scheduling
             [MaybeNullWhen(false)] out T item, out int charge);
 
         /// <summary>
-        /// Invokes <see cref="IJobSource.TakeJob" />
-        /// for <see cref="SchedulingGroup{T}"/>.
+        /// Invokes the protected method <see cref="TryTakeItem(out T, out int)" />
+        /// for <see cref="SchedulingGroup{T}" />.
         /// </summary>
-        /// <param name="charge">The amount of credit to charge
-        /// to this child queue for the new job.
-        /// </param>
-        /// <returns>
-        /// The job that the parent <see cref="SchedulingGroup" />
-        /// should be processing next, or null if there is none
-        /// from this child queue.
-        /// </returns>
         internal bool TryTakeItemToParent(
             [MaybeNullWhen(false)] out T item, out int charge) 
             => TryTakeItem(out item, out charge);
