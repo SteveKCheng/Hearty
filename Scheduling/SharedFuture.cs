@@ -431,6 +431,107 @@ namespace JobBank.Scheduling
         }
 
         /// <summary>
+        /// Request cancellation on behalf of a client.
+        /// </summary>
+        /// <param name="account">
+        /// Represents the client that wants to drop interest
+        /// in this job.  It is compared by reference equality
+        /// with the clients already registered to this job.
+        /// </param>
+        /// <remarks>
+        /// <para>
+        /// This method is an alternate way to request cancellation
+        /// without using a cancellation token.  For server applications
+        /// that need to honor requests from remote clients, mapping
+        /// the combination of the client identity and the job
+        /// back to <see cref="CancellationTokenSource" /> object that
+        /// created the cancellation token can be very non-trivial.
+        /// </para>
+        /// <para>
+        /// This object already holds references to 
+        /// <see cref="ISchedulingAccount" />, which are already 
+        /// representations of clients, so the functionality is easily
+        /// implemented at this level.
+        /// </para>
+        /// <para>
+        /// Note that it is also possible, and very useful,
+        /// that a <see cref="CancellationToken" /> passed to create 
+        /// the job is common to all jobs submitted by the same client.
+        /// Such a cancellation token, if triggered, would of course
+        /// cancel all jobs by the same client.  But this method that
+        /// does not rely on the cancellation token would also allow 
+        /// individual jobs to be cancelled.
+        /// </para>
+        /// </remarks>
+        public void RequestCancel(ISchedulingAccount account)
+        {
+            CancellationTokenSource? cancellationSource = null;
+            CancellationTokenRegistration cancellationRegistration = default;
+
+            lock (_accountLock)
+            {
+                // Ignore cancellation if the job is already finished.
+                if (_activeCount <= 0)
+                    return;
+
+                var splitter = _splitter;
+                int countRemoved = 0;
+
+                if (object.ReferenceEquals(_account, account))
+                {
+                    countRemoved = 1;
+                    cancellationRegistration = _cancellationRegistration;
+                    _cancellationRegistration = default;
+                }
+                else if (splitter is not null)
+                {
+                    countRemoved = splitter.RemoveParticipants(account);
+                }
+
+                if (countRemoved == 0)
+                    return;
+
+                var activeCount = _activeCount;
+                _activeCount = activeCount -= countRemoved;
+
+                if (activeCount <= 0)
+                {
+                    cancellationSource = _cancellationSourceUse.Source;
+                    _cancellationSourceUse = default;
+                }
+            }
+
+            cancellationRegistration.Unregister();
+            cancellationSource?.Cancel();
+        }
+        
+        /// <summary>
+        /// Cancel the job for all clients.
+        /// </summary>
+        public void AdministrativeCancel()
+        {
+            CancellationTokenSource? cancellationSource = null;
+
+            lock (_accountLock)
+            {
+                // Ignore cancellation if the job is already finished.
+                if (_activeCount <= 0)
+                    return;
+
+                // If there are further requests to cancel, they may
+                // be safely ignored.
+                _activeCount = 0;
+
+                // Just cancel the main cancellation source directly,
+                // and let FinalizeCharge clean up everything else.
+                cancellationSource = _cancellationSourceUse.Source;
+                _cancellationSourceUse = default;
+            }
+
+            cancellationSource?.Cancel();
+        }
+
+        /// <summary>
         /// Create a new job to push into a job-scheduling queue. 
         /// </summary>
         /// <param name="input">The input describing the job. </param>
