@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using GoldSaucer.BTree;
 using System.Threading;
 using System.Numerics;
+using JobBank.Utilities;
 
 namespace JobBank.Server
 {
@@ -82,7 +83,8 @@ namespace JobBank.Server
         /// The number of locks is the degree of hardware concurrency
         /// possible, rounded up to the next power of 2.
         /// </remarks>
-        private readonly object[] _targetLockObjects;
+        private readonly StripedLocks _targetStripedLocks
+            = StripedLocks<ExpiryQueue<T>>.Shared;
 
         /// <summary>
         /// Buffer to expire items in a batch.
@@ -199,30 +201,6 @@ namespace JobBank.Server
                                period: Timeout.Infinite);
 
             _currentExpiredTargets = new T[10];
-
-            // Create striped locks
-            uint countLockObjects = RoundUpToPowerOf2((uint)Environment.ProcessorCount);
-            countLockObjects = Math.Min(countLockObjects, 1024);
-            var targetLockObjects = new object[countLockObjects];
-            targetLockObjects[0] = targetLockObjects;
-            for (uint i = 1; i < countLockObjects; ++i)
-                targetLockObjects[i] = new object();
-            _targetLockObjects = targetLockObjects;
-        }
-
-        private static uint RoundUpToPowerOf2(uint value)
-        {
-#if NET6_0
-            return BitOperations.RoundUpToPowerOf2(value);
-#else
-            --value;
-            value |= value >> 1;
-            value |= value >> 2;
-            value |= value >> 4;
-            value |= value >> 8;
-            value |= value >> 16;
-            return value + 1;
-#endif
         }
 
         /// <summary>
@@ -307,11 +285,8 @@ namespace JobBank.Server
         {
             DateTime? newExpiry;
 
-            var targetLockObjects = _targetLockObjects;
-            int lockIndex = target.GetHashCode() & (targetLockObjects.Length - 1);
-
             // Serialize execution for any given target object
-            lock (targetLockObjects[lockIndex])
+            lock (_targetStripedLocks[target.GetHashCode()])
             {
                 newExpiry = exchangeFunc(target, arg, out var oldExpiry);
 
