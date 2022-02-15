@@ -1,6 +1,5 @@
 ﻿using JobBank.Utilities;
 using System;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -116,7 +115,7 @@ namespace JobBank.Scheduling
         /// <see cref="TryShareJob" />).
         /// </para>
         /// </remarks>
-        public bool IsCancelled => (_activeCount <= 0);
+        public bool IsCancelled => (_activeCount == 0);
 
         /// <summary>
         /// Triggers cancellation for this job when all clients agree to cancel.
@@ -129,7 +128,7 @@ namespace JobBank.Scheduling
         /// </summary>
         /// <remarks>
         /// This member is set to its default state if 
-        /// <see cref="_account"/> is <see cref="SchedulingAccountSplitter" />
+        /// <see cref="_account"/> is <see cref="_splitter" />
         /// which holds the full list of registrations.
         /// </remarks>
         private CancellationTokenRegistration _cancellationRegistration;
@@ -137,6 +136,10 @@ namespace JobBank.Scheduling
         /// <summary>
         /// Counts how many clients remain that have not cancelled.
         /// </summary>
+        /// <remarks>
+        /// This variable is less than zero if the job completes,
+        /// i.e. <see cref="FinalizeCharge" /> is reached.
+        /// </remarks>
         private int _activeCount;
 
         /// <summary>
@@ -156,11 +159,6 @@ namespace JobBank.Scheduling
         private int _currentWait;
 
         /// <summary>
-        /// Set to true when the job finishes.
-        /// </summary>
-        private bool _isDone;
-
-        /// <summary>
         /// The snapshot of current time, as reported by
         /// <see cref="Environment.TickCount64" />, when this
         /// job has started running.
@@ -173,23 +171,38 @@ namespace JobBank.Scheduling
         /// <remarks>
         /// Occasionally there may be more than one account
         /// sharing the charge.  Then this member will be changed
-        /// to an instance of <see cref="SchedulingAccountSplitter" />.
+        /// to <see cref="_splitter" />.
         /// </remarks>
         private ISchedulingAccount _account;
 
         /// <summary>
-        /// Protects <see cref="ISchedulingAccount" />
-        /// <see cref="_currentWait" />, and <see cref="_isDone" />.
+        /// Set to true when <see cref="LaunchJobInternalAsync" />
+        /// invokes <see cref="ISchedulingAccount.UpdateCurrentItem" />
+        /// for the first time.
         /// </summary>
         /// <remarks>
-        /// Those two variables have to be consistent with each other.
-        /// Note that this lock only protects the reference
-        /// itself, in case it changes, not method calls to 
-        /// <see cref="ISchedulingAccount" />, which is expected to 
-        /// have its own internal locking.  A spin lock is used only
-        /// to avoid having to allocate an extra object just for locking.
+        /// This flag is needed for a newly created <see cref="_splitter" />
+        /// that replaces <see cref="_account" /> to correctly 
+        /// imitate the old state of the latter.  
         /// </remarks>
-        private SpinLock _accountLock = new SpinLock(enableThreadOwnerTracking: false);
+        private bool _accountingStarted;
+
+        /// <summary>
+        /// Holds and manages multiple <see cref="ISchedulingAccount" />
+        /// when this job is shared.
+        /// </summary>
+        private SchedulingAccountSplitter<CancellationTokenRegistration>? _splitter;
+
+        /// <summary>
+        /// Locked to ensure that variables related to time accounting 
+        /// are consistent when concurrent callers consult them.
+        /// </summary>
+        /// <remarks>
+        /// These are <see cref="_account" />, <see cref="_splitter" />,
+        /// <see cref="_currentWait" />, <see cref="_accountingStarted" />
+        /// and <see cref="_cancellationRegistration" />.
+        /// </remarks>
+        private readonly object _accountLock;
 
         /// <summary>
         /// Arranges a timer that periodically fires to 
@@ -205,21 +218,13 @@ namespace JobBank.Scheduling
         {
             int elapsed = MiscArithmetic.SaturateToInt(now - _startTime);
 
-            ISchedulingAccount? account = null;
-            int currentWait;
-            int roundedCharge = 0;
-
-            bool lockTaken = false;
-            try
+            lock (_accountLock)
             {
-                _accountLock.Enter(ref lockTaken);
-
-                currentWait = _currentWait;
-
                 // Do not update charges if job has completed.
-                if (_isDone)
+                if (_activeCount <= 0)
                     return false;
 
+                int currentWait = _currentWait;
                 if (elapsed > currentWait)
                 {
                     int resolution = InitialWait >= 100 ? InitialWait : 100;
@@ -227,25 +232,18 @@ namespace JobBank.Scheduling
 
                     // Round up extraCharge to closest unit of resolution,
                     // saturating on overflow.
-                    roundedCharge =
+                    int roundedCharge =
                         (extraCharge <= int.MaxValue - resolution)
-                          ? (extraCharge + (resolution - 1)) / resolution * resolution
-                          : int.MaxValue;
+                            ? (extraCharge + (resolution - 1)) / resolution * resolution
+                            : int.MaxValue;
 
                     // Update to new value
-                    _currentWait = MiscArithmetic.SaturatingAdd(currentWait, 
+                    _currentWait = MiscArithmetic.SaturatingAdd(currentWait,
                                                                 roundedCharge);
 
-                    account = _account;
+                    _account.UpdateCurrentItem(currentWait, roundedCharge);
                 }
             }
-            finally
-            {
-                if (lockTaken)
-                    _accountLock.Exit();
-            }
-
-            account?.UpdateCurrentItem(currentWait, roundedCharge);
 
             // Re-schedule timer as long as job has not completed
             return true;
@@ -259,32 +257,23 @@ namespace JobBank.Scheduling
         {
             int elapsed = MiscArithmetic.SaturateToInt(now - _startTime);
 
-            ISchedulingAccount account;
-            int currentWait;
             CancellationTokenRegistration cancellationRegistration;
 
-            bool lockTaken = false;
-            try
+            lock (_accountLock)
             {
-                _accountLock.Enter(ref lockTaken);
+                var account = _account;
+                var currentWait = _currentWait;
 
-                account = _account;
-                currentWait = _currentWait;
                 _currentWait = elapsed;
                 cancellationRegistration = _cancellationRegistration;
                 _cancellationRegistration = default;
-                _isDone = true;
-            }
-            finally
-            {
-                if (lockTaken)
-                    _accountLock.Exit();
+                _activeCount = -1;
+
+                account.UpdateCurrentItem(currentWait, elapsed - currentWait);
+                account.TabulateCompletedItem(elapsed);
             }
 
-            account.UpdateCurrentItem(currentWait, elapsed - currentWait);
-            account.TabulateCompletedItem(elapsed);
             cancellationRegistration.Dispose();
-
             _cancellationSourceUse.Dispose();
         }
 
@@ -328,12 +317,17 @@ namespace JobBank.Scheduling
         {
             _account = account;
             _timingQueue = timingQueue;
+            _activeCount = 1;
 
             Input = input;
             InitialWait = initialCharge;
 
             _cancellationSourceUse = CancellationSourcePool.Rent();
-            _activeCount = 1;
+
+            // The cancellation source just rented is never exposed,
+            // so it can be used as a lock object.
+            _accountLock = _cancellationSourceUse.Source!;
+
             _cancellationRegistration = RegisterForCancellation(cancellationToken);
         }
 
@@ -413,6 +407,32 @@ namespace JobBank.Scheduling
         }
 
         /// <summary>
+        /// Atomically increment an integer variable only if it is positive.
+        /// </summary>
+        /// <param name="value">The variable to atomically increment. </param>
+        /// <returns>
+        /// Whether the variable has been successfully incremented.
+        /// </returns>
+        private static bool InterlockedIncrementIfPositive(ref int value)
+        {
+            int oldValue;
+            int newValue = value;
+
+            do
+            {
+                oldValue = newValue;
+                if (oldValue <= 0)
+                    return false;
+
+                newValue = Interlocked.CompareExchange(ref value,
+                                                       oldValue + 1,
+                                                       oldValue);
+            } while (newValue != oldValue);
+
+            return true;
+        }
+
+        /// <summary>
         /// Represent an existing job for a new client, 
         /// to push into a job-scheduling queue. 
         /// </summary>
@@ -461,84 +481,58 @@ namespace JobBank.Scheduling
             TryShareJob(ISchedulingAccount account,
                         CancellationToken cancellationToken)
         {
-            // Increment _activeCount atomically unless it is already <= 0
-            int activeCount = _activeCount;
-            bool success;
-            do
+            SchedulingAccountSplitter<CancellationTokenRegistration>? splitter;
+            lock (_accountLock)
             {
-                var c = activeCount;
-
-                if (c <= 0)
+                // Do not bother to add participant if future is done.
+                if (_activeCount <= 0)
                     return null;
 
-                activeCount = Interlocked.CompareExchange(ref _activeCount, c + 1, c);
-                success = (activeCount == c);
-            } while (!success);
-
-            // Now, _activeCount must be at least 1.  The cancellation tokens
-            // may have concurrently triggered, but from this object's point
-            // of view, it can never be cancelled yet.
-            //
-            // Next, register cancellation processing, upon which the new
-            // client could possibly cancel.  If we manage to catch it,
-            // by detecting that _activeCount is zero, then effectively
-            // we are just backing out of the increment to _activeCount
-            // that was performed just above.
-            var cancelRegistration = RegisterForCancellation(cancellationToken);
-            if (_activeCount == 0)
-                return null;
-
-            // Install a new SchedulingAccountSplitter unless it already
-            // exists because this future object is already shared.
-            // We need a retry loop because we do not want to hold a spin
-            // lock during object allocation and initialization.
-            var existingAccount = _account;
-            SchedulingAccountSplitter? splitter;
-            while ((splitter = existingAccount as SchedulingAccountSplitter) is null)
-            {
-                int currentWait = _currentWait;
-                splitter = new SchedulingAccountSplitter(existingAccount,
-                                                         currentWait,
-                                                         _cancellationRegistration);
-
-                bool lockTaken = false;
-                try
+                // Install a new SchedulingAccountSplitter unless it already
+                // exists because this future object is already shared.
+                splitter = _splitter;
+                if (splitter is null)
                 {
-                    _accountLock.Enter(ref lockTaken);
-
-                    var a = _account;
-
-                    if (_currentWait == currentWait && 
-                        object.ReferenceEquals(a, existingAccount))
+                    if (_accountingStarted)
                     {
-                        // Successful compare-exchange
-                        _account = splitter;
-                        _cancellationRegistration = default;
-                        break;
+                        splitter = new(InitialWait, _currentWait, _account,
+                                       ref _cancellationRegistration);
+                    }
+                    else
+                    {
+                        splitter = new();
+                        splitter.AddParticipant(_account, ref _cancellationRegistration);
                     }
 
-                    existingAccount = a;
-                }
-                finally
-                {
-                    if (lockTaken)
-                        _accountLock.Exit();
+                    _account = _splitter = splitter;
                 }
             }
 
+            // Increment _activeCount atomically unless it is already <= 0
+            if (!InterlockedIncrementIfPositive(ref _activeCount))
+                return null;
+
+            // Now, _activeCount must be at least 2.  The cancellation tokens
+            // may have concurrently triggered, but from this object's point
+            // of view, it can never be cancelled yet.
+            //
+            // Next, register cancellation processing.  If we are unlucky,
+            // all clients, including the new one to add, may race to
+            // cancel simultaneously as we execute the following code.  
+            // The race is harmless and can be ignored, because splitter
+            // below will deal with it correctly.
+            var cancelRegistration = RegisterForCancellation(cancellationToken);
+
             // Finally, attach the new client for the purposes of charging
-            // execution time. This call re-adjusts charges on all accounts,
-            // and so cannot be called during the retry loop above.
+            // execution time. This call may re-adjusts charges on all accounts.
             //
-            // Note that SchedulingAccountSplitter locks internally so
+            // As SchedulingAccountSplitter locks internally,
             // updates to charges are serialized and cannot be missed. 
-            //
-            // If the new client has just cancelled and has been unlucky
-            // to not have been caught in the earlier checks on _activeCount,
-            // it will get charged execution time for the brief moment
-            // it has "shared" in the work, but otherwise this object
-            // will behave correctly.
-            splitter.AddMember(account, cancelRegistration);
+            if (!splitter.AddParticipant(account, ref cancelRegistration))
+            {
+                cancelRegistration.Dispose();
+                return null;
+            }
 
             return new ScheduledJob<TInput, TOutput>(this, account);
         }
@@ -569,47 +563,29 @@ namespace JobBank.Scheduling
             // from its containing queue.  This check is not
             // strictly necessary but is good for performance.
             //
-            // If we are cancelled, then it should not be necessary
-            // to dispose cancellation registrations, fortunately.
-            // Otherwise this cleaning up would get complicated.
+            // Fortunately, we do not need to dispose cancellation
+            // registrations here, since they must have been
+            // removed already or been cancelled, for the main
+            // token to have been cancelled in the first place.
             if (cancellationToken.IsCancellationRequested)
             {
                 worker.AbandonJob(executionId);
                 _taskBuilder.SetException(
                     new OperationCanceledException(cancellationToken));
-
-                // Flag this variable to true for completeness.
-                //
-                // We do not care about racing on this variable
-                // even though we are outside of a lock, because
-                // no code will ever run from this job instance
-                // that would consult this variable.
-                _isDone = true;
-
                 return;
             }
 
             try
             {
-                var initialCharge = InitialWait;
                 _startTime = Environment.TickCount64;
 
-                bool lockTaken = false;
-                ISchedulingAccount account;
-
-                try
+                lock (_accountLock)
                 {
-                    _accountLock.Enter(ref lockTaken);
+                    var initialCharge = InitialWait;
                     _currentWait = initialCharge;
-                    account = _account;
+                    _accountingStarted = true;
+                    _account.UpdateCurrentItem(null, initialCharge);
                 }
-                finally
-                {
-                    if (lockTaken)
-                        _accountLock.Exit();
-                }
-                
-                account.UpdateCurrentItem(null, initialCharge);
 
                 _timingQueue.Enqueue(
                     static (t, s) => Unsafe.As<SharedFuture<TInput, TOutput>>(s!)

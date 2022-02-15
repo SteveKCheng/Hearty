@@ -23,7 +23,6 @@
     <Compile Include="Quarantine.cs" />
     <Compile Include="JobLaunchStartTimeComparer.cs" />
     <Compile Include="SchedulingAccountSplitterNew.cs" />
-    <Compile Include="SchedulingAccountSplitter.cs" />
     <Compile Include="WorkerDistribution.cs" />
     <Compile Include="SchedulingQueue.cs" />
     <Compile Include="SchedulingStatistics.cs" />
