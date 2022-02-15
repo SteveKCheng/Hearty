@@ -213,7 +213,8 @@ namespace JobBank.Scheduling
         /// These are <see cref="_account" />, <see cref="_splitter" />,
         /// <see cref="_currentWait" />,
         /// <see cref="_currentCharge" />, <see cref="_accountingStarted" />
-        /// and <see cref="_cancellationRegistration" />.
+        /// <see cref="_cancellationRegistration" /> and
+        /// <see cref="_activeCount" />.
         /// </remarks>
         private readonly object _accountLock;
 
@@ -279,6 +280,7 @@ namespace JobBank.Scheduling
             int elapsed = MiscArithmetic.SaturateToInt(now - _startTime);
 
             CancellationTokenRegistration cancellationRegistration;
+            CancellationSourcePool.Use cancellationSourceUse;
 
             lock (_accountLock)
             {
@@ -287,17 +289,23 @@ namespace JobBank.Scheduling
 
                 cancellationRegistration = _cancellationRegistration;
                 _cancellationRegistration = default;
-                _activeCount = -1;
+
+                if (_activeCount > 0)
+                    _activeCount = -1;
+
+                cancellationSourceUse = _cancellationSourceUse;
+                _cancellationSourceUse = default;
 
                 account.UpdateCurrentItem(currentCharge, 
                                           elapsed - currentCharge);
                 _currentCharge = _currentWait = elapsed;
 
+                // This will also remove all participants from _splitter
                 account.TabulateCompletedItem(elapsed);
             }
 
             cancellationRegistration.Dispose();
-            _cancellationSourceUse.Dispose();
+            cancellationSourceUse.Dispose();
         }
 
         /// <summary>
@@ -360,24 +368,66 @@ namespace JobBank.Scheduling
         /// </summary>
         private CancellationTokenRegistration
             RegisterForCancellation(CancellationToken cancellationToken)
-            => cancellationToken.Register(
-                s => Unsafe.As<SharedFuture<TInput, TOutput>>(s!).OnCancel(), 
+            => cancellationToken.UnsafeRegister(
+                static (s, t) => Unsafe.As<SharedFuture<TInput, TOutput>>(s!).OnCancel(t), 
                 this);
             
         /// <summary>
         /// Propagates cancellation from clients' <see cref="CancellationToken" />
         /// when all clients cancel.
         /// </summary>
-        private void OnCancel()
+        /// <param name="cancellationToken">
+        /// The token that had been cancelled.
+        /// </param>
+        private void OnCancel(CancellationToken cancellationToken)
         {
-            if (Interlocked.Decrement(ref _activeCount) == 0)
+            CancellationTokenSource? cancellationSource = null;
+            
+            lock (_accountLock)
             {
-                // N.B. Existing cancellation callbacks are always disposed
-                //      before the rented cancellation source is returned
-                //      in FinalizeCharge.  So the cancellation source is
-                //      guaranteed to be valid to use here.
-                _cancellationSourceUse.Source!.Cancel();
+                // Ignore cancellation if the job is already finished.
+                if (_activeCount <= 0)
+                    return;
+
+                var splitter = _splitter;
+                int countRemoved = 0;
+
+                if (_cancellationRegistration.Token == cancellationToken)
+                {
+                    countRemoved = 1;
+                    _cancellationRegistration = default;
+                }
+                else if (splitter is not null)
+                {
+                    countRemoved = splitter.RemoveParticipants(
+                                    cancellationToken,
+                                    (t, a, r) => r.Token == t);
+                }
+
+                // This condition may occur where the same cancellation
+                // token is registered onto more than one participant:
+                // then the first invocation of this method removes all
+                // participants for that cancellation token, and
+                // subsequent invocations for the same cancellation
+                // token see no more participants.
+                if (countRemoved == 0)
+                    return;
+
+                var activeCount = _activeCount;
+                _activeCount = activeCount -= countRemoved;
+
+                // We should trigger the cancellation source outside of
+                // this lock, but must avoid a race when job completion
+                // returns it to a pool (if not yet triggered)!
+                if (activeCount <= 0)
+                {
+                    cancellationSource = _cancellationSourceUse.Source;
+                    _cancellationSourceUse = default;
+                }
             }
+
+            // Cancel the job if activeCount has just decreased to zero.
+            cancellationSource?.Cancel();
         }
 
         /// <summary>
@@ -430,32 +480,6 @@ namespace JobBank.Scheduling
         }
 
         /// <summary>
-        /// Atomically increment an integer variable only if it is positive.
-        /// </summary>
-        /// <param name="value">The variable to atomically increment. </param>
-        /// <returns>
-        /// Whether the variable has been successfully incremented.
-        /// </returns>
-        private static bool InterlockedIncrementIfPositive(ref int value)
-        {
-            int oldValue;
-            int newValue = value;
-
-            do
-            {
-                oldValue = newValue;
-                if (oldValue <= 0)
-                    return false;
-
-                newValue = Interlocked.CompareExchange(ref value,
-                                                       oldValue + 1,
-                                                       oldValue);
-            } while (newValue != oldValue);
-
-            return true;
-        }
-
-        /// <summary>
         /// Represent an existing job for a new client, 
         /// to push into a job-scheduling queue. 
         /// </summary>
@@ -504,9 +528,13 @@ namespace JobBank.Scheduling
             TryShareJob(ISchedulingAccount account,
                         CancellationToken cancellationToken)
         {
-            static void DisposeCancellationRegistration(
-                            ISchedulingAccount a, CancellationTokenRegistration r)
-                => r.Dispose();
+            // Important: we do not call CancellationTokenRegistration.Dispose!
+            // That method blocks until the callback is executed, which may
+            // deadlock, when removal of a participant is triggered by the
+            // registered cancellation callback in the first place!
+            static void UnregisterCancellation(ISchedulingAccount a, 
+                                               CancellationTokenRegistration r)
+                => r.Unregister();
 
             SchedulingAccountSplitter<CancellationTokenRegistration>? splitter;
             lock (_accountLock)
@@ -526,21 +554,19 @@ namespace JobBank.Scheduling
                         _currentCharge = currentWait;
                         splitter = new(EstimatedWait, currentWait, _account,
                                        _cancellationRegistration,
-                                       (a, r) => DisposeCancellationRegistration(a, r));
+                                       (a, r) => UnregisterCancellation(a, r));
                     }
                     else
                     {
-                        splitter = new((a, r) => DisposeCancellationRegistration(a, r));
+                        splitter = new((a, r) => UnregisterCancellation(a, r));
                         splitter.AddParticipant(_account, _cancellationRegistration);
                     }
 
                     _account = _splitter = splitter;
                 }
-            }
 
-            // Increment _activeCount atomically unless it is already <= 0
-            if (!InterlockedIncrementIfPositive(ref _activeCount))
-                return null;
+                ++_activeCount;
+            }
 
             // Now, _activeCount must be at least 2.  The cancellation tokens
             // may have concurrently triggered, but from this object's point
