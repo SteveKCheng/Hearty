@@ -83,7 +83,7 @@ namespace JobBank.Server.Mocks
         /// <param name="request">
         /// Job request whose payload is the UTF-8 JSON representation 
         /// of <see cref="MockPricingInput" />.  The member
-        /// <see cref="JobRequestMessage.InitialWait" /> specifies
+        /// <see cref="JobRequestMessage.EstimatedWait" /> specifies
         /// the artificial delay.
         /// </param>
         /// <param name="cancellationToken">
@@ -103,11 +103,11 @@ namespace JobBank.Server.Mocks
             try
             {
                 // Simulate working for some period of time
-                if (request.InitialWait < 0 || request.InitialWait > 60 * 60 * 1000)
+                if (request.EstimatedWait < 0 || request.EstimatedWait > 60 * 60 * 1000)
                     throw new ArgumentOutOfRangeException(
                         "InitialWait parameter of the job request is out of range. ",
                         (Exception?)null);
-                await Task.Delay(request.InitialWait, cancellationToken)
+                await Task.Delay(request.EstimatedWait, cancellationToken)
                           .ConfigureAwait(false);
 
                 var pricingInput = DeserializePricingInput(request);

@@ -65,7 +65,7 @@ namespace JobBank.Work
         /// as estimated by the requestor.
         /// </summary>
         [Key("w")]
-        public int InitialWait { get; set; }
+        public int EstimatedWait { get; set; }
 
         /// <summary>
         /// The ID of this job which should be unique for the

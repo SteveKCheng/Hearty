@@ -146,7 +146,7 @@ namespace JobBank.Scheduling
         /// The initial estimate of the amount of time the job
         /// would take, in milliseconds.
         /// </summary>
-        public int InitialWait { get; }
+        public int EstimatedWait { get; }
 
         /// <inheritdoc cref="IRunningJob.LaunchStartTime" />
         public long LaunchStartTime => _startTime;
@@ -227,7 +227,7 @@ namespace JobBank.Scheduling
                 int currentWait = _currentWait;
                 if (elapsed > currentWait)
                 {
-                    int resolution = InitialWait >= 100 ? InitialWait : 100;
+                    int resolution = EstimatedWait >= 100 ? EstimatedWait : 100;
                     int extraCharge = elapsed - currentWait;
 
                     // Round up extraCharge to closest unit of resolution,
@@ -320,7 +320,7 @@ namespace JobBank.Scheduling
             _activeCount = 1;
 
             Input = input;
-            InitialWait = initialCharge;
+            EstimatedWait = initialCharge;
 
             _cancellationSourceUse = CancellationSourcePool.Rent();
 
@@ -495,7 +495,7 @@ namespace JobBank.Scheduling
                 {
                     if (_accountingStarted)
                     {
-                        splitter = new(InitialWait, _currentWait, _account,
+                        splitter = new(EstimatedWait, _currentWait, _account,
                                        ref _cancellationRegistration);
                     }
                     else
@@ -581,7 +581,7 @@ namespace JobBank.Scheduling
 
                 lock (_accountLock)
                 {
-                    var initialCharge = InitialWait;
+                    var initialCharge = EstimatedWait;
                     _currentWait = initialCharge;
                     _accountingStarted = true;
                     _account.UpdateCurrentItem(null, initialCharge);

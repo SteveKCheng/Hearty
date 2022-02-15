@@ -48,8 +48,8 @@ namespace JobBank.Scheduling
         /// <inheritdoc cref="IRunningJob{TInput}.Input" />
         public TInput Input => OriginalJob.Input;
 
-        /// <inheritdoc cref="IRunningJob.InitialWait" />
-        public int InitialWait => OriginalJob.InitialWait;
+        /// <inheritdoc cref="IRunningJob.EstimatedWait" />
+        public int EstimatedWait => OriginalJob.EstimatedWait;
 
         /// <inheritdoc cref="IRunningJob.LaunchStartTime" />
         public long LaunchStartTime { get; private set; }

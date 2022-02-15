@@ -80,7 +80,7 @@ namespace JobBank.Server
             {
                 Route = runningJob.Input.Route,
                 ContentType = contentType,
-                InitialWait = runningJob.InitialWait,
+                EstimatedWait = runningJob.EstimatedWait,
                 ExecutionId = executionId,
                 Data = await runningJob.Input
                                        .Data

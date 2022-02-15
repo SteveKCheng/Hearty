@@ -16,7 +16,7 @@ namespace JobBank.Scheduling
         /// The initial estimate of the amount of time the job
         /// would take, in milliseconds.
         /// </summary>
-        int InitialWait { get; }
+        int EstimatedWait { get; }
 
         /// <summary>
         /// The approximate time that the job was launched,
