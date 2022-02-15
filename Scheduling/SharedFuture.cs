@@ -504,6 +504,10 @@ namespace JobBank.Scheduling
             TryShareJob(ISchedulingAccount account,
                         CancellationToken cancellationToken)
         {
+            static void DisposeCancellationRegistration(
+                            ISchedulingAccount a, CancellationTokenRegistration r)
+                => r.Dispose();
+
             SchedulingAccountSplitter<CancellationTokenRegistration>? splitter;
             lock (_accountLock)
             {
@@ -521,12 +525,13 @@ namespace JobBank.Scheduling
                         int currentWait = _currentWait;
                         _currentCharge = currentWait;
                         splitter = new(EstimatedWait, currentWait, _account,
-                                       ref _cancellationRegistration);
+                                       _cancellationRegistration,
+                                       (a, r) => DisposeCancellationRegistration(a, r));
                     }
                     else
                     {
-                        splitter = new();
-                        splitter.AddParticipant(_account, ref _cancellationRegistration);
+                        splitter = new((a, r) => DisposeCancellationRegistration(a, r));
+                        splitter.AddParticipant(_account, _cancellationRegistration);
                     }
 
                     _account = _splitter = splitter;
@@ -553,9 +558,9 @@ namespace JobBank.Scheduling
             //
             // As SchedulingAccountSplitter locks internally,
             // updates to charges are serialized and cannot be missed. 
-            if (!splitter.AddParticipant(account, ref cancelRegistration))
+            if (!splitter.AddParticipant(account, cancelRegistration))
             {
-                cancelRegistration.Dispose();
+                UnregisterCancellation(account, cancelRegistration);
                 return null;
             }
 

@@ -45,7 +45,6 @@ namespace JobBank.Scheduling
     /// of participants stored here.
     /// </typeparam>
     internal sealed class SchedulingAccountSplitter<TRegistration> : ISchedulingAccount
-        where TRegistration : IDisposable
     {
         SchedulingStatistics ISchedulingAccount.CompletionStatistics
             => throw new NotSupportedException();
@@ -226,7 +225,7 @@ namespace JobBank.Scheduling
                 }
             }
 
-            participant.Registration.Dispose();
+            _disposeFunc?.Invoke(participant.Account, participant.Registration);
         }
 
         /// <summary>
@@ -239,9 +238,6 @@ namespace JobBank.Scheduling
         /// <param name="registration">
         /// Arbitrary data to be associated with the participant
         /// that will be disposed when it is removed.
-        /// To avoid double disposal, this parameter is set to its
-        /// default value once it has been transferred to this
-        /// object's internal list of participants.
         /// </param>
         /// <returns>
         /// True if the participant has been added; false
@@ -249,7 +245,7 @@ namespace JobBank.Scheduling
         /// completed.
         /// </returns>
         public bool AddParticipant(ISchedulingAccount account, 
-                                   ref TRegistration registration)
+                                   TRegistration registration)
         {
             lock (_participants)
             {
@@ -277,7 +273,7 @@ namespace JobBank.Scheduling
                 // Add new participant taking a share of the deposit
                 var p = new Participant(depositRemaining,
                                         account,
-                                        ref registration);
+                                        registration);
                 _participants.Add(p);
             }
 
@@ -437,11 +433,23 @@ namespace JobBank.Scheduling
         private bool _isStarted;
 
         /// <summary>
+        /// Function called on a participant entry when it is
+        /// to be removed.
+        /// </summary>
+        private Action<ISchedulingAccount, TRegistration>? _disposeFunc;
+
+        /// <summary>
         /// Prepare to account costs with an initially empty
         /// set of participants, and an unstarted job.
         /// </summary>
-        public SchedulingAccountSplitter()
+        /// <param name="disposeFunc">
+        /// Function to be called on a participant entry when it is
+        /// gets removed.
+        /// </param>
+        public SchedulingAccountSplitter(
+            Action<ISchedulingAccount, TRegistration>? disposeFunc = null)
         {
+            _disposeFunc = disposeFunc;
         }
 
         /// <summary>
@@ -469,6 +477,10 @@ namespace JobBank.Scheduling
         /// safe to speculatively execute.
         /// </para>
         /// </remarks>
+        /// <param name="disposeFunc">
+        /// Function to be called on a participant entry when it is
+        /// gets removed.
+        /// </param>
         /// <param name="deposit">
         /// The deposit, or initial charge, registered for the job
         /// as in <see cref="ISchedulingExpense.GetInitialCharge" />.
@@ -483,22 +495,20 @@ namespace JobBank.Scheduling
         /// <param name="registration">
         /// Arbitrary data to be associated with the first participant
         /// that will be disposed when it is removed.
-        /// To avoid double disposal, this parameter is set to its
-        /// default value once it has been transferred to this
-        /// object's internal list of participants.
         /// </param>
-        public SchedulingAccountSplitter(int deposit, 
-                                         int runningCost,
-                                         ISchedulingAccount account,
-                                         ref TRegistration registration)
+        public SchedulingAccountSplitter(
+            int deposit, 
+            int runningCost,
+            ISchedulingAccount account,
+            TRegistration registration,
+            Action<ISchedulingAccount, TRegistration>? disposeFunc = null)
+            : this(disposeFunc)
         {
             _deposit = deposit;
             _runningCost = runningCost;
             _isStarted = true;
 
-            var p = new Participant(deposit,
-                                    account,
-                                    ref registration)
+            var p = new Participant(deposit, account, registration)
             {
                 RunningCost = runningCost
             };
@@ -575,13 +585,12 @@ namespace JobBank.Scheduling
 
             public Participant(int deposit,
                                ISchedulingAccount account,
-                               ref TRegistration registration)
+                               TRegistration registration)
             {
                 Deposit = deposit;
                 RunningCost = 0;
                 Account = account;
                 Registration = registration;
-                registration = default!;
             }
         }
     }
