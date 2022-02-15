@@ -397,7 +397,17 @@ namespace JobBank.Server
                                                     ownsCancellation, cancellationToken,
                                                     out outputTask)) is null)
             {
-                if (!promise.IsTransient)
+                // Stop the retry loop when the result is permanent,
+                // i.e. not transient.
+                //
+                // There may be an interval where TryShareJob sees the
+                // cancellation having been triggered, but the promise
+                // has not yet completed because it takes time for 
+                // the result to get propagated as a cancellation
+                // exception.  Fortunately, cancellation should be the
+                // only case where the promise would come out as 
+                // uncompleted, which makes it easy to check for.
+                if (promise.IsCompleted && !promise.IsTransient)
                     return null;
 
                 // We are careful to not invoke this callback inside the lock
