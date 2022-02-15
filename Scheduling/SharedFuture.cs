@@ -230,6 +230,9 @@ namespace JobBank.Scheduling
         /// </summary>
         private bool UpdateCurrentCharge(long now)
         {
+            if (_activeCount <= 0)
+                return false;
+
             int elapsed = MiscArithmetic.SaturateToInt(now - _startTime);
 
             lock (_accountLock)
@@ -381,6 +384,9 @@ namespace JobBank.Scheduling
         /// </param>
         private void OnCancel(CancellationToken cancellationToken)
         {
+            if (_activeCount <= 0)
+                return;
+
             CancellationTokenSource? cancellationSource = null;
             
             lock (_accountLock)
@@ -465,6 +471,9 @@ namespace JobBank.Scheduling
         /// </remarks>
         public void RequestCancel(ISchedulingAccount account)
         {
+            if (_activeCount <= 0)
+                return;
+
             CancellationTokenSource? cancellationSource = null;
             CancellationTokenRegistration cancellationRegistration = default;
 
@@ -510,6 +519,9 @@ namespace JobBank.Scheduling
         /// </summary>
         public void AdministrativeCancel()
         {
+            if (_activeCount <= 0)
+                return;
+
             CancellationTokenSource? cancellationSource = null;
 
             lock (_accountLock)
@@ -629,6 +641,14 @@ namespace JobBank.Scheduling
             TryShareJob(ISchedulingAccount account,
                         CancellationToken cancellationToken)
         {
+            // Strictly speaking we are not supposed to use _accountLock,
+            // which is a pooled object, after it has been returned to
+            // the pool when FinalizeCharge completes.  The harm is most
+            // likely minor, but still, avoid surprises by checking 
+            // the status first outside the lock.
+            if (_activeCount <= 0)
+                return null;
+
             // Important: we do not call CancellationTokenRegistration.Dispose!
             // That method blocks until the callback is executed, which may
             // deadlock, when removal of a participant is triggered by the
