@@ -152,11 +152,23 @@ namespace JobBank.Scheduling
         public long LaunchStartTime => _startTime;
 
         /// <summary>
-        /// The amount of time for the currently running job,
-        /// in milliseconds, that have been charged to all 
-        /// participating accounts.
+        /// The amount of time, in milliseconds, 
+        /// recorded to have elapsed for the currently running job
+        /// in the timer's last periodic update.
         /// </summary>
         private int _currentWait;
+
+        /// <summary>
+        /// The maximum of <see cref="_currentWait" /> and
+        /// <see cref="EstimatedWait" /> when <see cref="_splitter" /> is
+        /// null.
+        /// </summary>
+        /// <remarks>
+        /// When <see cref="_splitter" /> is not null, it handles
+        /// this difference and <see cref="_currentCharge" /> becomes
+        /// always equal to <see cref="_currentWait" />.
+        /// </remarks>
+        private int _currentCharge;
 
         /// <summary>
         /// The snapshot of current time, as reported by
@@ -199,7 +211,8 @@ namespace JobBank.Scheduling
         /// </summary>
         /// <remarks>
         /// These are <see cref="_account" />, <see cref="_splitter" />,
-        /// <see cref="_currentWait" />, <see cref="_accountingStarted" />
+        /// <see cref="_currentWait" />,
+        /// <see cref="_currentCharge" />, <see cref="_accountingStarted" />
         /// and <see cref="_cancellationRegistration" />.
         /// </remarks>
         private readonly object _accountLock;
@@ -238,10 +251,18 @@ namespace JobBank.Scheduling
                             : int.MaxValue;
 
                     // Update to new value
-                    _currentWait = MiscArithmetic.SaturatingAdd(currentWait,
-                                                                roundedCharge);
+                    int newWait = MiscArithmetic.SaturatingAdd(currentWait,
+                                                               roundedCharge);
+                    _currentWait = newWait;
 
-                    _account.UpdateCurrentItem(currentWait, roundedCharge);
+                    // Invoke UpdateCurrentItem if new charge is higher.
+                    int currentCharge = _currentCharge;
+                    if (newWait > currentCharge)
+                    {
+                        _account.UpdateCurrentItem(currentCharge,
+                                                   newWait - currentCharge);
+                        _currentCharge = newWait;
+                    }
                 }
             }
 
@@ -262,14 +283,16 @@ namespace JobBank.Scheduling
             lock (_accountLock)
             {
                 var account = _account;
-                var currentWait = _currentWait;
+                var currentCharge = _currentCharge;
 
-                _currentWait = elapsed;
                 cancellationRegistration = _cancellationRegistration;
                 _cancellationRegistration = default;
                 _activeCount = -1;
 
-                account.UpdateCurrentItem(currentWait, elapsed - currentWait);
+                account.UpdateCurrentItem(currentCharge, 
+                                          elapsed - currentCharge);
+                _currentCharge = _currentWait = elapsed;
+
                 account.TabulateCompletedItem(elapsed);
             }
 
@@ -495,7 +518,9 @@ namespace JobBank.Scheduling
                 {
                     if (_accountingStarted)
                     {
-                        splitter = new(EstimatedWait, _currentWait, _account,
+                        int currentWait = _currentWait;
+                        _currentCharge = currentWait;
+                        splitter = new(EstimatedWait, currentWait, _account,
                                        ref _cancellationRegistration);
                     }
                     else
@@ -581,10 +606,10 @@ namespace JobBank.Scheduling
 
                 lock (_accountLock)
                 {
-                    var initialCharge = EstimatedWait;
-                    _currentWait = initialCharge;
+                    int currentCharge = EstimatedWait;
+                    _currentCharge = (_splitter is null) ? currentCharge : 0;
                     _accountingStarted = true;
-                    _account.UpdateCurrentItem(null, initialCharge);
+                    _account.UpdateCurrentItem(null, currentCharge);
                 }
 
                 _timingQueue.Enqueue(
