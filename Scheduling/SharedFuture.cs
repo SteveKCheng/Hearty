@@ -695,6 +695,7 @@ namespace JobBank.Scheduling
                         splitter.AddParticipant(_account, _cancellationRegistration);
                     }
 
+                    _cancellationRegistration = default;
                     _account = _splitter = splitter;
                 }
 
