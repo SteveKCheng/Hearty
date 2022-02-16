@@ -481,8 +481,9 @@ namespace JobBank.Scheduling
 
             cancellationSource?.Cancel();
 
-            if (account is not null)
-                UnregisterClient(account, clientData);
+            // This method does nothing if clientData has not been assigned
+            // to a non-default value, not caring if account is null.
+            UnregisterClient(account!, clientData);
         }
 
         /// <summary>
@@ -518,22 +519,28 @@ namespace JobBank.Scheduling
         /// individual jobs to be cancelled.
         /// </para>
         /// </remarks>
-        public void RequestCancel(ISchedulingAccount account)
+        /// <returns>
+        /// True if the cancellation request for <paramref name="account" /> 
+        /// has been processed succesfully.  False if this future has
+        /// completed already or if <paramref name="account" />
+        /// is not currently participating in this future.
+        /// </returns>
+        public bool RequestCancel(ISchedulingAccount account)
         {
             if (_activeCount <= 0)
-                return;
+                return false;
 
             CancellationTokenSource? cancellationSource = null;
             ClientData clientData = default;
+            int countRemoved = 0;
 
             lock (_accountLock)
             {
                 // Ignore cancellation if the job is already finished.
                 if (_activeCount <= 0)
-                    return;
+                    return false;
 
                 var splitter = _splitter;
-                int countRemoved = 0;
 
                 if (object.ReferenceEquals(_account, account))
                 {
@@ -554,7 +561,11 @@ namespace JobBank.Scheduling
 
             cancellationSource?.Cancel();
 
+            // This method only does anything if clientData has been
+            // assigned to a non-default value above.
             UnregisterClient(account, clientData);
+
+            return countRemoved > 0;
         }
 
         /// <summary>
