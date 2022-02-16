@@ -118,8 +118,20 @@ namespace JobBank.Scheduling
         public bool IsCancelled => (_activeCount == 0);
 
         /// <summary>
-        /// Triggers cancellation for this job when all clients agree to cancel.
+        /// Triggers cancellation for this job, when all clients 
+        /// agree to cancel, or when forced to do so.
         /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This cancellation source provides the token that is passed
+        /// to the job execution itself, i.e. <see cref="IJobWorker{TInput, TOutput}.ExecuteJobAsync" />.
+        /// The cancellation tokens from the clients are not passed directly
+        /// there but are effectively linked to this source.
+        /// </para>
+        /// This member is disposed, i.e. the cancellation source is 
+        /// returned to the pool, only on successful completion of the job,
+        /// to avoid races with triggering cancellation.
+        /// </remarks>
         private CancellationSourcePool.Use _cancellationSourceUse;
 
         /// <summary>
@@ -283,7 +295,7 @@ namespace JobBank.Scheduling
             int elapsed = MiscArithmetic.SaturateToInt(now - _startTime);
 
             CancellationTokenRegistration cancellationRegistration;
-            CancellationSourcePool.Use cancellationSourceUse;
+            CancellationSourcePool.Use cancellationSourceUse = default;
 
             ISchedulingAccount account;
             int currentCharge;
@@ -299,10 +311,16 @@ namespace JobBank.Scheduling
                 _cancellationRegistration = default;
 
                 if (_activeCount > 0)
+                {
                     _activeCount = -1;
 
-                cancellationSourceUse = _cancellationSourceUse;
-                _cancellationSourceUse = default;
+                    // Dispose the cancellation source only when not
+                    // requested to cancel, to avoid a race with
+                    // the actual cancellation, which occurs without
+                    // having _accountLock locked.
+                    cancellationSourceUse = _cancellationSourceUse;
+                    _cancellationSourceUse = default;
+                }
 
                 _currentCharge = _currentWait = elapsed;
             }
@@ -419,31 +437,22 @@ namespace JobBank.Scheduling
                     countRemoved = splitter.RemoveParticipants(
                                     cancellationToken,
                                     (t, a, r) => r.Token == t);
+
+                    // Note that countRemoved == 0 may occur where the
+                    // same cancellation token is registered onto more than
+                    // one participant: then the first invocation of this
+                    // method removes all participants for that cancellation
+                    // token, and subsequent invocations for the same
+                    // cancellation token see no more participants.
+                    // The following code will do nothing then.
                 }
 
-                // This condition may occur where the same cancellation
-                // token is registered onto more than one participant:
-                // then the first invocation of this method removes all
-                // participants for that cancellation token, and
-                // subsequent invocations for the same cancellation
-                // token see no more participants.
-                if (countRemoved == 0)
-                    return;
-
-                var activeCount = _activeCount;
-                _activeCount = activeCount -= countRemoved;
-
-                // We should trigger the cancellation source outside of
-                // this lock, but must avoid a race when job completion
-                // returns it to a pool (if not yet triggered)!
-                if (activeCount <= 0)
-                {
+                // Prepare to cancel outside _accountLock if all
+                // participants have been removed.
+                if ((_activeCount -= countRemoved) <= 0)
                     cancellationSource = _cancellationSourceUse.Source;
-                    _cancellationSourceUse = default;
-                }
             }
 
-            // Cancel the job if activeCount has just decreased to zero.
             cancellationSource?.Cancel();
         }
 
@@ -508,17 +517,10 @@ namespace JobBank.Scheduling
                     countRemoved = splitter.RemoveParticipants(account);
                 }
 
-                if (countRemoved == 0)
-                    return;
-
-                var activeCount = _activeCount;
-                _activeCount = activeCount -= countRemoved;
-
-                if (activeCount <= 0)
-                {
+                // Prepare to cancel outside _accountLock if all
+                // participants have been removed.
+                if ((_activeCount -= countRemoved) <= 0)
                     cancellationSource = _cancellationSourceUse.Source;
-                    _cancellationSourceUse = default;
-                }
             }
 
             cancellationRegistration.Unregister();
@@ -548,7 +550,6 @@ namespace JobBank.Scheduling
                 // Just cancel the main cancellation source directly,
                 // and let FinalizeCharge clean up everything else.
                 cancellationSource = _cancellationSourceUse.Source;
-                _cancellationSourceUse = default;
             }
 
             cancellationSource?.Cancel();
@@ -743,6 +744,9 @@ namespace JobBank.Scheduling
         private async Task LaunchJobInternalAsync(IJobWorker<TInput, TOutput> worker,
                                                   uint executionId)
         {
+            // At this point, FinalizeCharge cannot have been called
+            // yet, so _cancellationSourceUse remains valid, even
+            // if the token has been triggered already.
             var cancellationToken = _cancellationSourceUse.Token;
 
             _startTime = Environment.TickCount64;
