@@ -479,7 +479,7 @@ namespace JobBank.Server
                     // Set flag when at least one client owns cancellation
                     ownsCancellation |= entry.OwnsCancellation;
 
-                    if (future.TryShareJob(account, cancellationToken)
+                    if (future.TryShareJob(account, cancellationToken, null)
                         is not JobMessage existingMessage)
                     {
                         return null;
@@ -498,6 +498,7 @@ namespace JobBank.Server
                                 work.InitialWait,
                                 account,
                                 cancellationToken,
+                                null,
                                 _timingQueue,
                                 out future);
                     }

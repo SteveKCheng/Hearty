@@ -134,16 +134,27 @@ namespace JobBank.Scheduling
         /// </remarks>
         private CancellationSourcePool.Use _cancellationSourceUse;
 
-        /// <summary>
-        /// Registration on client's original <see cref="CancellationToken" />
-        /// to propagate it to <see cref="_cancellationSourceUse"/>.
-        /// </summary>
         /// <remarks>
         /// This member is set to its default state if 
-        /// <see cref="_account"/> is <see cref="_splitter" />
-        /// which holds the full list of registrations.
+        /// <see cref="_account"/> becomes <see cref="_splitter" />
+        /// which holds the full list of clients.
         /// </remarks>
-        private CancellationTokenRegistration _cancellationRegistration;
+        private ClientData _singleClientData;
+
+        private struct ClientData
+        {
+            /// <summary>
+            /// Registration on client's original <see cref="CancellationToken" />
+            /// to propagate it to <see cref="SharedFuture{TInput, TOutput}._cancellationSourceUse" />.
+            /// </summary>
+            public CancellationTokenRegistration CancellationRegistration;
+
+            /// <summary>
+            /// A function called to notify the client when it disengages
+            /// from the job or the job finishes.
+            /// </summary>
+            public Action<SharedFuture<TInput, TOutput>, ISchedulingAccount>? OnClientFinish;
+        }
 
         /// <summary>
         /// Counts how many clients remain that have not cancelled.
@@ -215,7 +226,7 @@ namespace JobBank.Scheduling
         /// Holds and manages multiple <see cref="ISchedulingAccount" />
         /// when this job is shared.
         /// </summary>
-        private SchedulingAccountSplitter<CancellationTokenRegistration>? _splitter;
+        private SchedulingAccountSplitter<ClientData>? _splitter;
 
         /// <summary>
         /// Locked to ensure that variables related to time accounting 
@@ -294,7 +305,7 @@ namespace JobBank.Scheduling
         {
             int elapsed = MiscArithmetic.SaturateToInt(now - _startTime);
 
-            CancellationTokenRegistration cancellationRegistration;
+            ClientData clientData;
             CancellationSourcePool.Use cancellationSourceUse = default;
 
             ISchedulingAccount account;
@@ -307,8 +318,8 @@ namespace JobBank.Scheduling
                 currentCharge = _currentCharge;
                 accountingStarted = _accountingStarted;
 
-                cancellationRegistration = _cancellationRegistration;
-                _cancellationRegistration = default;
+                clientData = _singleClientData;
+                _singleClientData = default;
 
                 if (_activeCount > 0)
                 {
@@ -336,7 +347,7 @@ namespace JobBank.Scheduling
             // This will also remove all participants from _splitter
             account.TabulateCompletedItem(elapsed);
 
-            cancellationRegistration.Unregister();
+            UnregisterClient(account, clientData);
             cancellationSourceUse.Dispose();
         }
 
@@ -372,10 +383,16 @@ namespace JobBank.Scheduling
         /// Used to periodically fire timers to update the estimate
         /// of the time needed to execute the job.
         /// </param>
+        /// <param name="onClientFinish">
+        /// An optional function invoked to clean up for the first client 
+        /// (represented by <paramref name="account" />) of this job 
+        /// when it disengages from this job or when this job completes.
+        /// </param>
         private SharedFuture(in TInput input, 
                              int initialCharge, 
                              ISchedulingAccount account,
                              CancellationToken cancellationToken,
+                             Action<SharedFuture<TInput, TOutput>, ISchedulingAccount>? onClientFinish,
                              SimpleExpiryQueue timingQueue)
         {
             _account = account;
@@ -391,7 +408,11 @@ namespace JobBank.Scheduling
             // so it can be used as a lock object.
             _accountLock = _cancellationSourceUse.Source!;
 
-            _cancellationRegistration = RegisterForCancellation(cancellationToken);
+            _singleClientData = new ClientData
+            {
+                CancellationRegistration = RegisterForCancellation(cancellationToken),
+                OnClientFinish = onClientFinish
+            };
         }
 
         /// <summary>
@@ -418,6 +439,9 @@ namespace JobBank.Scheduling
 
             CancellationTokenSource? cancellationSource = null;
             
+            ISchedulingAccount? account = null;
+            ClientData clientData = default;
+            
             lock (_accountLock)
             {
                 // Ignore cancellation if the job is already finished.
@@ -427,16 +451,18 @@ namespace JobBank.Scheduling
                 var splitter = _splitter;
                 int countRemoved = 0;
 
-                if (_cancellationRegistration.Token == cancellationToken)
+                if (_singleClientData.CancellationRegistration.Token == cancellationToken)
                 {
                     countRemoved = 1;
-                    _cancellationRegistration = default;
+                    clientData = _singleClientData;
+                    _singleClientData = default;
+                    account = _account;
                 }
                 else if (splitter is not null)
                 {
                     countRemoved = splitter.RemoveParticipants(
                                     cancellationToken,
-                                    (t, a, r) => r.Token == t);
+                                    (t, a, r) => r.CancellationRegistration.Token == t);
 
                     // Note that countRemoved == 0 may occur where the
                     // same cancellation token is registered onto more than
@@ -454,6 +480,9 @@ namespace JobBank.Scheduling
             }
 
             cancellationSource?.Cancel();
+
+            if (account is not null)
+                UnregisterClient(account, clientData);
         }
 
         /// <summary>
@@ -495,7 +524,7 @@ namespace JobBank.Scheduling
                 return;
 
             CancellationTokenSource? cancellationSource = null;
-            CancellationTokenRegistration cancellationRegistration = default;
+            ClientData clientData = default;
 
             lock (_accountLock)
             {
@@ -509,8 +538,8 @@ namespace JobBank.Scheduling
                 if (object.ReferenceEquals(_account, account))
                 {
                     countRemoved = 1;
-                    cancellationRegistration = _cancellationRegistration;
-                    _cancellationRegistration = default;
+                    clientData = _singleClientData;
+                    _singleClientData = default;
                 }
                 else if (splitter is not null)
                 {
@@ -523,10 +552,11 @@ namespace JobBank.Scheduling
                     cancellationSource = _cancellationSourceUse.Source;
             }
 
-            cancellationRegistration.Unregister();
             cancellationSource?.Cancel();
+
+            UnregisterClient(account, clientData);
         }
-        
+
         /// <summary>
         /// Cancel the job for all clients.
         /// </summary>
@@ -575,6 +605,14 @@ namespace JobBank.Scheduling
         /// More accounts can share the charges by attaching them implicitly
         /// through <see cref="TryShareJob" />.
         /// </param>
+        /// <param name="onClientFinish">
+        /// An optional function invoked to clean up for the first client 
+        /// (represented by <paramref name="account" />) of this job 
+        /// when it disengages from this job or when this job completes.
+        /// This function is particularly useful because it will 
+        /// receive a reference to the new job whereas the methods of
+        /// <see cref="ISchedulingAccount" /> do not.
+        /// </param>
         /// <param name="timingQueue">
         /// Used to periodically fire timers to update the estimate
         /// of the time needed to execute the job.
@@ -593,6 +631,7 @@ namespace JobBank.Scheduling
                       int initialCharge,
                       ISchedulingAccount account,
                       CancellationToken cancellationToken,
+                      Action<SharedFuture<TInput, TOutput>, ISchedulingAccount>? onClientFinish,
                       SimpleExpiryQueue timingQueue,
                       out SharedFuture<TInput, TOutput> future)
         {
@@ -600,6 +639,7 @@ namespace JobBank.Scheduling
                                                        initialCharge,
                                                        account,
                                                        cancellationToken,
+                                                       onClientFinish,
                                                        timingQueue);
             return new ScheduledJob<TInput, TOutput>(future, account);
         }
@@ -617,6 +657,14 @@ namespace JobBank.Scheduling
         /// when it is no longer interested in the returned job.  
         /// The job may remain running if the other clients of the same
         /// job have yet cancelled.
+        /// </param>
+        /// <param name="onClientFinish">
+        /// An optional function invoked to clean up for the new client
+        /// (represented by <paramref name="account" />) of this job 
+        /// when it disengages from this job or when this job completes.
+        /// This function is particularly useful because it will 
+        /// receive a reference to the new job whereas the methods of
+        /// <see cref="ISchedulingAccount" /> do not.
         /// </param>
         /// <remarks>
         /// <para>
@@ -651,7 +699,8 @@ namespace JobBank.Scheduling
         /// </returns>
         public ScheduledJob<TInput, TOutput>? 
             TryShareJob(ISchedulingAccount account,
-                        CancellationToken cancellationToken)
+                        CancellationToken cancellationToken,
+                        Action<SharedFuture<TInput, TOutput>, ISchedulingAccount>? onClientFinish)
         {
             // Strictly speaking we are not supposed to use _accountLock,
             // which is a pooled object, after it has been returned to
@@ -661,15 +710,7 @@ namespace JobBank.Scheduling
             if (_activeCount <= 0)
                 return null;
 
-            // Important: we do not call CancellationTokenRegistration.Dispose!
-            // That method blocks until the callback is executed, which may
-            // deadlock, when removal of a participant is triggered by the
-            // registered cancellation callback in the first place!
-            static void UnregisterCancellation(ISchedulingAccount a, 
-                                               CancellationTokenRegistration r)
-                => r.Unregister();
-
-            SchedulingAccountSplitter<CancellationTokenRegistration>? splitter;
+            SchedulingAccountSplitter<ClientData>? splitter;
             lock (_accountLock)
             {
                 // Do not bother to add participant if future is done.
@@ -686,16 +727,15 @@ namespace JobBank.Scheduling
                         int currentWait = _currentWait;
                         _currentCharge = currentWait;
                         splitter = new(EstimatedWait, currentWait, _account,
-                                       _cancellationRegistration,
-                                       (a, r) => UnregisterCancellation(a, r));
+                                       _singleClientData, UnregisterClientAction, this);
                     }
                     else
                     {
-                        splitter = new((a, r) => UnregisterCancellation(a, r));
-                        splitter.AddParticipant(_account, _cancellationRegistration);
+                        splitter = new(UnregisterClientAction, this);
+                        splitter.AddParticipant(_account, _singleClientData);
                     }
 
-                    _cancellationRegistration = default;
+                    _singleClientData = default;
                     _account = _splitter = splitter;
                 }
 
@@ -711,21 +751,48 @@ namespace JobBank.Scheduling
             // cancel simultaneously as we execute the following code.  
             // The race is harmless and can be ignored, because splitter
             // below will deal with it correctly.
-            var cancelRegistration = RegisterForCancellation(cancellationToken);
+            var clientData = new ClientData
+            {
+                CancellationRegistration = RegisterForCancellation(cancellationToken),
+                OnClientFinish = onClientFinish
+            };
 
             // Finally, attach the new client for the purposes of charging
             // execution time. This call may re-adjusts charges on all accounts.
             //
             // As SchedulingAccountSplitter locks internally,
             // updates to charges are serialized and cannot be missed. 
-            if (!splitter.AddParticipant(account, cancelRegistration))
+            if (!splitter.AddParticipant(account, clientData))
             {
-                UnregisterCancellation(account, cancelRegistration);
+                UnregisterClient(account, clientData);
                 return null;
             }
 
             return new ScheduledJob<TInput, TOutput>(this, account);
         }
+
+        /// <summary>
+        /// Unregister a client when it disengages or when this future
+        /// is completed.
+        /// </summary>
+        private void UnregisterClient(ISchedulingAccount account, ClientData clientData)
+        {
+            // Important: we do not call CancellationTokenRegistration.Dispose!
+            // That method blocks until the callback is executed, which may
+            // deadlock, when removal of a participant is triggered by the
+            // registered cancellation callback in the first place!
+            clientData.CancellationRegistration.Unregister();
+
+            clientData.OnClientFinish?.Invoke(this, account);
+        }
+
+        /// <summary>
+        /// Cached delegate of <see cref="UnregisterClient" /> to pass
+        /// into <see cref="SchedulingAccountSplitter{TRegistration}" />.
+        /// </summary>
+        private static readonly Action<object?, ISchedulingAccount, ClientData>
+            UnregisterClientAction = (s, a, d) =>
+                Unsafe.As<SharedFuture<TInput, TOutput>>(s!).UnregisterClient(a, d);
 
         /// <summary>
         /// Builds the task in <see cref="OutputTask" />.

@@ -225,7 +225,7 @@ namespace JobBank.Scheduling
                 }
             }
 
-            _disposeFunc?.Invoke(participant.Account, participant.Registration);
+            _disposeFunc?.Invoke(_disposeFuncState, participant.Account, participant.Registration);
         }
 
         /// <summary>
@@ -436,7 +436,12 @@ namespace JobBank.Scheduling
         /// Function called on a participant entry when it is
         /// to be removed.
         /// </summary>
-        private Action<ISchedulingAccount, TRegistration>? _disposeFunc;
+        private readonly Action<object?, ISchedulingAccount, TRegistration>? _disposeFunc;
+
+        /// <summary>
+        /// Arbitrary state object passed along to <see cref="_disposeFunc" />.
+        /// </summary>
+        private readonly object? _disposeFuncState;
 
         /// <summary>
         /// Prepare to account costs with an initially empty
@@ -446,10 +451,15 @@ namespace JobBank.Scheduling
         /// Function to be called on a participant entry when it is
         /// gets removed.
         /// </param>
+        /// <param name="disposeFuncState">
+        /// Arbitrary state object to pass along to <paramref name="disposeFunc" />.
+        /// </param>
         public SchedulingAccountSplitter(
-            Action<ISchedulingAccount, TRegistration>? disposeFunc = null)
+            Action<object?, ISchedulingAccount, TRegistration>? disposeFunc = null,
+            object? disposeFuncState = null)
         {
             _disposeFunc = disposeFunc;
+            _disposeFuncState = disposeFuncState;
         }
 
         /// <summary>
@@ -481,6 +491,9 @@ namespace JobBank.Scheduling
         /// Function to be called on a participant entry when it is
         /// gets removed.
         /// </param>
+        /// <param name="disposeFuncState">
+        /// Arbitrary state object to pass along to <paramref name="disposeFunc" />.
+        /// </param>
         /// <param name="deposit">
         /// The deposit, or initial charge, registered for the job
         /// as in <see cref="ISchedulingExpense.GetInitialCharge" />.
@@ -501,8 +514,9 @@ namespace JobBank.Scheduling
             int runningCost,
             ISchedulingAccount account,
             TRegistration registration,
-            Action<ISchedulingAccount, TRegistration>? disposeFunc = null)
-            : this(disposeFunc)
+            Action<object?, ISchedulingAccount, TRegistration>? disposeFunc = null,
+            object? disposeFuncState = null)
+            : this(disposeFunc, disposeFuncState)
         {
             _deposit = deposit;
             _runningCost = runningCost;
