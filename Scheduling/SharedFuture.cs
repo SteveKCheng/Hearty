@@ -287,11 +287,13 @@ namespace JobBank.Scheduling
 
             ISchedulingAccount account;
             int currentCharge;
+            bool accountingStarted;
 
             lock (_accountLock)
             {
                 account = _account;
                 currentCharge = _currentCharge;
+                accountingStarted = _accountingStarted;
 
                 cancellationRegistration = _cancellationRegistration;
                 _cancellationRegistration = default;
@@ -307,8 +309,11 @@ namespace JobBank.Scheduling
 
             // This can go outside the lock because _activeCount <= 0
             // means critical variables cannot ever be modified again.
-            account.UpdateCurrentItem(currentCharge,
-                                      elapsed - currentCharge);
+            if (accountingStarted)
+            {
+                account.UpdateCurrentItem(currentCharge,
+                                          elapsed - currentCharge);
+            }
 
             // This will also remove all participants from _splitter
             account.TabulateCompletedItem(elapsed);
@@ -740,28 +745,24 @@ namespace JobBank.Scheduling
         {
             var cancellationToken = _cancellationSourceUse.Token;
 
+            _startTime = Environment.TickCount64;
+
             // If the job is already cancelled before work begins,
             // act as if the job (message) does not even exist
             // in the first place, e.g. as if it had been removed
             // from its containing queue.  This check is not
             // strictly necessary but is good for performance.
-            //
-            // Fortunately, we do not need to dispose cancellation
-            // registrations here, since they must have been
-            // removed already or been cancelled, for the main
-            // token to have been cancelled in the first place.
             if (cancellationToken.IsCancellationRequested)
             {
                 worker.AbandonJob(executionId);
                 _taskBuilder.SetException(
                     new OperationCanceledException(cancellationToken));
+                FinalizeCharge(_startTime);
                 return;
             }
 
             try
             {
-                _startTime = Environment.TickCount64;
-
                 lock (_accountLock)
                 {
                     int currentCharge = EstimatedWait;
