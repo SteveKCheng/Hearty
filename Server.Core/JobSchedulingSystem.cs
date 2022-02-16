@@ -214,6 +214,22 @@ namespace JobBank.Server
         /// </returns>
         public bool TryCancelForClient(IJobQueueOwner owner, PromiseId promiseId)
         {
+            SharedFuture<PromisedWork, PromiseData>? future = null;
+            lock (_microPromises)
+                _microPromises.TryGetValue(promiseId, out future);
+
+            if (future is not null)
+            {
+                // FIXME The priority needs to be passed in or implied
+                //       by the name of the queue.
+                int priority = 5;
+
+                if (!PriorityClasses[priority].TryGetValue(owner, out var queue))
+                    return false;
+
+                return future.RequestCancel(queue.SchedulingAccount);
+            }
+
             CancellationTokenSource? source = null;
 
             lock (_cancellations)
@@ -253,8 +269,7 @@ namespace JobBank.Server
         /// the same job object.
         /// </remarks>
         private readonly Dictionary<PromiseId,
-                            (SharedFuture<PromisedWork, PromiseData> Future, 
-                             bool OwnsCancellation)>
+                                    SharedFuture<PromisedWork, PromiseData>>
             _microPromises = new();
 
         /// <summary>
@@ -277,15 +292,10 @@ namespace JobBank.Server
         /// </param>
         private void RemoveCachedFuture(PromiseId promiseId)
         {
-            bool unregisterCancellation;
             lock (_microPromises)
             {
                 bool isRemoved = _microPromises.Remove(promiseId, out var removedEntry);
-                unregisterCancellation = isRemoved && removedEntry.OwnsCancellation;
             }
-
-            if (unregisterCancellation)
-                UnregisterCancellationUse(promiseId);
         }
 
         /// <summary>
@@ -382,7 +392,6 @@ namespace JobBank.Server
             RegisterJobMessage(ISchedulingAccount account, 
                                PromiseRetriever promiseRetriever,
                                in PromisedWork work, 
-                               bool ownsCancellation,
                                CancellationToken cancellationToken,
                                out Promise promise)
         {
@@ -393,7 +402,7 @@ namespace JobBank.Server
 
             // Retry loop for concurrently cancelled promises
             while ((message = TryRegisterJobMessage(account, promise, work, 
-                                                    ownsCancellation, cancellationToken,
+                                                    cancellationToken,
                                                     out outputTask)) is null)
             {
                 // Stop the retry loop when the result is permanent,
@@ -451,7 +460,6 @@ namespace JobBank.Server
         private JobMessage? TryRegisterJobMessage(ISchedulingAccount account,
                                                   Promise promise,
                                                   in PromisedWork work,
-                                                  bool ownsCancellation,
                                                   CancellationToken cancellationToken,
                                                   out Task<PromiseData>? outputTask)
         {
@@ -474,10 +482,7 @@ namespace JobBank.Server
                 // and has not been cancelled.
                 if (exists)
                 {
-                    future = entry.Future;
-
-                    // Set flag when at least one client owns cancellation
-                    ownsCancellation |= entry.OwnsCancellation;
+                    future = entry!;
 
                     if (future.TryShareJob(account, cancellationToken, null)
                         is not JobMessage existingMessage)
@@ -485,7 +490,6 @@ namespace JobBank.Server
                         return null;
                     }
 
-                    entry.OwnsCancellation = ownsCancellation;
                     message = existingMessage;
                 }
                 else
@@ -494,7 +498,7 @@ namespace JobBank.Server
                     try
                     {
                         message = SharedFuture<PromisedWork, PromiseData>.CreateJob(
-                                work,
+                                work.ReplacePromise(promise),
                                 work.InitialWait,
                                 account,
                                 cancellationToken,
@@ -509,7 +513,7 @@ namespace JobBank.Server
                     }
 
                     outputTask = future.OutputTask;
-                    entry = (future, ownsCancellation);
+                    entry = future;
                 }
             }
 
@@ -552,7 +556,6 @@ namespace JobBank.Server
 
             var message = RegisterJobMessage(
                             queue.SchedulingAccount, promiseRetriever, work,
-                            ownsCancellation: false,
                             cancellationToken,
                             out var promise);
 
@@ -601,26 +604,10 @@ namespace JobBank.Server
         {
             var queue = PriorityClasses[priority].GetOrAdd(owner);
 
-            var cancellation = CancellationSourcePool.Rent();
-
             var message = RegisterJobMessage(
                             queue.SchedulingAccount, promiseRetriever, work,
-                            ownsCancellation: true,
-                            cancellation.Token,
+                            queue.CancellationToken,
                             out var promise);
-
-            if (promise.IsCompleted)
-            {
-                cancellation.Dispose();
-            }
-            else
-            {
-                RegisterCancellationUse(owner, promise.Id, ref cancellation);
-
-                // Undo if the promise could have raced to complete and clean up
-                if (promise.IsCompleted)
-                    UnregisterCancellationUse(promise.Id);
-            }
 
             if (message is not null)
                 queue.Enqueue(message.GetValueOrDefault());
@@ -1125,7 +1112,6 @@ namespace JobBank.Server
                                         _queue.SchedulingAccount,
                                         promiseRetriever,
                                         input,
-                                        ownsCancellation: false,
                                         _jobCancelToken,
                                         out var promise);
 
