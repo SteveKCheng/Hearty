@@ -285,10 +285,13 @@ namespace JobBank.Scheduling
             CancellationTokenRegistration cancellationRegistration;
             CancellationSourcePool.Use cancellationSourceUse;
 
+            ISchedulingAccount account;
+            int currentCharge;
+
             lock (_accountLock)
             {
-                var account = _account;
-                var currentCharge = _currentCharge;
+                account = _account;
+                currentCharge = _currentCharge;
 
                 cancellationRegistration = _cancellationRegistration;
                 _cancellationRegistration = default;
@@ -299,15 +302,18 @@ namespace JobBank.Scheduling
                 cancellationSourceUse = _cancellationSourceUse;
                 _cancellationSourceUse = default;
 
-                account.UpdateCurrentItem(currentCharge, 
-                                          elapsed - currentCharge);
                 _currentCharge = _currentWait = elapsed;
-
-                // This will also remove all participants from _splitter
-                account.TabulateCompletedItem(elapsed);
             }
 
-            cancellationRegistration.Dispose();
+            // This can go outside the lock because _activeCount <= 0
+            // means critical variables cannot ever be modified again.
+            account.UpdateCurrentItem(currentCharge,
+                                      elapsed - currentCharge);
+
+            // This will also remove all participants from _splitter
+            account.TabulateCompletedItem(elapsed);
+
+            cancellationRegistration.Unregister();
             cancellationSourceUse.Dispose();
         }
 
