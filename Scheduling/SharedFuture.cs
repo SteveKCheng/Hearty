@@ -479,7 +479,7 @@ namespace JobBank.Scheduling
                     cancellationSource = _cancellationSourceUse.Source;
             }
 
-            cancellationSource?.Cancel();
+            cancellationSource?.CancelMaybeInBackground(_accountingStarted);
 
             // This method does nothing if clientData has not been assigned
             // to a non-default value, not caring if account is null.
@@ -559,7 +559,7 @@ namespace JobBank.Scheduling
                     cancellationSource = _cancellationSourceUse.Source;
             }
 
-            cancellationSource?.Cancel();
+            cancellationSource?.CancelMaybeInBackground(_accountingStarted);
 
             // This method only does anything if clientData has been
             // assigned to a non-default value above.
@@ -593,7 +593,7 @@ namespace JobBank.Scheduling
                 cancellationSource = _cancellationSourceUse.Source;
             }
 
-            cancellationSource?.Cancel();
+            cancellationSource?.CancelMaybeInBackground(_accountingStarted);
         }
 
         /// <summary>
