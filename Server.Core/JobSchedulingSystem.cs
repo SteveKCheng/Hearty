@@ -11,7 +11,6 @@ using Microsoft.Extensions.Logging;
 namespace JobBank.Server
 {
     using JobMessage = ScheduledJob<PromisedWork, PromiseData>;
-    using ClientQueue = SchedulingQueue<ScheduledJob<PromisedWork, PromiseData>>;
     using OwnerCancellation = KeyValuePair<IJobQueueOwner, CancellationSourcePool.Use>;
     using MacroJobExpansion = IAsyncEnumerable<(PromiseRetriever, PromisedWork)>;
 
@@ -32,7 +31,7 @@ namespace JobBank.Server
         /// </summary>
         public PrioritizedQueueSystem<
                 JobMessage, 
-                ClientQueueSystem<JobMessage, IJobQueueOwner, ClientQueue>>
+                ClientQueueSystem<JobMessage, IJobQueueOwner, ClientJobQueue>>
             PriorityClasses { get; }
 
         /// <summary>
@@ -77,8 +76,8 @@ namespace JobBank.Server
             _exceptionTranslator = exceptionTranslator;
 
             PriorityClasses = new(countPriorities, 
-                () => new ClientQueueSystem<JobMessage, IJobQueueOwner, ClientQueue>(
-                    key => new ClientQueue(),
+                () => new ClientQueueSystem<JobMessage, IJobQueueOwner, ClientJobQueue>(
+                    key => new ClientJobQueue(),
                     new SimpleExpiryQueue(60000, 20)));
 
             for (int i = 0; i < countPriorities; ++i)
@@ -551,7 +550,7 @@ namespace JobBank.Server
             var queue = PriorityClasses[priority].GetOrAdd(owner);
 
             var message = RegisterJobMessage(
-                            queue, promiseRetriever, work,
+                            queue.SchedulingAccount, promiseRetriever, work,
                             ownsCancellation: false,
                             cancellationToken,
                             out var promise);
@@ -604,7 +603,7 @@ namespace JobBank.Server
             var cancellation = CancellationSourcePool.Rent();
 
             var message = RegisterJobMessage(
-                            queue, promiseRetriever, work,
+                            queue.SchedulingAccount, promiseRetriever, work,
                             ownsCancellation: true,
                             cancellation.Token,
                             out var promise);
@@ -1017,7 +1016,7 @@ namespace JobBank.Server
         private readonly MacroJobExpansion _expansion;
 
         private readonly JobSchedulingSystem _jobScheduling;
-        private readonly ClientQueue _queue;
+        private readonly ClientJobQueue _queue;
         private readonly PromiseId _promiseId;
         private readonly IPromiseListBuilder _resultBuilder;
         private readonly CancellationToken _jobCancelToken;
@@ -1056,7 +1055,7 @@ namespace JobBank.Server
         /// </param>
         internal MacroJobMessage(MacroJobExpansion expansion,
                                  JobSchedulingSystem jobScheduling,
-                                 ClientQueue queue,
+                                 ClientJobQueue queue,
                                  PromiseId promiseId,
                                  IPromiseListBuilder resultBuilder,
                                  CancellationToken cancellationToken)
@@ -1122,7 +1121,7 @@ namespace JobBank.Server
                         var (promiseRetriever, input) = enumerator.Current;
 
                         message = _jobScheduling.RegisterJobMessage(
-                                        _queue,
+                                        _queue.SchedulingAccount,
                                         promiseRetriever,
                                         input,
                                         ownsCancellation: false,
