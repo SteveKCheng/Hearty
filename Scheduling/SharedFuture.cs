@@ -87,17 +87,17 @@ namespace JobBank.Scheduling
         public TInput Input { get; }
 
         /// <summary>
-        /// Whether cancellation has been requested by all participating
-        /// clients.
+        /// Whether cancellation has occurred or is about to occur.
         /// </summary>
         /// <remarks>
         /// <para>
         /// When all the participating clients at any one time
         /// have requested cancellation, this flag is set to true
         /// and remains that way.  The cancellation may not yet
-        /// be processed, i.e.  <see cref="OutputTask" /> may not
+        /// have followed through completely, i.e.  
+        /// <see cref="OutputTask" /> may not
         /// yet be complete.  Nevertheless a new client that wants
-        /// to run the same job can no longer use this instance,
+        /// to run the same job can no longer share this instance,
         /// and must remove it from its cache.
         /// </para>
         /// <para>
@@ -355,6 +355,13 @@ namespace JobBank.Scheduling
         /// Asynchronous task that furnishes the result
         /// when the job finishes executing.
         /// </summary>
+        /// <remarks>
+        /// Any functions to unregister clients and to accumulate
+        /// statistics on <see cref="ISchedulingAccount" /> are
+        /// guaranteed to have been invoked before this task 
+        /// gets completed, thus ruling out some subtle race 
+        /// conditions.
+        /// </remarks>
         public Task<TOutput> OutputTask => _taskBuilder.Task;
 
         /// <summary>
@@ -690,7 +697,7 @@ namespace JobBank.Scheduling
         /// gets cancelled by current clients (i.e. <see cref="IsCancelled" />
         /// becomes true) while this method is attempting to attach a new client.
         /// When that happens, the caller, if it wants the cancelled job restarted,
-        /// but create a new instance of this class through <see cref="CreateJob" />.
+        /// must create a new instance of this class through <see cref="CreateJob" />.
         /// </para>
         /// <para>
         /// The race condition can be reliably and correctly detected
@@ -823,70 +830,76 @@ namespace JobBank.Scheduling
         private async Task LaunchJobInternalAsync(IJobWorker<TInput, TOutput> worker,
                                                   uint executionId)
         {
-            // At this point, FinalizeCharge cannot have been called
-            // yet, so _cancellationSourceUse remains valid, even
-            // if the token has been triggered already.
-            var cancellationToken = _cancellationSourceUse.Token;
-
-            _startTime = Environment.TickCount64;
-
-            // If the job is already cancelled before work begins,
-            // act as if the job (message) does not even exist
-            // in the first place, e.g. as if it had been removed
-            // from its containing queue.  This check is not
-            // strictly necessary but is good for performance.
-            if (cancellationToken.IsCancellationRequested)
-            {
-                worker.AbandonJob(executionId);
-                _taskBuilder.SetException(
-                    new OperationCanceledException(cancellationToken));
-                FinalizeCharge(_startTime);
-                return;
-            }
+            Exception? exception = null;
+            TOutput output = default!;
+            bool workerInvoked = false;
 
             try
             {
-                lock (_accountLock)
+                // At this point, FinalizeCharge cannot have been called
+                // yet, so _cancellationSourceUse remains valid, even
+                // if the token has been triggered already.
+                var cancellationToken = _cancellationSourceUse.Token;
+
+                _startTime = Environment.TickCount64;
+
+                if (cancellationToken.IsCancellationRequested)
                 {
-                    int currentCharge = EstimatedWait;
-                    _currentCharge = (_splitter is null) ? currentCharge : 0;
-                    _accountingStarted = true;
-                    _account.UpdateCurrentItem(null, currentCharge);
+                    // If the job is already cancelled before work begins,
+                    // act as if the job (message) does not even exist
+                    // in the first place, e.g. as if it had been removed
+                    // from its containing queue.  This check is not
+                    // strictly necessary but is good for performance.
+                    exception = new OperationCanceledException(cancellationToken);
                 }
-
-                _timingQueue.Enqueue(
-                    static (t, s) => Unsafe.As<SharedFuture<TInput, TOutput>>(s!)
-                                           .UpdateCurrentCharge(t),
-                    this);
-
-                cancellationToken.ThrowIfCancellationRequested();
-
-                try
+                else
                 {
-                    var output = await worker.ExecuteJobAsync(executionId, this, cancellationToken)
-                                             .ConfigureAwait(false);
-                    _taskBuilder.SetResult(output);
-                }
-                catch (Exception e)
-                {
-                    _taskBuilder.SetException(e);
+                    lock (_accountLock)
+                    {
+                        int currentCharge = EstimatedWait;
+                        _currentCharge = (_splitter is null) ? currentCharge : 0;
+                        _accountingStarted = true;
+                        _account.UpdateCurrentItem(null, currentCharge);
+                    }
+
+                    _timingQueue.Enqueue(
+                        static (t, s) => Unsafe.As<SharedFuture<TInput, TOutput>>(s!)
+                                               .UpdateCurrentCharge(t),
+                        this);
+
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    workerInvoked = true;
+                    output = await worker.ExecuteJobAsync(executionId, this, cancellationToken)
+                                         .ConfigureAwait(false);
                 }
             }
             catch (Exception e)
             {
-                worker.AbandonJob(executionId);
-                _taskBuilder.SetException(e);
+                exception = e;
             }
 
             try
             {
+                if (!workerInvoked)
+                {
+                    try { worker.AbandonJob(executionId); }
+                    catch { }
+                }
+
                 var endTime = Environment.TickCount64;
                 FinalizeCharge(endTime);
             }
-            catch
+            catch (Exception e)
             {
                 // FIXME What to do with exception here?
+                exception ??= e;
             }
+
+            if (exception is null)
+                _taskBuilder.SetResult(output);
+            else
+                _taskBuilder.SetException(exception);
         }
 
         bool ILaunchableJob<TInput, TOutput>.TryLaunchJob(IJobWorker<TInput, TOutput> worker, 
