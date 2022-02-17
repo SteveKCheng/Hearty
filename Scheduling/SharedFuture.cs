@@ -118,6 +118,12 @@ namespace JobBank.Scheduling
         public bool IsCancelled => (_activeCount == 0);
 
         /// <summary>
+        /// The number of clients that are currently interested
+        /// in this future.
+        /// </summary>
+        public int NumberOfClients => Math.Max(_activeCount, 0);
+
+        /// <summary>
         /// Triggers cancellation for this job, when all clients 
         /// agree to cancel, or when forced to do so.
         /// </summary>
