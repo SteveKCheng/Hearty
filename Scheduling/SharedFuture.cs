@@ -406,6 +406,10 @@ namespace JobBank.Scheduling
             _timingQueue = timingQueue;
             _activeCount = 1;
 
+            // Touch this object to make sure it is created,
+            // because the lazy creation is not thread-safe.
+            _ = _taskBuilder.Task;
+
             Input = input;
             EstimatedWait = initialCharge;
 
