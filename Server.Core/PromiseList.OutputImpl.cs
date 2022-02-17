@@ -123,6 +123,8 @@ public partial class PromiseList
         }
     }
 
+    internal static readonly IPromiseClientInfo dummyClient = new DummyPromiseClientInfo();
+
     /// <summary>
     /// Hooks to write out <see cref="PromiseList" /> as a multi-part stream.
     /// </summary>
@@ -180,7 +182,7 @@ public partial class PromiseList
             if (promise is null)
                 throw new InvalidOperationException($"Promise with ID {promiseId} does not exist even though it has been put as part of the results. ");
 
-            var result = await promise.GetResultAsync(new DummyPromiseClientInfo(),
+            var result = await promise.GetResultAsync(dummyClient,
                                                       null, cancellationToken)
                                       .ConfigureAwait(false);
             var output = result.NormalOutput;
