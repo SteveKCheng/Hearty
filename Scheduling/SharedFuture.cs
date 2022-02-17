@@ -147,6 +147,9 @@ namespace JobBank.Scheduling
         /// </remarks>
         private ClientData _singleClientData;
 
+        /// <summary>
+        /// Registration entry for a client of <see cref="SharedFuture{TInput, TOutput}" />.
+        /// </summary>
         private struct ClientData
         {
             /// <summary>
