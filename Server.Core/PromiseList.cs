@@ -62,10 +62,17 @@ namespace JobBank.Server
 
         bool IPromiseListBuilder.TryComplete(int count, Exception? exception)
         {
-            lock (_outstandingPromises)
+            var outstandingPromises = _outstandingPromises;
+            if (outstandingPromises is null)
+                return false;
+
+            lock (outstandingPromises)
             {
-                if (_outstandingPromises.Count != count)
-                    throw new InvalidOperationException();
+                if (_outstandingPromises is null)
+                    return false;
+
+                if (_promisesSeen != count)
+                    throw new InvalidOperationException("The count of promises reported on completion does not match the actual count. ");
 
                 if (_promiseIdTotal >= 0)
                     return false;
@@ -81,27 +88,42 @@ namespace JobBank.Server
 
         void IPromiseListBuilder.SetMember(int index, Promise promise)
         {
-            lock (_outstandingPromises)
+            var outstandingPromises = _outstandingPromises;
+            if (outstandingPromises is null)
+                return;
+
+            lock (outstandingPromises)
             {
-                int count = _outstandingPromises.Count;
-                if (index > count)
-                    throw new InvalidOperationException();
+                if (_outstandingPromises is null)
+                    return;
+
+                int count = _promisesSeen;
+                if (index < 0 || index > count)
+                {
+                    throw new IndexOutOfRangeException(
+                        "A new index to register a new promise must " +
+                        "immediately follow the last highest index. ");
+                }
 
                 if (index == count)
                 {
-                    _outstandingPromises.Add(promise);
+                    outstandingPromises.Add(index, promise);
+                    ++_promisesSeen;
                 }
                 else
                 {
-                    var oldPromise = _outstandingPromises[index];
+                    // If index < count, the promise must have been seen
+                    // and completed with a non-transient result.
+                    if (!outstandingPromises.TryGetValue(index, out var oldPromise))
+                        return;
+
                     bool keep = object.ReferenceEquals(oldPromise, promise) ||
-                                oldPromise is null ||
                                 (oldPromise.IsCompleted &&
                                  !oldPromise.ResultOutput!.IsTransient);
                     if (keep)
                         return;
 
-                    _outstandingPromises[index] = promise;
+                    outstandingPromises[index] = promise;
                 }
             }
 
@@ -122,9 +144,18 @@ namespace JobBank.Server
         {
             var result = await promise.GetResultAsync(dummyClient, null, default)
                                       .ConfigureAwait(false);
-            lock (_outstandingPromises)
+
+            var outstandingPromises = _outstandingPromises;
+            if (outstandingPromises is null)
+                return;
+
+            lock (outstandingPromises)
             {
-                if (!object.ReferenceEquals(_outstandingPromises[index], promise))
+                if (_outstandingPromises is null)
+                    return;
+
+                if (!outstandingPromises.TryGetValue(index, out var oldPromise) ||
+                    !object.ReferenceEquals(oldPromise, promise))
                     return;
 
                 if (result.NormalOutput.IsTransient)
@@ -134,7 +165,7 @@ namespace JobBank.Server
                 else
                 {
                     _promiseIds.TrySetMember(_committedCount++, promise.Id);
-                    _outstandingPromises[index] = null;
+                    outstandingPromises.Remove(index);
                 }
                     
                 FinishUpWhenAllPromisesCompleted();
@@ -148,23 +179,21 @@ namespace JobBank.Server
         private void FinishUpWhenAllPromisesCompleted()
         {
             int total = _promiseIdTotal;
-            int n = _committedCount;
-            int c = _transientCount;
+            int c = _committedCount;
+            int t = _transientCount;
 
-            if (n + c == total)
+            if (c + t == total)
             {
                 // Publish all transient promises at the end
-                for (int i = _outstandingPromises.Count; i > 0 && c > 0; --i)
+                if (t > 0)
                 {
-                    var p = _outstandingPromises[i-1];
-                    if (p?.ResultOutput?.IsTransient == true)
-                    {
-                        _promiseIds.TrySetMember(n++, p.Id);
-                        --c;
-                    }
+                    foreach (var (_, promise) in _outstandingPromises!)
+                        _promiseIds.TrySetMember(c++, promise.Id);
                 }
 
                 _promiseIds.TryComplete(total, _completionException);
+
+                _outstandingPromises = null;
             }
         }
             
@@ -174,7 +203,27 @@ namespace JobBank.Server
         /// Buffer of promises that need to be awaited before
         /// they can be committed into <see cref="_promiseIds" />.
         /// </summary>
-        private List<Promise?> _outstandingPromises = new();
+        /// <remarks>
+        /// <para>
+        /// The key is the index of the promise in the original input
+        /// ordering.  A dictionary is used in place of an array since
+        /// it is expected only that the most recent promises,
+        /// out of potentially thousands, need to be remembered; 
+        /// once a promise completes with a non-transient result, 
+        /// its entry can be removed from this dictionary entirely.
+        /// </para>
+        /// <para>
+        /// This dictionary is set to null once this <see cref="PromiseList" />
+        /// has completed, to free up memory.
+        /// </para>
+        /// </remarks>
+        private Dictionary<int, Promise>? _outstandingPromises = new(capacity: 64);
+
+        /// <summary>
+        /// The current count of items seen from calls to
+        /// <see cref="IPromiseListBuilder.SetMember" />.
+        /// </summary>
+        private int _promisesSeen = 0;
 
         /// <summary>
         /// The total number of promise IDs, determined once 
