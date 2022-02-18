@@ -1063,6 +1063,11 @@ namespace JobBank.Server
             int count = 0;
             Exception? exception = null;
 
+            // Whether an exception indicates cancellation from the token
+            // passed into this enumerator.
+            static bool IsLocalCancellation(Exception e, CancellationToken c)
+                => e is OperationCanceledException ec && ec.CancellationToken == c;
+
             //
             // We cannot write the following loop as a straightforward
             // "await foreach" with "yield return" inside, because
@@ -1077,11 +1082,10 @@ namespace JobBank.Server
                 if (_resultBuilder.IsComplete)
                     yield break;
 
-                enumerator = _expansion.GetAsyncEnumerator(
-                    cancellationToken.CanBeCanceled ? cancellationToken
-                                                    : _jobCancelToken);
+                if (!_jobCancelToken.IsCancellationRequested)
+                    enumerator = _expansion.GetAsyncEnumerator(cancellationToken);
             }
-            catch (Exception e)
+            catch (Exception e) when (!IsLocalCancellation(e, cancellationToken))
             {
                 exception = e;
             }
@@ -1095,7 +1099,9 @@ namespace JobBank.Server
                     try
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        _jobCancelToken.ThrowIfCancellationRequested();
+
+                        if (_jobCancelToken.IsCancellationRequested)
+                            break;
 
                         // Stop generating job messages if another producer
                         // has completely done so, or there are no more micro jobs.
@@ -1104,7 +1110,9 @@ namespace JobBank.Server
                             break;
 
                         cancellationToken.ThrowIfCancellationRequested();
-                        _jobCancelToken.ThrowIfCancellationRequested();
+
+                        if (_jobCancelToken.IsCancellationRequested)
+                            break;
 
                         var (promiseRetriever, input) = enumerator.Current;
 
@@ -1123,7 +1131,7 @@ namespace JobBank.Server
                         if (message is null)
                             continue;
                     }
-                    catch (Exception e)
+                    catch (Exception e) when (!IsLocalCancellation(e, cancellationToken))
                     {
                         exception = e;
                         break;
@@ -1136,35 +1144,29 @@ namespace JobBank.Server
                 {
                     await enumerator.DisposeAsync().ConfigureAwait(false);
                 }
-                catch (Exception e)
+                catch (Exception e) when (!IsLocalCancellation(e, cancellationToken))
                 {
                     exception ??= e;
                 }
             }
 
-            if (exception is OperationCanceledException cancelException)
+            if (_jobCancelToken.IsCancellationRequested && exception is null)
             {
-                if (cancelException.CancellationToken == _jobCancelToken)
+                // Complete _resultBuilder with the cancellation exception
+                // only if this producer is the last to cancel.
+                if (_jobScheduling.UnregisterMacroJob(_promiseId, toCancel: true))
                 {
-                    // Complete _resultBuilder with the cancellation exception
-                    // only if this producer is the last to cancel.
-                    if (_jobScheduling.UnregisterMacroJob(_promiseId, toCancel: true))
-                        _resultBuilder.TryComplete(count, exception);
-
-                    yield break;
-                }
-                else if (cancelException.CancellationToken == cancellationToken)
-                {
-                    // Do not terminate _resultBuilder when cancelling locally
-                    // on this enumerator.
-                    yield break;
+                    exception = new OperationCanceledException(_jobCancelToken);
+                    _resultBuilder.TryComplete(count, exception);
                 }
             }
-
-            // When this producers finishes successfully, or the
-            // exception is not transient, complete _resultBuilder.
-            bool isFirst = _resultBuilder.TryComplete(count, exception);
-            _ = CleanUpAsync(isFirst);
+            else
+            {
+                // When this producers finishes successfully without
+                // job cancellation, complete _resultBuilder.
+                bool isFirst = _resultBuilder.TryComplete(count, exception);
+                _ = CleanUpAsync(isFirst);
+            }
         }
 
         /// <summary>
