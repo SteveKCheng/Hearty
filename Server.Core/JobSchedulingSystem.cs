@@ -1163,12 +1163,35 @@ namespace JobBank.Server
 
             // When this producers finishes successfully, or the
             // exception is not transient, complete _resultBuilder.
-            //
+            bool isFirst = _resultBuilder.TryComplete(count, exception);
+            _ = CleanUpAsync(isFirst);
+        }
+
+        /// <summary>
+        /// Wait for all promises to complete before executing successful
+        /// clean-up action.
+        /// </summary>
+        /// <param name="isFirst">
+        /// Whether this instance is the first to complete 
+        /// <see cref="_resultBuilder" />, thus triggering clean-up
+        /// action shared for all clients requesting the same macro job.
+        /// </param>
+        private async Task CleanUpAsync(bool isFirst)
+        {
+            try
+            {
+                await _resultBuilder.WaitForAllPromisesAsync()
+                                    .ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+
             // If this producer is the first producer then unregister
             // the promise as well.  UnregisterMacroPromise could be
             // called unconditionally here and it would do nothing
             // if this is not the first producer.
-            if (_resultBuilder.TryComplete(count, exception))
+            if (isFirst)
                 _jobScheduling.UnregisterMacroJob(_promiseId, toCancel: false);
         }
     }
