@@ -26,6 +26,7 @@
     <Compile Include="IPromiseListBuilder.cs" />
     <Compile Include="JobSchedulingSystem.cs" />
     <Compile Include="LocalWorkerAdaptor.cs" />
+    <Compile Include="MacroJob.cs" />
     <Compile Include="PathsDirectory.cs" />
     <Compile Include="Payload.cs" />
     <Compile Include="PipeExtensions.cs" />
