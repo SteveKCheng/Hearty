@@ -1007,7 +1007,37 @@ namespace JobBank.Server
         private readonly ClientJobQueue _queue;
         private readonly PromiseId _promiseId;
         private readonly IPromiseListBuilder _resultBuilder;
-        private readonly CancellationToken _jobCancelToken;
+
+        /// <summary>
+        /// Provides the cancellation token for all micro jobs
+        /// spawned from this macro job.
+        /// </summary>
+        /// <remarks>
+        /// This token allows the micro jobs to be cancelled along
+        /// with this macro job when only this macro job is to be
+        /// cancelled, even if the cancellation token passed externally
+        /// is linked to other operations.
+        /// </remarks>
+        private CancellationSourcePool.Use _rentedCancellationSource;
+
+        /// <summary>
+        /// Links the cancellation token passed in the constructor
+        /// into <see cref="_rentedCancellationSource" />.
+        /// </summary>
+        private CancellationTokenRegistration _cancellationRegistration;
+
+        /// <summary>
+        /// Flagged to non-zero as soon as <see cref="GetAsyncEnumerator" />
+        /// is called, to disallow multiple calls.
+        /// </summary>
+        /// <remarks>
+        /// Enumeration of micro jobs can only be done once per instance
+        /// of this class, because the jobs involve registrations that have
+        /// to be accessed outside of the enumerator and cleaned up after
+        /// the jobs finish executing.  Obviously, these registrations
+        /// cannot be scoped to the enumerator instance.
+        /// </remarks>
+        private int _jobStarted;
 
         /// <summary>
         /// Construct the macro job message.
@@ -1053,15 +1083,32 @@ namespace JobBank.Server
             _queue = queue;
             _promiseId = promiseId;
             _resultBuilder = resultBuilder;
-            _jobCancelToken = cancellationToken;
+            _rentedCancellationSource = CancellationSourcePool.Rent();
+
+            _cancellationRegistration = cancellationToken.Register(
+                static s => Unsafe.As<MacroJobMessage>(s!).Cancel(),
+                this);
+        }
+
+        public void Cancel()
+        {
+            _rentedCancellationSource.Source?.Cancel();
         }
 
         /// <inheritdoc cref="IAsyncEnumerable{T}.GetAsyncEnumerator" />
         public async IAsyncEnumerator<JobMessage>
             GetAsyncEnumerator(CancellationToken cancellationToken = default)
         {
+            if (Interlocked.Exchange(ref _jobStarted, 1) != 0)
+            {
+                throw new NotSupportedException(
+                    "Enumerator for MacroJobMessage may not be retrieved " +
+                    "more than once. ");
+            }
+
             int count = 0;
             Exception? exception = null;
+            CancellationToken jobCancelToken = _rentedCancellationSource.Token;
 
             // Whether an exception indicates cancellation from the token
             // passed into this enumerator.
@@ -1082,7 +1129,7 @@ namespace JobBank.Server
                 if (_resultBuilder.IsComplete)
                     yield break;
 
-                if (!_jobCancelToken.IsCancellationRequested)
+                if (!jobCancelToken.IsCancellationRequested)
                     enumerator = _expansion.GetAsyncEnumerator(cancellationToken);
             }
             catch (Exception e) when (!IsLocalCancellation(e, cancellationToken))
@@ -1098,9 +1145,7 @@ namespace JobBank.Server
 
                     try
                     {
-                        cancellationToken.ThrowIfCancellationRequested();
-
-                        if (_jobCancelToken.IsCancellationRequested)
+                        if (jobCancelToken.IsCancellationRequested)
                             break;
 
                         // Stop generating job messages if another producer
@@ -1109,9 +1154,7 @@ namespace JobBank.Server
                             !await enumerator.MoveNextAsync().ConfigureAwait(false))
                             break;
 
-                        cancellationToken.ThrowIfCancellationRequested();
-
-                        if (_jobCancelToken.IsCancellationRequested)
+                        if (jobCancelToken.IsCancellationRequested)
                             break;
 
                         var (promiseRetriever, input) = enumerator.Current;
@@ -1120,7 +1163,7 @@ namespace JobBank.Server
                                         _queue.SchedulingAccount,
                                         promiseRetriever,
                                         input,
-                                        _jobCancelToken,
+                                        jobCancelToken,
                                         out var promise);
 
                         // Add the new member to the result sequence.
@@ -1150,13 +1193,19 @@ namespace JobBank.Server
                 }
             }
 
-            if (_jobCancelToken.IsCancellationRequested && exception is null)
+            if (jobCancelToken.IsCancellationRequested && exception is null)
             {
+                // Do not need to block waiting for our callback to complete
+                // because cancellation source has already been triggered,
+                // and it cannot be returned to the pool anyway.
+                _cancellationRegistration.Unregister();
+                _cancellationRegistration = default;
+
                 // Complete _resultBuilder with the cancellation exception
                 // only if this producer is the last to cancel.
                 if (_jobScheduling.UnregisterMacroJob(_promiseId, toCancel: true))
                 {
-                    exception = new OperationCanceledException(_jobCancelToken);
+                    exception = new OperationCanceledException(jobCancelToken);
                     _resultBuilder.TryComplete(count, exception);
                 }
             }
@@ -1184,6 +1233,17 @@ namespace JobBank.Server
             {
                 await _resultBuilder.WaitForAllPromisesAsync()
                                     .ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                _cancellationRegistration.Dispose();
+                _cancellationRegistration = default;
+
+                _rentedCancellationSource.Dispose();
             }
             catch
             {
