@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 
 namespace JobBank.Server
 {
@@ -63,8 +64,14 @@ namespace JobBank.Server
         /// by any producer.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// This property may be consulted to stop a producer
         /// once another producer has already terminated the list.
+        /// </para>
+        /// <para>
+        /// This property may return false even after <see cref="TryComplete" />
+        /// has been called if completion is asynchronous.
+        /// </para>
         /// </remarks>
         bool IsComplete { get; }
 
@@ -72,7 +79,31 @@ namespace JobBank.Server
         /// Whether this list being built has been terminated by
         /// cancellation.
         /// </summary>
+        /// <remarks>
+        /// The value of this property may not be fixed 
+        /// until <see cref="IsComplete" /> is true.
+        /// </remarks>
         bool IsCancelled { get; }
+
+        /// <summary>
+        /// Wait asynchronously until the list is terminated
+        /// and all promises have completed.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// If the list is terminated with an associated exception,
+        /// then the returned task will be faulted with that exception.
+        /// </para>
+        /// <para>
+        /// The returned task may not complete even after 
+        /// <see cref="TryComplete" />
+        /// when any promise that had been set earlier by
+        /// <see cref="SetMember" /> has not yet completed.
+        /// This task can be waited upon before executing clean-up
+        /// actions.
+        /// </para>
+        /// </remarks>
+        ValueTask WaitForAllPromisesAsync();
 
         /// <summary>
         /// Get the object that can be used to read what has

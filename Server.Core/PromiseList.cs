@@ -58,7 +58,10 @@ namespace JobBank.Server
         bool IPromiseListBuilder.IsComplete => _promiseIds.IsComplete;
 
         bool IPromiseListBuilder.IsCancelled =>
-            _promiseIds.IsComplete && _promiseIds.Exception is OperationCanceledException;
+            _completionException is OperationCanceledException;
+
+        ValueTask IPromiseListBuilder.WaitForAllPromisesAsync() 
+            => new ValueTask(_promiseIds.Completion);
 
         bool IPromiseListBuilder.TryComplete(int count, Exception? exception)
         {
