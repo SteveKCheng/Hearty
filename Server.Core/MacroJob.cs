@@ -64,7 +64,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>, IDisposabl
     /// <summary>
     /// The macro job that may be shared with other instances of this class.
     /// </summary>
-    private readonly MacroJob _master;
+    public MacroJob Source { get; }
 
     /// <summary>
     /// Provides the cancellation token for all micro jobs
@@ -122,7 +122,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>, IDisposabl
     /// </para>
     /// <para>
     /// This variable is also flagged to non-zero (true) 
-    /// when <see cref="_master" /> is already cancelled before
+    /// when <see cref="Source" /> is already cancelled before
     /// this instance can register itself.
     /// </para>
     /// </remarks>
@@ -137,6 +137,9 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>, IDisposabl
     /// <summary>
     /// Construct the macro job message.
     /// </summary>
+    /// <param name="source">
+    /// The macro job that this message should be attached to.
+    /// </param>
     /// <param name="queue">
     /// The job queue that micro jobs will be pushed into.
     /// </param>
@@ -147,16 +150,16 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>, IDisposabl
     /// and micro jobs cannot be cancelled independently
     /// of one another.
     /// </param>
-    internal MacroJobMessage(MacroJob master,
+    internal MacroJobMessage(MacroJob source,
                              ClientJobQueue queue,
                              CancellationToken cancellationToken)
     {
-        _master = master;
+        Source = source;
         _queue = queue;
         _clientCancellationToken = cancellationToken;
 
         _listLinks = new(this);
-        _master.AddChild(this);
+        _isInvalid = Source.AddParticipant(this) ? 0 : 1;
     }
 
     public void Cancel(bool background)
@@ -197,8 +200,8 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>, IDisposabl
 
         var jobCancelToken = new CancellationToken(canceled: true);
 
-        JobSchedulingSystem jobScheduling = _master.JobScheduling;
-        IPromiseListBuilder resultBuilder = _master.ResultBuilder;
+        JobSchedulingSystem jobScheduling = Source.JobScheduling;
+        IPromiseListBuilder resultBuilder = Source.ResultBuilder;
 
         // Whether an exception indicates cancellation from the token
         // passed into this enumerator.
@@ -218,7 +221,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>, IDisposabl
             // Do not do anything if another producer has already completed.
             if (resultBuilder.IsComplete)
             {
-                _master.RemoveChild(this);
+                Source.RemoveParticipant(this);
                 yield break;
             }
 
@@ -243,7 +246,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>, IDisposabl
             }
 
             if (!jobCancelToken.IsCancellationRequested)
-                enumerator = _master.Expansion.GetAsyncEnumerator(cancellationToken);
+                enumerator = Source.Expansion.GetAsyncEnumerator(cancellationToken);
         }
         catch (Exception e) when (!IsLocalCancellation(e, cancellationToken))
         {
@@ -313,8 +316,15 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>, IDisposabl
             _clientCancellationRegistration = default;
 
             // Complete resultBuilder with the cancellation exception
-            // only if this producer is the last to cancel.
-            if (_master.RemoveChild(this))
+            // only if this producer is the only one remaining.
+            //
+            // Note that the reference count behind BasicCleanUp is not
+            // decremented until this point.  So, it is legal that all
+            // participants have been requested to cancel, but before
+            // they all process their cancellations to this point,
+            // another participant can add itself and "resurrect" the
+            // macro job.
+            if (Source.RemoveParticipant(this))
             {
                 // Report the client's token if it cancelled
                 if (_clientCancellationToken.IsCancellationRequested)
@@ -341,7 +351,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>, IDisposabl
     {
         try
         {
-            await _master.ResultBuilder.WaitForAllPromisesAsync()
+            await Source.ResultBuilder.WaitForAllPromisesAsync()
                                        .ConfigureAwait(false);
         }
         catch
@@ -370,7 +380,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>, IDisposabl
         {
         }
 
-        _master.RemoveChild(this);
+        Source.RemoveParticipant(this);
     }
 
     /// <summary>
@@ -386,7 +396,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>, IDisposabl
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _isInvalid, 1) == 0)
-            _master.RemoveChild(this);
+            Source.RemoveParticipant(this);
     }
 }
 
@@ -401,7 +411,7 @@ internal sealed class MacroJob
     public readonly PromiseId PromiseId;
     public readonly MacroJobExpansion Expansion;
 
-    private MacroJobMessage? _children;
+    private MacroJobMessage? _participants;
     private int _count;
 
     /// <summary>
@@ -436,40 +446,58 @@ internal sealed class MacroJob
         ResultBuilder = resultBuilder;
         PromiseId = promiseId;
         Expansion = expansion;
-
-        _count = 1;
     }
 
-    internal bool Reserve()
+    /// <summary>
+    /// Register a participant from this (shared) macro job.
+    /// </summary>
+    /// <remarks>
+    /// If this method returns true, the participant
+    /// will have been added to <see cref="_participants" />,
+    /// and <see cref="_count" /> will be incremented by one.
+    /// </remarks>
+    /// <returns>
+    /// True if the participant has been successfully added;
+    /// false if all other participants have cancelled and 
+    /// this instance is no longer valid to start executing
+    /// the (shared) macro job.
+    /// </returns>
+    internal bool AddParticipant(MacroJobMessage message)
     {
         lock (this)
         {
+            MacroJobLinks.Append(message, ref _participants);
+
             var count = _count;
-            if (count <= 0)
+            if (count < 0)
                 return false;
             _count = ++count;
-            return true;
         }
+
+        return true;
     }
 
-    internal void AddChild(MacroJobMessage child)
-    {
-        lock (this)
-        {
-            MacroJobLinks.Append(child, ref _children);
-        }
-    }
-
-    internal bool RemoveChild(MacroJobMessage? child)
+    /// <summary>
+    /// Unregister a participant from this (shared) macro job.
+    /// </summary>
+    /// <remarks>
+    /// It is removed from <see cref="_participants" />,
+    /// and <see cref="_count" /> is decremented by one.
+    /// </remarks>
+    /// <returns>
+    /// True if the participant being removed 
+    /// is the last for this (shared) macro job.
+    /// </returns>
+    internal bool RemoveParticipant(MacroJobMessage message)
     {
         bool dead;
 
         lock (this)
         {
-            int remaining = --_count;
+            MacroJobLinks.Remove(message, ref _participants);
+            int remaining = _count - 1;
             dead = (remaining <= 0);
-            if (child is not null)
-                MacroJobLinks.Remove(child, ref _children);
+            _count = dead ? -1 : remaining;
         }
 
         if (dead)

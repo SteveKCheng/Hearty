@@ -672,13 +672,15 @@ namespace JobBank.Server
 
             var promise = EnsureNonNullPromise(promiseRetriever.Invoke(work));
 
-            MacroJob? macroJob;
+            MacroJobMessage? message;
 
             // Retry loop for concurrently cancelled promises
-            while ((macroJob = TryRegisterMacroJob(promise, 
-                                                   builderFactory, 
-                                                   expansion,
-                                                   out isNewJob)) is null && isNewJob)
+            while ((message = TryRegisterMacroJob(queue,
+                                                  promise, 
+                                                  builderFactory, 
+                                                  expansion,
+                                                  cancellationToken,
+                                                  out isNewJob)) is null && isNewJob)
             {
                 // Like in RegisterJobMessage, do not take locks on
                 // _macroPromises while invoking this callback function.
@@ -687,31 +689,24 @@ namespace JobBank.Server
                 VerifyPromiseIsDifferent(promise, oldPromiseId);
             }
 
-            // A non-null MacroJob means there may be something to enqueue,
+            // A non-null message means there may be something to enqueue,
             // because it has not finished yet.
-            if (macroJob is not null)
+            if (message is not null)
             {
                 bool toEnqueue = true;
                 if (isNewJob)
                 {
                     // Need to set the result builder into the promise for a new job
                     toEnqueue = promise.TryAwaitAndPostResult(
-                                        ValueTask.FromResult(macroJob.ResultBuilder.Output),
+                                        ValueTask.FromResult(
+                                            message.Source.ResultBuilder.Output),
                                         _exceptionTranslator);
                 }
 
                 if (toEnqueue)
-                {
-                    var message = new MacroJobMessage(macroJob,
-                                                      queue,
-                                                      cancellationToken);
-
                     queue.Enqueue(message);
-                }
                 else
-                {
-                    macroJob.RemoveChild(child: null);
-                }
+                    message.Dispose();
             }
 
             return promise;
@@ -720,35 +715,40 @@ namespace JobBank.Server
         /// <summary>
         /// One iteration in the retry loop of <see cref="PushMacroJobCore" />.
         /// </summary>
-        private MacroJob? TryRegisterMacroJob(Promise promise,
-                                              PromiseListBuilderFactory builderFactory,
-                                              MacroJobExpansion expansion,
-                                              out bool isNewJob)
+        private MacroJobMessage? TryRegisterMacroJob(
+                                    ClientJobQueue queue,
+                                    Promise promise,
+                                    PromiseListBuilderFactory builderFactory,
+                                    MacroJobExpansion expansion,
+                                    CancellationToken cancellationToken,
+                                    out bool isNewJob)
         {
             // This code is separated into a local function to avoid
             // "goto" for re-doing operations due to concurrency conflict.
-            static MacroJob? ProcessExistingEntry(MacroJob entry,
-                                                  out bool isNewJob)
+            static MacroJobMessage? ProcessExistingEntry(MacroJob entry,
+                                                         ClientJobQueue queue,
+                                                         CancellationToken cancellationToken,
+                                                         out bool isNewJob)
             {
-                if (entry.ResultBuilder.IsCancelled)
+                var message = new MacroJobMessage(entry, queue, cancellationToken);
+                if (message.IsValid)
+                {
+                    isNewJob = false;
+                    return message;
+                }
+                else if (entry.ResultBuilder.IsCancelled)
                 {
                     // Cannot re-use existing result builder because
                     // it has been cancelled.
                     isNewJob = true;
                     return null;
                 }
-                else if (entry.ResultBuilder.IsComplete)
+                else
                 {
                     // No need to register any job if sharing an existing
                     // promise and the results builder is already complete.
                     isNewJob = false;
                     return null;
-                }
-                else
-                {
-                    entry.Reserve();
-                    isNewJob = false;
-                    return entry;
                 }
             }
 
@@ -761,7 +761,12 @@ namespace JobBank.Server
 
                 // Promise is already registered.
                 if (!Unsafe.IsNullRef(ref entry))
-                    return ProcessExistingEntry(entry!, out isNewJob);
+                {
+                    return ProcessExistingEntry(entry!, 
+                                                queue, 
+                                                cancellationToken, 
+                                                out isNewJob);
+                }
             }
 
             // The usual case: the promise is not already registered.
@@ -784,13 +789,19 @@ namespace JobBank.Server
                 // Restart as if it had already existed earlier,
                 // and discard resultBuilder.
                 if (exists)
-                    return ProcessExistingEntry(newEntry!, out isNewJob);
+                {
+                    return ProcessExistingEntry(newEntry!,
+                                                queue,
+                                                cancellationToken,
+                                                out isNewJob);
+                }
 
                 // Populate the new entry.
                 var macroJob = new MacroJob(this, resultBuilder, promiseId, expansion);
+                var message = new MacroJobMessage(macroJob, queue, cancellationToken);
                 newEntry = macroJob;
                 isNewJob = true;
-                return macroJob;
+                return message;
             }
         }
 
