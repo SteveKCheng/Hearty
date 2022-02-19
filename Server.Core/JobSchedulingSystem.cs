@@ -723,9 +723,23 @@ namespace JobBank.Server
                                     CancellationToken cancellationToken,
                                     out bool isNewJob)
         {
+            // Can re-use existing promise without creating a new job
+            // when its output is completed without a transient result.
+            static bool HasGoodCompletedOutput(PromiseData? existingOutput)
+                => existingOutput is not null &&
+                   existingOutput.IsComplete &&
+                   !existingOutput.IsTransient;
+
+            if (HasGoodCompletedOutput(promise.ResultOutput))
+            {
+                isNewJob = false;
+                return null;
+            }
+
             // This code is separated into a local function to avoid
             // "goto" for re-doing operations due to concurrency conflict.
             static MacroJobMessage? ProcessExistingEntry(MacroJob entry,
+                                                         PromiseData? existingOutput,
                                                          ClientJobQueue queue,
                                                          CancellationToken cancellationToken,
                                                          out bool isNewJob)
@@ -736,18 +750,10 @@ namespace JobBank.Server
                     isNewJob = false;
                     return message;
                 }
-                else if (entry.ResultBuilder.IsCancelled)
-                {
-                    // Cannot re-use existing result builder because
-                    // it has been cancelled.
-                    isNewJob = true;
-                    return null;
-                }
                 else
                 {
-                    // No need to register any job if sharing an existing
-                    // promise and the results builder is already complete.
-                    isNewJob = false;
+                    // Must create a new job when existing promise cannot be re-used
+                    isNewJob = !HasGoodCompletedOutput(existingOutput);
                     return null;
                 }
             }
@@ -762,7 +768,8 @@ namespace JobBank.Server
                 // Promise is already registered.
                 if (!Unsafe.IsNullRef(ref entry))
                 {
-                    return ProcessExistingEntry(entry!, 
+                    return ProcessExistingEntry(entry!,
+                                                promise.ResultOutput,
                                                 queue, 
                                                 cancellationToken, 
                                                 out isNewJob);
@@ -791,6 +798,7 @@ namespace JobBank.Server
                 if (exists)
                 {
                     return ProcessExistingEntry(newEntry!,
+                                                promise.ResultOutput,
                                                 queue,
                                                 cancellationToken,
                                                 out isNewJob);

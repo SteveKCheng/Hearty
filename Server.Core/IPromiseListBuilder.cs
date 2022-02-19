@@ -66,7 +66,8 @@ namespace JobBank.Server
         /// <remarks>
         /// <para>
         /// This property may be consulted to stop a producer
-        /// once another producer has already terminated the list.
+        /// early once another producer has already terminated 
+        /// the list, to avoid doing useless work.
         /// </para>
         /// <para>
         /// This property may return false even after <see cref="TryComplete" />
@@ -74,16 +75,6 @@ namespace JobBank.Server
         /// </para>
         /// </remarks>
         bool IsComplete { get; }
-
-        /// <summary>
-        /// Whether this list being built has been terminated by
-        /// cancellation.
-        /// </summary>
-        /// <remarks>
-        /// The value of this property may not be fixed 
-        /// until <see cref="IsComplete" /> is true.
-        /// </remarks>
-        bool IsCancelled { get; }
 
         /// <summary>
         /// Wait asynchronously until the list is terminated

@@ -289,7 +289,7 @@ namespace JobBank.Server
         /// payloads, possibly with a distinguished content type.
         /// </para>
         /// </remarks>
-        public virtual bool IsFailure { get => false; }
+        public virtual bool IsFailure => false;
 
         /// <summary>
         /// Whether this data is transient result that should be 
@@ -304,5 +304,11 @@ namespace JobBank.Server
         /// as transient as well.
         /// </remarks>
         public virtual bool IsTransient => false;
+
+        /// <summary>
+        /// True if this instance holds data in its final form;
+        /// false if its data is partial.
+        /// </summary>
+        public virtual bool IsComplete => true;
     }
 }

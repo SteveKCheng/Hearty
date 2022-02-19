@@ -57,9 +57,6 @@ namespace JobBank.Server
 
         bool IPromiseListBuilder.IsComplete => _promiseIds.IsComplete;
 
-        bool IPromiseListBuilder.IsCancelled =>
-            _completionException is OperationCanceledException;
-
         ValueTask IPromiseListBuilder.WaitForAllPromisesAsync() 
             => new ValueTask(_promiseIds.Completion);
 
@@ -271,6 +268,16 @@ namespace JobBank.Server
         {
             _promiseStorage = promiseStorage;
         }
+
+        /// <inheritdoc />
+        public override bool IsComplete => _promiseIds.IsComplete;
+
+        /// <inheritdoc />
+        public override bool IsFailure => _promiseIds.Exception is not null;
+
+        /// <inheritdoc />
+        public override bool IsTransient 
+            => _promiseIds.Exception is OperationCanceledException;
 
         /// <inheritdoc />
         public override ValueTask<Stream> GetByteStreamAsync(int format, CancellationToken cancellationToken)
