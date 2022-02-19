@@ -8,7 +8,7 @@ namespace JobBank.Scheduling
     /// <summary>
     /// Extension methods dealing with cancellation.
     /// </summary>
-    internal static class CancellationExtensions
+    public static class CancellationExtensions
     {
         /// <summary>
         /// Triggers cancellation as a background task, so that
