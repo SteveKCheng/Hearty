@@ -131,7 +131,11 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
 
     public void Cancel()
     {
-        _rentedCancellationSource.Source?.Cancel();
+        lock (this)
+        {
+            // Lock against concurrent disposal in CleanUpAsync
+            _rentedCancellationSource.Source?.Cancel();
+        }
     }
 
     /// <inheritdoc cref="IAsyncEnumerable{T}.GetAsyncEnumerator" />
@@ -278,10 +282,16 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
 
         try
         {
-            _cancellationRegistration.Dispose();
+            // We do not need to block on unregistering, because
+            // the Cancel method already locks to prevent the
+            // cancellation source from going away concurrently.
+            _cancellationRegistration.Unregister();
             _cancellationRegistration = default;
 
-            _rentedCancellationSource.Dispose();
+            lock (this)
+            {
+                _rentedCancellationSource.Dispose();
+            }
         }
         catch
         {
