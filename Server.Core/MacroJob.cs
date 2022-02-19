@@ -135,6 +135,13 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>, IDisposabl
     public bool IsValid => (_isInvalid == 0);
 
     /// <summary>
+    /// If true, the client's request needs to be unregistered 
+    /// from <see cref="JobSchedulingSystem" /> when the macro
+    /// job finishes.
+    /// </summary>
+    public bool IsTrackingClientRequest { get; set; }
+
+    /// <summary>
     /// Construct the macro job message.
     /// </summary>
     /// <param name="source">
@@ -221,7 +228,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>, IDisposabl
             // Do not do anything if another producer has already completed.
             if (resultBuilder.IsComplete)
             {
-                Source.RemoveParticipant(this);
+                BasicCleanUp();
                 yield break;
             }
 
@@ -309,12 +316,6 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>, IDisposabl
 
         if (jobCancelToken.IsCancellationRequested && exception is null)
         {
-            // Do not need to block waiting for our callback to complete
-            // because cancellation source has already been triggered,
-            // and it cannot be returned to the pool anyway.
-            _clientCancellationRegistration.Unregister();
-            _clientCancellationRegistration = default;
-
             // Complete resultBuilder with the cancellation exception
             // only if this producer is the only one remaining.
             //
@@ -324,7 +325,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>, IDisposabl
             // they all process their cancellations to this point,
             // another participant can add itself and "resurrect" the
             // macro job.
-            if (Source.RemoveParticipant(this))
+            if (BasicCleanUp())
             {
                 // Report the client's token if it cancelled
                 if (_clientCancellationToken.IsCancellationRequested)
@@ -339,15 +340,41 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>, IDisposabl
             // When this producers finishes successfully without
             // job cancellation, complete resultBuilder.
             resultBuilder.TryComplete(count, exception);
-            _ = CleanUpAsync();
+            _ = FinishAsync();
         }
     }
 
     /// <summary>
-    /// Wait for all promises to complete before executing successful
-    /// clean-up action.
+    /// Unconditional synchronous clean-up action after this message
+    /// finishes executing.
     /// </summary>
-    private async Task CleanUpAsync()
+    /// <remarks>
+    /// This method relies on the caller guarding it from being
+    /// called more than once by the atomic variable 
+    /// <see cref="_isInvalid" />.
+    /// </remarks>
+    /// <returns>
+    /// True if this participant is the last for the (shared) macro job.
+    /// </returns>
+    private bool BasicCleanUp()
+    {
+        // We do not need to block on unregistering, because
+        // the Cancel method already locks to prevent the
+        // cancellation source from going away concurrently.
+        _clientCancellationRegistration.Unregister();
+        _clientCancellationRegistration = default;
+
+        if (IsTrackingClientRequest)
+            Source.JobScheduling.UnregisterClientRequest(Source.PromiseId, _queue);
+
+        return Source.RemoveParticipant(this);
+    }
+
+    /// <summary>
+    /// Wait for all promises to complete before executing 
+    /// clean-up action, when this message has not been cancelled.
+    /// </summary>
+    private async Task FinishAsync()
     {
         try
         {
@@ -360,11 +387,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>, IDisposabl
 
         try
         {
-            // We do not need to block on unregistering, because
-            // the Cancel method already locks to prevent the
-            // cancellation source from going away concurrently.
-            _clientCancellationRegistration.Unregister();
-            _clientCancellationRegistration = default;
+            BasicCleanUp();
 
             CancellationSourcePool.Use rentedCancellationSource;
 
@@ -379,8 +402,6 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>, IDisposabl
         catch
         {
         }
-
-        Source.RemoveParticipant(this);
     }
 
     /// <summary>
@@ -396,7 +417,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>, IDisposabl
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _isInvalid, 1) == 0)
-            Source.RemoveParticipant(this);
+            BasicCleanUp();
     }
 }
 

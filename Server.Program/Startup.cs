@@ -201,7 +201,7 @@ namespace JobBank.Server.Program
             });
 
             jobScheduling.PushMacroJobAndOwnCancellation(
-                _dummyQueueOwner, 4, static w => w.Promise! ?? throw new ArgumentNullException(), 
+                _dummyQueueOwner, 5, static w => w.Promise! ?? throw new ArgumentNullException(), 
                 new PromisedWork(request) { Promise = promise }, 
                 _ => new PromiseList(input.Storage),
                 AsAsyncEnumerable(microJobs));
