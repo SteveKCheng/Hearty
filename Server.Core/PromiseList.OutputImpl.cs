@@ -84,7 +84,6 @@ public partial class PromiseList
                 bool isCancellation = exception is OperationCanceledException;
                 string text = isCancellation ? "<CANCELLED>\r\n" : "<FAILED>\r\n";
                 numBytes = (int)writer.WriteUtf8String(text);
-                writer.Advance(numBytes);
             }
 
             return ValueTask.FromResult(numBytes);
@@ -144,7 +143,6 @@ public partial class PromiseList
                 bool isCancellation = exception is OperationCanceledException;
                 string text = isCancellation ? "<CANCELLED>\r\n" : "<FAILED>\r\n";
                 numBytes += (int)writer.WriteUtf8String(text);
-                writer.Advance(numBytes);
             }
 
             return ValueTask.FromResult(numBytes);

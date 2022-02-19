@@ -51,12 +51,14 @@ namespace JobBank.Server
         /// <summary>
         /// Write text in UTF-8 encoding.
         /// </summary>
-        /// <param name="destination">The output destination. </param>
+        /// <param name="destination">The output destination. 
+        /// It is advanced by the number of bytes written.
+        /// </param>
         /// <param name="text">The text to write.  It should
         /// be short, as there is no way this method can
         /// flush buffers to re-use them. </param>
         /// <returns>
-        /// The number of bytes written.
+        /// The number of bytes written.  
         /// </returns>
         public static long WriteUtf8String(this IBufferWriter<byte> destination, string text)
             => Encoding.UTF8.GetBytes(text, destination);
