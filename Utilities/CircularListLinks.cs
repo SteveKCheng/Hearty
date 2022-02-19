@@ -62,10 +62,15 @@ namespace JobBank.Utilities
     /// <typeparam name="TLinksAccessor">
     /// Retrieves the interior reference to this structure for any
     /// potential list node.  This type is expected to be private.
+    /// It cannot have instance data as its retrieval method needs
+    /// to be called from the static methods defined in this structure.
+    /// Thus it is necessarily constrained to be a value type,
+    /// and a default-initialized instance is used to call 
+    /// its interface method.
     /// </typeparam>
     public struct CircularListLinks<T, TLinksAccessor>
         where T : class
-        where TLinksAccessor : IInteriorStruct<T, CircularListLinks<T, TLinksAccessor>>
+        where TLinksAccessor : struct, IInteriorStruct<T, CircularListLinks<T, TLinksAccessor>>
     {
         /// <summary>
         /// Backing field for <see cref="Previous"/>.
