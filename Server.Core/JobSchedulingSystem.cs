@@ -620,16 +620,6 @@ namespace JobBank.Server
         #region Macro jobs
 
         /// <summary>
-        /// Type of value for the <see cref="_macroPromises" /> dictionary.
-        /// </summary>
-        private struct MacroPromisesEntry
-        {
-            public IPromiseListBuilder ResultBuilder;
-            public int ProducerCount;
-            public bool OwnsCancellation;
-        }
-
-        /// <summary>
         /// Cached output for macro jobs.
         /// </summary>
         /// <remarks>
@@ -641,7 +631,7 @@ namespace JobBank.Server
         /// a macro job does not cancel the promise output unless there
         /// are no more macro jobs sharing the same output object.
         /// </remarks>
-        private readonly Dictionary<PromiseId, MacroPromisesEntry>
+        private readonly Dictionary<PromiseId, MacroJob>
             _macroPromises = new();
 
         /// <summary>
@@ -651,49 +641,16 @@ namespace JobBank.Server
         /// as passed to <see cref="PushMacroJob" />, which registered
         /// it.
         /// </param>
-        /// <param name="toCancel">
-        /// If true, this method is called to process a job cancellation,
-        /// and it would not remove the registration entry if the same
-        /// output is being written by other non-cancelled macro job
-        /// instances.  If false, the registration entry is unconditionally
-        /// removed.
-        /// </param>
         /// <returns>
         /// Whether the registration entry existed and has been removed.
         /// </returns>
-        internal bool UnregisterMacroJob(PromiseId promiseId, bool toCancel)
+        internal bool UnregisterMacroJob(PromiseId promiseId)
         {
-            bool RemoveMainEntry(PromiseId promiseId, 
-                                 bool toCancel, 
-                                 out bool unregisterCancellation)
+            lock (_macroPromises)
             {
-                unregisterCancellation = false;
-
-                lock (_macroPromises)
-                {
-                    if (toCancel)
-                    {
-                        ref var entry = ref CollectionsMarshal.GetValueRefOrNullRef(
-                                            _macroPromises, promiseId);
-
-                        // Do not remove the entry from the dictionary if the
-                        // same output is being written by another macro job instance.
-                        if (Unsafe.IsNullRef(ref entry) || --entry.ProducerCount > 0)
-                            return false;
-                    }
-
-                    bool isRemoved = _macroPromises.Remove(promiseId, out var removedEntry);
-                    unregisterCancellation = isRemoved && removedEntry.OwnsCancellation;
-                    return isRemoved;
-                }
+                bool isRemoved = _macroPromises.Remove(promiseId);
+                return isRemoved;
             }
-
-            bool isRemoved = RemoveMainEntry(promiseId, toCancel, 
-                                             out bool unregisterCancellation);
-            if (unregisterCancellation)
-                UnregisterCancellationUse(promiseId);
-
-            return isRemoved;
         }
 
         /// <summary>
@@ -707,8 +664,7 @@ namespace JobBank.Server
                                          PromiseListBuilderFactory builderFactory,
                                          MacroJobExpansion expansion,
                                          bool ownsCancellation,
-                                         CancellationToken cancellationToken,
-                                         out IPromiseListBuilder? resultBuilder)
+                                         CancellationToken cancellationToken)
         {
             var queue = PriorityClasses[priority].GetOrAdd(owner);
 
@@ -716,11 +672,13 @@ namespace JobBank.Server
 
             var promise = EnsureNonNullPromise(promiseRetriever.Invoke(work));
 
+            MacroJob? macroJob;
+
             // Retry loop for concurrently cancelled promises
-            while ((resultBuilder = TryRegisterMacroJob(promise, 
-                                       builderFactory, 
-                                       ownsCancellation, 
-                                       out isNewJob)) is null && isNewJob)
+            while ((macroJob = TryRegisterMacroJob(promise, 
+                                                   builderFactory, 
+                                                   expansion,
+                                                   out isNewJob)) is null && isNewJob)
             {
                 // Like in RegisterJobMessage, do not take locks on
                 // _macroPromises while invoking this callback function.
@@ -729,38 +687,30 @@ namespace JobBank.Server
                 VerifyPromiseIsDifferent(promise, oldPromiseId);
             }
 
-            // A non-null resultBuilder means there may be something to enqueue,
+            // A non-null MacroJob means there may be something to enqueue,
             // because it has not finished yet.
-            if (resultBuilder is not null)
+            if (macroJob is not null)
             {
                 bool toEnqueue = true;
                 if (isNewJob)
                 {
                     // Need to set the result builder into the promise for a new job
                     toEnqueue = promise.TryAwaitAndPostResult(
-                                        ValueTask.FromResult(resultBuilder.Output),
+                                        ValueTask.FromResult(macroJob.ResultBuilder.Output),
                                         _exceptionTranslator);
                 }
 
-                // A (shared) result builder could have raced to complete.
-                // If that happens do not enqueue anything, for efficiency.
-                toEnqueue = toEnqueue && !resultBuilder.IsComplete;
-
                 if (toEnqueue)
                 {
-                    var message = new MacroJobMessage(expansion,
-                                                      this, queue,
-                                                      promise.Id, resultBuilder,
+                    var message = new MacroJobMessage(macroJob,
+                                                      queue,
                                                       cancellationToken);
 
                     queue.Enqueue(message);
                 }
                 else
                 {
-                    // When not enqueuing, we need to undo the registration
-                    // that would have been cleaned up by MacroJobMessage.
-                    UnregisterMacroJob(promise.Id, toCancel: false);
-                    resultBuilder = null;
+                    macroJob.RemoveChild(child: null);
                 }
             }
 
@@ -770,17 +720,15 @@ namespace JobBank.Server
         /// <summary>
         /// One iteration in the retry loop of <see cref="PushMacroJobCore" />.
         /// </summary>
-        private IPromiseListBuilder? TryRegisterMacroJob(
-                                        Promise promise,
-                                        PromiseListBuilderFactory builderFactory,
-                                        bool ownsCancellation,
-                                        out bool isNewJob)
+        private MacroJob? TryRegisterMacroJob(Promise promise,
+                                              PromiseListBuilderFactory builderFactory,
+                                              MacroJobExpansion expansion,
+                                              out bool isNewJob)
         {
             // This code is separated into a local function to avoid
             // "goto" for re-doing operations due to concurrency conflict.
-            static IPromiseListBuilder? ProcessExistingEntry(ref MacroPromisesEntry entry,
-                                                             bool ownsCancellation,
-                                                             out bool isNewJob)
+            static MacroJob? ProcessExistingEntry(MacroJob entry,
+                                                  out bool isNewJob)
             {
                 if (entry.ResultBuilder.IsCancelled)
                 {
@@ -798,13 +746,9 @@ namespace JobBank.Server
                 }
                 else
                 {
-                    // Update existing entry for a shared job.
-                    var resultBuilder = entry.ResultBuilder;
-                    ++entry.ProducerCount;
-                    entry.OwnsCancellation |= ownsCancellation;
-
+                    entry.Reserve();
                     isNewJob = false;
-                    return resultBuilder;
+                    return entry;
                 }
             }
 
@@ -817,11 +761,7 @@ namespace JobBank.Server
 
                 // Promise is already registered.
                 if (!Unsafe.IsNullRef(ref entry))
-                {
-                    return ProcessExistingEntry(ref entry,
-                                                ownsCancellation,
-                                                out isNewJob);
-                }
+                    return ProcessExistingEntry(entry!, out isNewJob);
             }
 
             // The usual case: the promise is not already registered.
@@ -844,19 +784,13 @@ namespace JobBank.Server
                 // Restart as if it had already existed earlier,
                 // and discard resultBuilder.
                 if (exists)
-                {
-                    return ProcessExistingEntry(ref newEntry,
-                                                ownsCancellation,
-                                                out isNewJob);
-                }
+                    return ProcessExistingEntry(newEntry!, out isNewJob);
 
                 // Populate the new entry.
-                newEntry.ResultBuilder = resultBuilder;
-                newEntry.ProducerCount = 1;
-                newEntry.OwnsCancellation = ownsCancellation;
-
+                var macroJob = new MacroJob(this, resultBuilder, promiseId, expansion);
+                newEntry = macroJob;
                 isNewJob = true;
-                return resultBuilder;
+                return macroJob;
             }
         }
 
@@ -900,12 +834,11 @@ namespace JobBank.Server
                                     MacroJobExpansion expansion,
                                     CancellationToken cancellationToken)
         {
-            return PushMacroJobCore(owner, priority, 
-                                    promiseRetriever, work, 
+            return PushMacroJobCore(owner, priority,
+                                    promiseRetriever, work,
                                     builderFactory, expansion,
                                     ownsCancellation: false,
-                                    cancellationToken,
-                                    out _);
+                                    cancellationToken);
         }
 
         /// <summary>
@@ -944,31 +877,11 @@ namespace JobBank.Server
                                                       PromiseListBuilderFactory builderFactory,
                                                       MacroJobExpansion expansion)
         {
-            var cancellation = CancellationSourcePool.Rent();
-
-            var promise = PushMacroJobCore(owner, priority,
-                                           promiseRetriever, work,
-                                           builderFactory, expansion,
-                                           ownsCancellation: true,
-                                           cancellation.Token,
-                                           out IPromiseListBuilder? resultBuilder);
-
-            if (resultBuilder is null)
-            {
-                // resultBuilder being null means no job message was enqueued,
-                // and therefore nothing will call UnregisterCancellationUse.
-                cancellation.Dispose();
-            }
-            else
-            {
-                RegisterCancellationUse(owner, promise.Id, ref cancellation);
-
-                // Undo if the promise could have raced to complete and clean up
-                if (resultBuilder.IsComplete)
-                    UnregisterCancellationUse(promise.Id);
-            }
-
-            return promise;
+            return PushMacroJobCore(owner, priority,
+                                    promiseRetriever, work,
+                                    builderFactory, expansion,
+                                    ownsCancellation: true,
+                                    CancellationToken.None);
         }
 
         #endregion
