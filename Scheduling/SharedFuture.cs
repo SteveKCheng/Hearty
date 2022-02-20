@@ -443,36 +443,32 @@ namespace JobBank.Scheduling
         private CancellationTokenRegistration
             RegisterForCancellation(CancellationToken cancellationToken)
             => cancellationToken.UnsafeRegister(
-                static (s, t) => Unsafe.As<SharedFuture<TInput, TOutput>>(s!).OnCancel(t), 
+                static (s, t) => Unsafe.As<SharedFuture<TInput, TOutput>>(s!)
+                                       .CancelForClient(t, background: true),
                 this);
-            
-        /// <summary>
-        /// Propagates cancellation from clients' <see cref="CancellationToken" />
-        /// when all clients cancel.
-        /// </summary>
-        /// <param name="cancellationToken">
-        /// The token that had been cancelled.
-        /// </param>
-        private void OnCancel(CancellationToken cancellationToken)
+
+        /// <inheritdoc cref="IJobCancellation.CancelForClient" />
+        public bool CancelForClient(CancellationToken clientToken, 
+                                    bool background)
         {
             if (_activeCount <= 0)
-                return;
+                return false;
 
             CancellationTokenSource? cancellationSource = null;
             
             ISchedulingAccount? account = null;
             ClientData clientData = default;
-            
+            int countRemoved = 0;
+
             lock (_accountLock)
             {
                 // Ignore cancellation if the job is already finished.
                 if (_activeCount <= 0)
-                    return;
+                    return false;
 
                 var splitter = _splitter;
-                int countRemoved = 0;
 
-                if (_singleClientData.CancellationRegistration.Token == cancellationToken)
+                if (_singleClientData.CancellationRegistration.Token == clientToken)
                 {
                     countRemoved = 1;
                     clientData = _singleClientData;
@@ -482,7 +478,7 @@ namespace JobBank.Scheduling
                 else if (splitter is not null)
                 {
                     countRemoved = splitter.RemoveParticipants(
-                                    cancellationToken,
+                                    clientToken,
                                     (t, a, r) => r.CancellationRegistration.Token == t);
 
                     // Note that countRemoved == 0 may occur where the
@@ -505,94 +501,11 @@ namespace JobBank.Scheduling
             // This method does nothing if clientData has not been assigned
             // to a non-default value, not caring if account is null.
             UnregisterClient(account!, clientData);
-        }
-
-        /// <summary>
-        /// Request cancellation on behalf of a client.
-        /// </summary>
-        /// <param name="account">
-        /// Represents the client that wants to drop interest
-        /// in this job.  It is compared by reference equality
-        /// with the clients already registered to this job.
-        /// </param>
-        /// <remarks>
-        /// <para>
-        /// This method is an alternate way to request cancellation
-        /// without using a cancellation token.  For server applications
-        /// that need to honor requests from remote clients, mapping
-        /// the combination of the client identity and the job
-        /// back to <see cref="CancellationTokenSource" /> object that
-        /// created the cancellation token can be very non-trivial.
-        /// </para>
-        /// <para>
-        /// This object already holds references to 
-        /// <see cref="ISchedulingAccount" />, which are already 
-        /// representations of clients, so the functionality is easily
-        /// implemented at this level.
-        /// </para>
-        /// <para>
-        /// Note that it is also possible, and very useful,
-        /// that a <see cref="CancellationToken" /> passed to create 
-        /// the job is common to all jobs submitted by the same client.
-        /// Such a cancellation token, if triggered, would of course
-        /// cancel all jobs by the same client.  But this method that
-        /// does not rely on the cancellation token would also allow 
-        /// individual jobs to be cancelled.
-        /// </para>
-        /// </remarks>
-        /// <returns>
-        /// True if the cancellation request for <paramref name="account" /> 
-        /// has been processed succesfully.  False if this future has
-        /// completed already or if <paramref name="account" />
-        /// is not currently participating in this future.
-        /// </returns>
-        public bool CancelForClient(ISchedulingAccount account, bool background)
-        {
-            if (_activeCount <= 0)
-                return false;
-
-            CancellationTokenSource? cancellationSource = null;
-            ClientData clientData = default;
-            int countRemoved = 0;
-
-            lock (_accountLock)
-            {
-                // Ignore cancellation if the job is already finished.
-                if (_activeCount <= 0)
-                    return false;
-
-                var splitter = _splitter;
-
-                if (object.ReferenceEquals(_account, account))
-                {
-                    countRemoved = 1;
-                    clientData = _singleClientData;
-                    _singleClientData = default;
-                }
-                else if (splitter is not null)
-                {
-                    countRemoved = splitter.RemoveParticipants(account);
-                }
-
-                // Prepare to cancel outside _accountLock if all
-                // participants have been removed.
-                if ((_activeCount -= countRemoved) <= 0)
-                    cancellationSource = _cancellationSourceUse.Source;
-            }
-
-            background &= _accountingStarted;
-            cancellationSource?.CancelMaybeInBackground(background);
-
-            // This method only does anything if clientData has been
-            // assigned to a non-default value above.
-            UnregisterClient(account, clientData);
 
             return countRemoved > 0;
         }
 
-        /// <summary>
-        /// Cancel the job for all clients.
-        /// </summary>
+        /// <inheritdoc cref="IJobCancellation.Kill" />
         public void Kill(bool background)
         {
             if (_activeCount <= 0)

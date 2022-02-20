@@ -60,12 +60,18 @@ namespace JobBank.Scheduling
         /// is not stopped until those clients also request
         /// cancellation.
         /// </remarks>
-        /// <param name="account">
+        /// <param name="clientToken">
         /// Represents the client that wants to drop interest
-        /// in this job.  It is compared by reference equality
-        /// with the clients already registered to this job.
-        /// This argument is only used by implementing objects
-        /// that manage multiple clients.
+        /// in this job.  It is compared against the tokens
+        /// that have been registered for clients in the
+        /// receiver object.  Clients are keyed using a
+        /// <see cref="CancellationToken" /> 
+        /// since it can be reasonably expected to be created
+        /// by a server application any, although the token 
+        /// passed here may not necessarily be cancelled if
+        /// the token represents all of a client's operations,
+        /// but the client is only request that only this job 
+        /// be cancelled.
         /// </param>
         /// <param name="background">
         /// If true, any potentially heavy processing of the
@@ -84,7 +90,7 @@ namespace JobBank.Scheduling
         /// is not registered with this job, or the job has already
         /// been cancelled.
         /// </returns>
-        bool CancelForClient(ISchedulingAccount account, bool background);
+        bool CancelForClient(CancellationToken clientToken, bool background);
 
         /// <summary>
         /// Request termination of this job for all clients.
