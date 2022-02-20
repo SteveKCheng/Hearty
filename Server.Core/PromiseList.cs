@@ -53,7 +53,12 @@ namespace JobBank.Server
         /// <summary>
         /// The list of promise IDs after re-ordering.
         /// </summary>
-        private readonly IncrementalAsyncList<PromiseId> _promiseIds = new();
+        /// <remarks>
+        /// The integer key is the index
+        /// of the promise in the original input ordering.
+        /// </remarks>
+        private readonly IncrementalAsyncList<KeyValuePair<int, PromiseId>> 
+            _promiseIds = new();
 
         bool IPromiseListBuilder.IsComplete => _promiseIds.IsComplete;
 
@@ -164,7 +169,8 @@ namespace JobBank.Server
                 }
                 else
                 {
-                    _promiseIds.TrySetMember(_committedCount++, promise.Id);
+                    _promiseIds.TrySetMember(_committedCount++,
+                                             new(index, promise.Id));
                     outstandingPromises.Remove(index);
                 }
                     
@@ -187,8 +193,8 @@ namespace JobBank.Server
                 // Publish all transient promises at the end
                 if (t > 0)
                 {
-                    foreach (var (_, promise) in _outstandingPromises!)
-                        _promiseIds.TrySetMember(c++, promise.Id);
+                    foreach (var (index, promise) in _outstandingPromises!)
+                        _promiseIds.TrySetMember(c++, new(index, promise.Id));
                 }
 
                 _promiseIds.TryComplete(total, _completionException);
@@ -340,6 +346,7 @@ namespace JobBank.Server
                 while (true)
                 {
                     int numBytes;
+                    int ordinal;
                     PromiseId promiseId;
                     bool isValid;
 
@@ -369,7 +376,7 @@ namespace JobBank.Server
                         // that ValueTask would get abandoned when an exception
                         // is thrown, even though in this particulation implementation
                         // it would be harmless.
-                        (promiseId, isValid) = await memberTask.ConfigureAwait(false);
+                        ((ordinal, promiseId), isValid) = await memberTask.ConfigureAwait(false);
                     }
 
                     if (!isValid)
@@ -386,6 +393,7 @@ namespace JobBank.Server
 
                     numBytes = await impl.WriteItemAsync(this,
                                                          writer,
+                                                         ordinal,
                                                          promiseId,
                                                          cancellationToken)
                                          .ConfigureAwait(false);

@@ -99,6 +99,24 @@ namespace JobBank.Server
         }
 
         /// <summary>
+        /// Write out an integer in decimal, using ASCII digits, with
+        /// no separator characters.
+        /// </summary>
+        /// <param name="destination">The output destination. </param>
+        /// <param name="value">The integer to write. </param>
+        /// <returns>
+        /// The number of bytes written.
+        /// </returns>
+        public static int WriteDecimalInteger(this IBufferWriter<byte> destination,
+                                              int value)
+        {
+            var span = destination.GetSpan(16);
+            Utf8Formatter.TryFormat(value, span, out int bytesWritten);
+            destination.Advance(bytesWritten);
+            return bytesWritten;
+        }
+
+        /// <summary>
         /// Write out the textual representation of a promise ID in ASCII.
         /// </summary>
         /// <param name="destination">The output destination. </param>

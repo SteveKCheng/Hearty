@@ -24,6 +24,9 @@ public partial class PromiseList
         /// <param name="writer">
         /// Where the output goes.
         /// </param>
+        /// <param name="ordinal">
+        /// The index of the promise in the original input ordering.
+        /// </param>
         /// <param name="promiseId">
         /// Promise ID of the next item.
         /// </param>
@@ -36,6 +39,7 @@ public partial class PromiseList
         /// </returns>
         public abstract ValueTask<int> WriteItemAsync(PromiseList self,
                                                       PipeWriter writer,
+                                                      int ordinal,
                                                       PromiseId promiseId,
                                                       CancellationToken cancellationToken);
 
@@ -91,6 +95,7 @@ public partial class PromiseList
 
         public override ValueTask<int> WriteItemAsync(PromiseList self,
                                                       PipeWriter writer,
+                                                      int ordinal,
                                                       PromiseId promiseId,
                                                       CancellationToken cancellationToken)
         {
@@ -171,6 +176,7 @@ public partial class PromiseList
 
         public override async ValueTask<int> WriteItemAsync(PromiseList self,
                                                             PipeWriter writer,
+                                                            int ordinal,
                                                             PromiseId promiseId,
                                                             CancellationToken cancellationToken)
         {
@@ -191,6 +197,11 @@ public partial class PromiseList
             // bother sending this header.  It just adds inefficiency.
             //
             //   writer.WriteUtf8String("Content-Transfer-Encoding: Binary\r\n");
+
+            writer.WriteUtf8String(JobBankHttpHeaders.Ordinal);
+            writer.WriteUtf8String(": ");
+            writer.WriteDecimalInteger(ordinal);
+            writer.WriteCrLf();
 
             writer.WriteUtf8String(JobBankHttpHeaders.PromiseId);
             writer.WriteUtf8String(": ");

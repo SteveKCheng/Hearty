@@ -20,5 +20,12 @@ namespace JobBank.Common
         /// Header that reports the promise ID in the response.
         /// </summary>
         public static readonly string PromiseId = "X-Promise-Id";
+
+        /// <summary>
+        /// Header within an item in a multi-part body
+        /// that reports the index of the item in its original
+        /// ordering.
+        /// </summary>
+        public static readonly string Ordinal = "Ordinal";
     }
 }
