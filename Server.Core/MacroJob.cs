@@ -252,8 +252,10 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
                 yield break;
             }
 
-            // Rent cancellation source unless this job has already been cancelled
-            if (!_isCancelled)
+            // Rent cancellation source unless this job has already been
+            // cancelled.  When this block is not executed, jobCancelToken
+            // is in the cancelled state as initialized above.
+            if (!_isCancelled && !ClientToken.IsCancellationRequested)
             {
                 var rentedCancellationSource = CancellationSourcePool.Rent();
 
