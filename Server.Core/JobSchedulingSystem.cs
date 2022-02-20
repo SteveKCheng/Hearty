@@ -152,7 +152,7 @@ namespace JobBank.Server
             lock (_microPromises)
                 _microPromises.TryGetValue(promiseId, out future);
             if (future is not null)
-                return future.RequestCancel(queue.SchedulingAccount);
+                return future.CancelForClient(queue.SchedulingAccount, true);
 
             object? target;
             lock (_clientRequests)

@@ -75,6 +75,7 @@ namespace JobBank.Scheduling
     /// The outputs from executing the job.
     /// </typeparam>
     public class SharedFuture<TInput, TOutput> : ILaunchableJob<TInput, TOutput>
+                                               , IJobCancellation
     {
         /// <summary>
         /// The inputs to execute the job.
@@ -545,7 +546,7 @@ namespace JobBank.Scheduling
         /// completed already or if <paramref name="account" />
         /// is not currently participating in this future.
         /// </returns>
-        public bool RequestCancel(ISchedulingAccount account)
+        public bool CancelForClient(ISchedulingAccount account, bool background)
         {
             if (_activeCount <= 0)
                 return false;
@@ -579,7 +580,8 @@ namespace JobBank.Scheduling
                     cancellationSource = _cancellationSourceUse.Source;
             }
 
-            cancellationSource?.CancelMaybeInBackground(_accountingStarted);
+            background &= _accountingStarted;
+            cancellationSource?.CancelMaybeInBackground(background);
 
             // This method only does anything if clientData has been
             // assigned to a non-default value above.
@@ -591,7 +593,7 @@ namespace JobBank.Scheduling
         /// <summary>
         /// Cancel the job for all clients.
         /// </summary>
-        public void AdministrativeCancel()
+        public void Kill(bool background)
         {
             if (_activeCount <= 0)
                 return;
@@ -613,7 +615,8 @@ namespace JobBank.Scheduling
                 cancellationSource = _cancellationSourceUse.Source;
             }
 
-            cancellationSource?.CancelMaybeInBackground(_accountingStarted);
+            background &= _accountingStarted;
+            cancellationSource?.CancelMaybeInBackground(background);
         }
 
         /// <summary>

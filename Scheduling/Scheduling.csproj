@@ -16,6 +16,7 @@
     <Compile Include="AsyncExpandable.cs" />
     <Compile Include="CancellationExtensions.cs" />
     <Compile Include="DistributedWorker.cs" />
+    <Compile Include="IJobCancellation.cs" />
     <Compile Include="IRunningJob.cs" />
     <Compile Include="IDistributedWorker.cs" />
     <Compile Include="IJobWorker.cs" />
