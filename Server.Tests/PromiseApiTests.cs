@@ -94,12 +94,17 @@ namespace JobBank.Server.Tests
                                                             contentType: "application/json",
                                                             DeserializeMockPricingOutput,
                                                             default);
-            int i = 0;
-            await foreach (var item in responses)
+
+            var ordinalsSeen = new HashSet<int>();
+
+            await foreach (var (ordinal, result) in responses)
             {
-                var input = inputs[i++];
+                Assert.InRange(ordinal, 0, inputs.Count - 1);
+                Assert.True(ordinalsSeen.Add(ordinal));
+
+                var input = inputs[ordinal];
                 var expected = input.Calculate();
-                Assert.Equal(expected, item);
+                Assert.Equal(expected, result);
             }
         }
 

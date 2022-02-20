@@ -126,10 +126,11 @@ namespace JobBank.Client
             return await content.ReadAsStreamAsync().ConfigureAwait(false);
         }
 
-        public async Task<IAsyncEnumerable<T>> GetItemStreamAsync<T>(PromiseId promiseId,
-                                                                     string contentType,
-                                                                     PayloadProcessor<T> processor,
-                                                                     CancellationToken cancellationToken = default)
+        public async Task<IAsyncEnumerable<KeyValuePair<int, T>>> 
+            GetItemStreamAsync<T>(PromiseId promiseId,
+                                  string contentType,
+                                  PayloadProcessor<T> processor,
+                                  CancellationToken cancellationToken = default)
         {
             var url = $"jobs/v1/id/{promiseId}";
 
@@ -156,7 +157,7 @@ namespace JobBank.Client
             return MakeItemsAsyncEnumerable(multipartReader, processor, cancellationToken);
         }
 
-        private static async IAsyncEnumerable<T> MakeItemsAsyncEnumerable<T>(
+        private static async IAsyncEnumerable<KeyValuePair<int, T>> MakeItemsAsyncEnumerable<T>(
             MultipartReader reader, 
             PayloadProcessor<T> processor,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -165,9 +166,15 @@ namespace JobBank.Client
             while ((section = await reader.ReadNextSectionAsync(cancellationToken)
                                           .ConfigureAwait(false)) is not null)
             {
+                var ordinalString = section.Headers![JobBankHttpHeaders.Ordinal];
+                if (ordinalString.Count != 1)
+                    throw new InvalidDataException("The 'Ordinal' header is expected in an item in the multi-part message but is not found. ");
+                if (!int.TryParse(ordinalString[0], out int ordinal))
+                    throw new InvalidDataException("The 'Ordinal' header is in an item in the multi-part message is invalid. ");
+
                 T item = await processor.Invoke(section.ContentType, section.Body, cancellationToken)
                                         .ConfigureAwait(false);
-                yield return item;
+                yield return KeyValuePair.Create(ordinal, item);
             }
         }
 
