@@ -276,8 +276,9 @@ namespace JobBank.Server
         public override bool IsFailure => _promiseIds.Exception is not null;
 
         /// <inheritdoc />
-        public override bool IsTransient 
-            => _promiseIds.Exception is OperationCanceledException;
+        public override bool IsTransient
+            => _promiseIds.Exception is OperationCanceledException ||
+               _transientCount > 0;
 
         /// <inheritdoc />
         public override ValueTask<Stream> GetByteStreamAsync(int format, CancellationToken cancellationToken)
