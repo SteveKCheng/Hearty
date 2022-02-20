@@ -769,9 +769,10 @@ namespace JobBank.Server
                 {
                     queue.Enqueue(message);
                 }
-                catch
+                catch (Exception e)
                 {
-                    message.Dispose();
+                    message.DisposeWithException(e);
+                    throw;
                 }
             }
 
@@ -823,6 +824,8 @@ namespace JobBank.Server
                                            out var promise);
             if (message is not null)
             {
+                Exception? exception = null;
+
                 try
                 {
                     bool shouldEnqueue;
@@ -836,9 +839,13 @@ namespace JobBank.Server
                         message = null;
                     }
                 }
+                catch (Exception e)
+                {
+                    exception = e;
+                }
                 finally
                 {
-                    message?.Dispose();
+                    message?.DisposeWithException(exception);
                 }
             }
 

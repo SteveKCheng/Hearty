@@ -117,7 +117,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This variable is flagged to non-zero as soon as 
+    /// This variable is flagged to 1 as soon as 
     /// <see cref="GetAsyncEnumerator" />
     /// is called, to disallow multiple calls.
     /// </para>
@@ -129,9 +129,9 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
     /// cannot be scoped to the enumerator instance.
     /// </para>
     /// <para>
-    /// This variable is also flagged to non-zero (true) 
-    /// when <see cref="Source" /> is already cancelled before
-    /// this instance can register itself.
+    /// This variable is also flagged to -1
+    /// when this instance should not even start enumerating jobs
+    /// because it has been cancelled or disposed.
     /// </para>
     /// </remarks>
     private int _isInvalid;
@@ -174,7 +174,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
         ClientToken = cancellationToken;
 
         _listLinks = new(this);
-        _isInvalid = Source.AddParticipant(this) ? 0 : 1;
+        _isInvalid = Source.AddParticipant(this) ? 0 : -1;
     }
 
     public bool Cancel(bool background)
@@ -197,6 +197,11 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
         }
 
         source?.CancelMaybeInBackground(background);
+
+        // Clean up immediately if this instance has not started
+        // yet, i.e. it has not yet been de-queued.
+        Dispose();
+
         return true;
     }
 
@@ -204,11 +209,17 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
     public async IAsyncEnumerator<JobMessage>
         GetAsyncEnumerator(CancellationToken cancellationToken = default)
     {
-        if (Interlocked.Exchange(ref _isInvalid, 1) != 0)
+        int wasInvalid = Interlocked.CompareExchange(ref _isInvalid, 1, 0);
+
+        // Quit early if already disposed or cancelled
+        if (wasInvalid == -1)
+            yield break;
+
+        if (wasInvalid == 1)
         {
             throw new NotSupportedException(
-                "Enumerator for MacroJobMessage may not be retrieved " +
-                "more than once. ");
+                        "Enumerator for MacroJobMessage may not be retrieved " +
+                        "more than once. ");
         }
 
         int count = 0;
@@ -325,24 +336,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
 
         if (jobCancelToken.IsCancellationRequested && exception is null)
         {
-            // Complete resultBuilder with the cancellation exception
-            // only if this producer is the only one remaining.
-            //
-            // Note that the reference count behind BasicCleanUp is not
-            // decremented until this point.  So, it is legal that all
-            // participants have been requested to cancel, but before
-            // they all process their cancellations to this point,
-            // another participant can add itself and "resurrect" the
-            // macro job.
-            if (BasicCleanUp())
-            {
-                // Report the client's token if it cancelled
-                if (ClientToken.IsCancellationRequested)
-                    jobCancelToken = ClientToken;
-
-                exception = new OperationCanceledException(jobCancelToken);
-                resultBuilder.TryComplete(count, exception);
-            }
+            FailIfOnlyProducer(count, exception: null);
         }
         else
         {
@@ -380,6 +374,64 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
     }
 
     /// <summary>
+    /// Dispose of this message as part of backing out
+    /// operations in case of an exception.
+    /// </summary>
+    /// <param name="exception">
+    /// The exception to complete <see cref="MacroJob.ResultBuilder" />
+    /// with.  If null, this instance is assumed to have cancelled
+    /// and the exception will be taken as
+    /// <see cref="OperationCanceledException" />.
+    /// </param>
+    public void DisposeWithException(Exception? exception)
+    {
+        if (Interlocked.CompareExchange(ref _isInvalid, -1, 0) == 0)
+            FailIfOnlyProducer(count: 0, exception: null);
+    }
+
+    /// <summary>
+    /// Complete the result only if this instance is 
+    /// the only producer remaining.
+    /// </summary>
+    /// <param name="count">
+    /// Number of items emitted by this producer so far,
+    /// needed to complete <see cref="IPromiseListBuilder" />.
+    /// </param>
+    /// <param name="exception">
+    /// The exception to complete <see cref="MacroJob.ResultBuilder" />
+    /// with.  If null, this instance is assumed to have cancelled
+    /// and the exception will be taken as
+    /// <see cref="OperationCanceledException" />.
+    /// </param>
+    private void FailIfOnlyProducer(int count, Exception? exception)
+    {
+        // Note that the reference count behind BasicCleanUp is not
+        // decremented until this point.  So, it is legal that all
+        // participants have been requested to cancel, but before
+        // they all process their cancellations to this point,
+        // another participant can add itself and "resurrect" the
+        // macro job.
+        if (!BasicCleanUp())
+            return;
+
+        // Avoid creating an exception object if it would be ignored anyway
+        var resultBuilder = Source.ResultBuilder;
+        if (resultBuilder.IsComplete)
+            return;
+
+        if (exception is null)
+        {
+            var jobCancelToken = ClientToken.IsCancellationRequested
+                ? ClientToken
+                : new CancellationToken(canceled: true);
+
+            exception = new OperationCanceledException(jobCancelToken);
+        }
+
+        resultBuilder.TryComplete(count, exception);
+    }
+
+    /// <summary>
     /// Wait for all promises to complete before executing 
     /// clean-up action, when this message has not been cancelled.
     /// </summary>
@@ -388,7 +440,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
         try
         {
             await Source.ResultBuilder.WaitForAllPromisesAsync()
-                                       .ConfigureAwait(false);
+                                      .ConfigureAwait(false);
         }
         catch
         {
@@ -418,16 +470,19 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
     /// if it has not started its micro jobs yet.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This method is used to discard speculatively created instances
     /// of this class.  It has no effect when the micro jobs have
     /// already started to be enumerated, or when this instance
     /// is already disposed.
+    /// </para>
+    /// <para>
+    /// This method also sets an exception on the promise if this
+    /// instance would have been the only producer, so that it
+    /// is not stuck in an incompleted state.
+    /// </para>
     /// </remarks>
-    public void Dispose()
-    {
-        if (Interlocked.Exchange(ref _isInvalid, 1) == 0)
-            BasicCleanUp();
-    }
+    public void Dispose() => DisposeWithException(null);
 
     bool IJobCancellation.CancelForClient(CancellationToken clientToken, 
                                           bool background)
@@ -518,7 +573,7 @@ internal sealed class MacroJob : IJobCancellation
 
             while (q is not null)
             {
-                // Get next link first in case q.Cancel asynchronously
+                // Get next link first, in case q.Cancel asynchronously
                 // removes q from the linked list.
                 var r = q.ListLinks.Next;
                 r = ReferenceEquals(r, p) ? null : r;
