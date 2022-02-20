@@ -85,12 +85,12 @@ namespace JobBank.Utilities
         /// <summary>
         /// The preceding item in the list.
         /// </summary>
-        public T Previous => _previous;
+        public readonly T Previous => _previous;
 
         /// <summary>
         /// The following item in the list.
         /// </summary>
-        public T Next => _next;
+        public readonly T Next => _next;
 
         /// <summary>
         /// Initialize for one node being in a list by itself.
