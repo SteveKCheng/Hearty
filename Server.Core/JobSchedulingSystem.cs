@@ -108,7 +108,7 @@ namespace JobBank.Server
         /// Track outstanding requests to be able to de-duplicate them and
         /// cancel them on behalf of (remote) clients.
         /// </summary>
-        private readonly Dictionary<(PromiseId, ClientJobQueue), object>
+        private readonly Dictionary<(PromiseId, ClientJobQueue), IJobCancellation>
             _clientRequests = new();
 
         /// <summary>
@@ -154,19 +154,12 @@ namespace JobBank.Server
             if (future is not null)
                 return future.CancelForClient(queue.CancellationToken, true);
 
-            object? target;
+            IJobCancellation? target;
             lock (_clientRequests)
-            {
                 _clientRequests.Remove((promiseId, queue), out target);
-            }
 
-            if (target is MacroJobMessage macroJobMessage)
-            {
-                macroJobMessage.Cancel(background: true);
-                return true;
-            }
-
-            return false;
+            return target?.CancelForClient(queue.CancellationToken, 
+                                           background: true) ?? false;
         }
 
         #endregion
