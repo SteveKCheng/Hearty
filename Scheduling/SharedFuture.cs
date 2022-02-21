@@ -459,6 +459,7 @@ namespace JobBank.Scheduling
             ISchedulingAccount? account = null;
             ClientData clientData = default;
             int countRemoved = 0;
+            bool toTerminate;
 
             lock (_accountLock)
             {
@@ -492,15 +493,20 @@ namespace JobBank.Scheduling
 
                 // Prepare to cancel outside _accountLock if all
                 // participants have been removed.
-                if ((_activeCount -= countRemoved) <= 0)
+                toTerminate = (_activeCount -= countRemoved) <= 0;
+                if (toTerminate)
                     cancellationSource = _cancellationSourceUse.Source;
             }
-
-            cancellationSource?.CancelMaybeInBackground(_accountingStarted);
 
             // This method does nothing if clientData has not been assigned
             // to a non-default value, not caring if account is null.
             UnregisterClient(account!, clientData);
+
+            if (toTerminate)
+            {
+                TerminateIfUnstarted();
+                cancellationSource?.CancelMaybeInBackground(_accountingStarted);
+            }
 
             return countRemoved > 0;
         }
@@ -528,8 +534,42 @@ namespace JobBank.Scheduling
                 cancellationSource = _cancellationSourceUse.Source;
             }
 
+            TerminateIfUnstarted();
+
             background &= _accountingStarted;
             cancellationSource?.CancelMaybeInBackground(background);
+        }
+
+        /// <summary>
+        /// Called to complete <see cref="OutputTask" /> and perform
+        /// all clean-up if this future is cancelled before it
+        /// even starts its job.
+        /// </summary>
+        private bool TerminateIfUnstarted()
+        {
+            if (Interlocked.Exchange(ref _jobLaunched, 1) != 0)
+                return false;
+
+            // At this point, FinalizeCharge cannot have been called
+            // yet, so _cancellationSourceUse remains valid, even
+            // if the token has been triggered already.
+            var cancellationToken = _cancellationSourceUse.Token;
+
+            Exception? exception = null;
+            
+            try
+            {
+                exception = new OperationCanceledException(cancellationToken);
+                var now = _startTime = Environment.TickCount64;
+                FinalizeCharge(now);
+            }
+            catch (Exception e)
+            {
+                exception ??= e;
+            }
+
+            _taskBuilder.SetException(exception);
+            return true;
         }
 
         /// <summary>
