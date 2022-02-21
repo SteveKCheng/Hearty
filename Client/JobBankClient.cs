@@ -137,9 +137,10 @@ namespace JobBank.Client
             var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("multipart/parallel"));
 
-            var response = await _httpClient.SendAsync(request)
+            var response = await _httpClient.SendAsync(request, 
+                                                       HttpCompletionOption.ResponseHeadersRead, 
+                                                       cancellationToken)
                                             .ConfigureAwait(false);
-            
 
             response.EnsureSuccessStatusCode();
             var content = response.Content;
