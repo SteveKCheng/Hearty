@@ -845,7 +845,7 @@ namespace JobBank.Scheduling
                 {
                     lock (_accountLock)
                     {
-                        int currentCharge = EstimatedWait;
+                        int currentCharge = _recordedInitialCharge * _activeCount;
                         _currentCharge = (_splitter is null) ? currentCharge : 0;
                         _accountingStarted = true;
                         _account.UpdateCurrentItem(null, currentCharge);
@@ -903,5 +903,51 @@ namespace JobBank.Scheduling
             _ = LaunchJobInternalAsync(worker, executionId);
             return true;
         }
+
+        /// <summary>
+        /// Get the amount that this item should be charged
+        /// when it is taken out of its scheduling flow.
+        /// </summary>
+        /// <returns>
+        /// The value of <see cref="EstimatedWait" /> divided by the
+        /// number of active clients, if non-zero.  The
+        /// return value is zero if there are no
+        /// active clients, meaning that the job has completed
+        /// or has been cancelled.
+        /// </returns>
+        /// <remarks>
+        /// This calculation is inherently racy because the result
+        /// is queried, before the job is actually launched, when
+        /// the number of active clients can change.  However, 
+        /// the race is tolerated as this number is only an estimate
+        /// to inform scheduling: the actual charge to the scheduling
+        /// flows will get corrected eventually.
+        /// </remarks>
+        int ISchedulingExpense.GetInitialCharge()
+        {
+            int activeCount = _activeCount;
+            if (activeCount <= 0)
+                return 0;
+
+            int initialCharge = EstimatedWait / activeCount;
+            int value = Interlocked.CompareExchange(ref _recordedInitialCharge,
+                                                    initialCharge, 0);
+            return value != 0 ? value : initialCharge;
+        }
+
+        /// <summary>
+        /// The value first calculated by 
+        /// <see cref="ISchedulingExpense.GetInitialCharge" />.
+        /// </summary>
+        /// <remarks>
+        /// This value needs to be recalled separately from <see cref="EstimatedWait" />
+        /// so that when charge accounting starts in <see cref="LaunchJobInternalAsync" />
+        /// the initial charge value is consistent with what has been reported
+        /// from <see cref="ISchedulingExpense.GetInitialCharge" />,
+        /// when this future is de-queued from the scheduling flow, even if
+        /// clients raced to add or remove themselves in the window between
+        /// the two method calls.
+        /// </remarks>
+        private int _recordedInitialCharge;
     }
 }

@@ -70,6 +70,7 @@ namespace JobBank.Scheduling
     /// The outputs from executing the job.
     /// </typeparam>
     public interface ILaunchableJob<out TInput, TOutput> : IRunningJob<TInput>
+                                                         , ISchedulingExpense
     {
         /// <summary>
         /// Have a worker launch this job, but only if it has not been

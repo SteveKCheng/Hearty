@@ -49,6 +49,6 @@ namespace JobBank.Scheduling
             Account = account;
         }
 
-        int ISchedulingExpense.GetInitialCharge() => Future.EstimatedWait;
+        int ISchedulingExpense.GetInitialCharge() => Future.GetInitialCharge();
     }
 }

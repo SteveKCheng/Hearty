@@ -106,5 +106,7 @@ namespace JobBank.Scheduling
                 _taskBuilder.SetException(e);
             }
         }
+
+        int ISchedulingExpense.GetInitialCharge() => EstimatedWait;
     }
 }
