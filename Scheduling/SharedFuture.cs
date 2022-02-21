@@ -163,7 +163,7 @@ namespace JobBank.Scheduling
             /// A function called to notify the client when it disengages
             /// from the job or the job finishes.
             /// </summary>
-            public Action<SharedFuture<TInput, TOutput>, ISchedulingAccount>? OnClientFinish;
+            public ClientFinishingAction? OnClientFinish;
         }
 
         /// <summary>
@@ -409,7 +409,7 @@ namespace JobBank.Scheduling
                              int initialCharge, 
                              ISchedulingAccount account,
                              CancellationToken cancellationToken,
-                             Action<SharedFuture<TInput, TOutput>, ISchedulingAccount>? onClientFinish,
+                             ClientFinishingAction? onClientFinish,
                              SimpleExpiryQueue timingQueue)
         {
             _account = account;
@@ -533,6 +533,24 @@ namespace JobBank.Scheduling
         }
 
         /// <summary>
+        /// Function to be invoked on behalf of a client when 
+        /// this future completes or the client cancels.
+        /// </summary>
+        /// <param name="future">The future that the client has
+        /// registered itself into. 
+        /// </param>
+        /// <param name="account">The scheduling account for the client
+        /// at the time of registration.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// The cancellation token for the client at the time of registration, 
+        /// which might be used as an identifier as in <see cref="IJobCancellation" />.
+        /// </param>
+        public delegate void ClientFinishingAction(SharedFuture<TInput, TOutput> future,
+                                                   ISchedulingAccount account,
+                                                   CancellationToken cancellationToken);
+
+        /// <summary>
         /// Create a new job to push into a job-scheduling queue. 
         /// </summary>
         /// <param name="input">The input describing the job. </param>
@@ -578,7 +596,7 @@ namespace JobBank.Scheduling
                       int initialCharge,
                       ISchedulingAccount account,
                       CancellationToken cancellationToken,
-                      Action<SharedFuture<TInput, TOutput>, ISchedulingAccount>? onClientFinish,
+                      ClientFinishingAction? onClientFinish,
                       SimpleExpiryQueue timingQueue,
                       out SharedFuture<TInput, TOutput> future)
         {
@@ -647,7 +665,7 @@ namespace JobBank.Scheduling
         public ScheduledJob<TInput, TOutput>? 
             TryShareJob(ISchedulingAccount account,
                         CancellationToken cancellationToken,
-                        Action<SharedFuture<TInput, TOutput>, ISchedulingAccount>? onClientFinish)
+                        ClientFinishingAction? onClientFinish)
         {
             // Strictly speaking we are not supposed to use _accountLock,
             // which is a pooled object, after it has been returned to
@@ -724,13 +742,15 @@ namespace JobBank.Scheduling
         /// </summary>
         private void UnregisterClient(ISchedulingAccount account, ClientData clientData)
         {
+            var token = clientData.CancellationRegistration.Token;
+
             // Important: we do not call CancellationTokenRegistration.Dispose!
             // That method blocks until the callback is executed, which may
             // deadlock, when removal of a participant is triggered by the
             // registered cancellation callback in the first place!
             clientData.CancellationRegistration.Unregister();
 
-            clientData.OnClientFinish?.Invoke(this, account);
+            clientData.OnClientFinish?.Invoke(this, account, token);
         }
 
         /// <summary>
