@@ -886,9 +886,8 @@ namespace JobBank.Server
 
                 try
                 {
-                    if (TryRegisterClientRequest(promise.Id, clientToken, message))
+                    if (message.TryTrackClientRequest())
                     {
-                        message.IsTrackingClientRequest = true;
                         queue.Enqueue(message);
                         message = null;
                     }

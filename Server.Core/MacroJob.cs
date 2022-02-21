@@ -147,7 +147,52 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
     /// from <see cref="JobSchedulingSystem" /> when the macro
     /// job finishes.
     /// </summary>
-    public bool IsTrackingClientRequest { get; set; }
+    private bool _isTrackingClientRequest;
+
+    /// <summary>
+    /// Set this macro job to register the request so it
+    /// can be de-duplicated and cancelled for remote clients.
+    /// </summary>
+    /// <remarks>
+    /// Owing to certain technical reasons in the correct
+    /// implementation of <see cref="JobSchedulingSystem" />,
+    /// the client tracking cannot be enabled until this instance 
+    /// has been constructed, so enabling this feature can race
+    /// with the macro job being killed, and so the caller
+    /// must be prepared to back out.
+    /// </remarks>
+    /// <returns>
+    /// True if this macro job has been successfully set to
+    /// track the client request; false if it has already
+    /// started running or has been cancelled.
+    /// </returns>
+    public bool TryTrackClientRequest()
+    {
+        var jobScheduling = Source.JobScheduling;
+        var promiseId = Source.PromiseId;
+
+        if (!jobScheduling.TryRegisterClientRequest(promiseId, ClientToken, this))
+            return false;
+
+        _isTrackingClientRequest = true;
+
+        // If this macro job gets killed concurrently, it
+        // might still see _isTrackingClientRequest being
+        // false, and not unregister itself as we expect.
+        // Deal with this rarely occurring race by backing
+        // out of the registration immediately.
+        //
+        // We intend to test _isInvalid if non-zero but on
+        // weakly-ordered memory architectures an 
+        // acquire+release barrier is required for correctness.
+        if (Interlocked.CompareExchange(ref _isInvalid, 0, 0) != 0)
+        {
+            jobScheduling.UnregisterClientRequest(promiseId, ClientToken);
+            return false;
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// Construct the macro job message.
@@ -370,7 +415,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
         _clientCancellationRegistration.Unregister();
         _clientCancellationRegistration = default;
 
-        if (IsTrackingClientRequest)
+        if (_isTrackingClientRequest)
             Source.JobScheduling.UnregisterClientRequest(Source.PromiseId, ClientToken);
 
         return Source.RemoveParticipant(this);
