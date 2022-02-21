@@ -370,7 +370,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
         _clientCancellationRegistration = default;
 
         if (IsTrackingClientRequest)
-            Source.JobScheduling.UnregisterClientRequest(Source.PromiseId, _queue);
+            Source.JobScheduling.UnregisterClientRequest(Source.PromiseId, ClientToken);
 
         return Source.RemoveParticipant(this);
     }

@@ -108,7 +108,7 @@ namespace JobBank.Server
         /// Track outstanding requests to be able to de-duplicate them and
         /// cancel them on behalf of (remote) clients.
         /// </summary>
-        private readonly Dictionary<(PromiseId, ClientJobQueue), IJobCancellation>
+        private readonly Dictionary<(PromiseId, CancellationToken), IJobCancellation>
             _clientRequests = new();
 
         /// <summary>
@@ -118,10 +118,10 @@ namespace JobBank.Server
         /// This method should be called once the job (for the client)
         /// has finished processing, successful or not.
         /// </remarks>
-        internal void UnregisterClientRequest(PromiseId promiseId, ClientJobQueue queue)
+        internal void UnregisterClientRequest(PromiseId promiseId, CancellationToken clientToken)
         {
             lock (_clientRequests)
-                _clientRequests.Remove((promiseId, queue));
+                _clientRequests.Remove((promiseId, clientToken));
         }
 
         /// <summary>
@@ -133,11 +133,11 @@ namespace JobBank.Server
         /// if it already exists.
         /// </returns>
         internal bool TryRegisterClientRequest(PromiseId promiseId, 
-                                               ClientJobQueue queue,
+                                               CancellationToken clientToken,
                                                IJobCancellation job)
         {
             lock (_clientRequests)
-                return _clientRequests.TryAdd((promiseId, queue), job);
+                return _clientRequests.TryAdd((promiseId, clientToken), job);
         }
 
         /// <summary>
@@ -164,18 +164,19 @@ namespace JobBank.Server
             if (!PriorityClasses[priority].TryGetValue(owner, out var queue))
                 return false;
 
+            var clientToken = queue.CancellationToken;
+
             SharedFuture<PromisedWork, PromiseData>? future = null;
             lock (_microPromises)
                 _microPromises.TryGetValue(promiseId, out future);
             if (future is not null)
-                return future.CancelForClient(queue.CancellationToken, true);
+                return future.CancelForClient(clientToken, true);
 
             IJobCancellation? target;
             lock (_clientRequests)
-                _clientRequests.Remove((promiseId, queue), out target);
+                _clientRequests.Remove((promiseId, clientToken), out target);
 
-            return target?.CancelForClient(queue.CancellationToken, 
-                                           background: true) ?? false;
+            return target?.CancelForClient(clientToken, background: true) ?? false;
         }
 
         #endregion
@@ -833,10 +834,12 @@ namespace JobBank.Server
         {
             var queue = PriorityClasses[priority].GetOrAdd(owner);
 
+            var clientToken = queue.CancellationToken;
+
             var message = RegisterMacroJob(queue,
                                            promiseRetriever, work,
                                            builderFactory, expansion,
-                                           queue.CancellationToken,
+                                           clientToken,
                                            out var promise);
             if (message is not null)
             {
@@ -844,7 +847,7 @@ namespace JobBank.Server
 
                 try
                 {
-                    if (TryRegisterClientRequest(promise.Id, queue, message))
+                    if (TryRegisterClientRequest(promise.Id, clientToken, message))
                     {
                         message.IsTrackingClientRequest = true;
                         queue.Enqueue(message);
