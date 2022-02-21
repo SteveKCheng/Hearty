@@ -125,6 +125,22 @@ namespace JobBank.Server
         }
 
         /// <summary>
+        /// Register a request of a promise from a client unless
+        /// it already exists.
+        /// </summary>
+        /// <returns>
+        /// True if the request is successfully added; false
+        /// if it already exists.
+        /// </returns>
+        internal bool TryRegisterClientRequest(PromiseId promiseId, 
+                                               ClientJobQueue queue,
+                                               IJobCancellation job)
+        {
+            lock (_clientRequests)
+                return _clientRequests.TryAdd((promiseId, queue), job);
+        }
+
+        /// <summary>
         /// Cancel a job that had been pushed earlier
         /// without an explicit cancellation token.
         /// </summary>
@@ -828,11 +844,7 @@ namespace JobBank.Server
 
                 try
                 {
-                    bool shouldEnqueue;
-                    lock (_clientRequests)
-                        shouldEnqueue = _clientRequests.TryAdd((promise.Id, queue), message);
-
-                    if (shouldEnqueue)
+                    if (TryRegisterClientRequest(promise.Id, queue, message))
                     {
                         message.IsTrackingClientRequest = true;
                         queue.Enqueue(message);
