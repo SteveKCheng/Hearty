@@ -308,6 +308,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
                                     _queue.SchedulingAccount,
                                     promiseRetriever,
                                     input,
+                                    registerClient: false,
                                     jobCancelToken,
                                     out var promise);
 

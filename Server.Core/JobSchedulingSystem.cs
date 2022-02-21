@@ -88,6 +88,10 @@ namespace JobBank.Server
                                 PriorityClasses.AsChannel(),
                                 workerDistribution.AsChannel(),
                                 CancellationToken.None);
+
+            _unregisterClientJobAction = (future, _, clientToken) =>
+                    this.UnregisterClientRequest(future.Input.Promise!.Id, 
+                                                 clientToken);
         }
 
         /// <summary>
@@ -165,12 +169,6 @@ namespace JobBank.Server
                 return false;
 
             var clientToken = queue.CancellationToken;
-
-            SharedFuture<PromisedWork, PromiseData>? future = null;
-            lock (_microPromises)
-                _microPromises.TryGetValue(promiseId, out future);
-            if (future is not null)
-                return future.CancelForClient(clientToken, true);
 
             IJobCancellation? target;
             lock (_clientRequests)
@@ -284,6 +282,13 @@ namespace JobBank.Server
         /// job object for the associated promise ID, this input
         /// is effectively ignored.  
         /// </param>
+        /// <param name="registerClient">
+        /// Whether the job should be registered in the table
+        /// of client requests so it can be cancelled 
+        /// by <see cref="IJobCancellation" />.  If true,
+        /// <paramref name="cancellationToken" /> should be
+        /// the client's token.
+        /// </param>
         /// <param name="cancellationToken">
         /// A token that may be used to cancel the job,
         /// but only for the current client.  If the job
@@ -317,6 +322,7 @@ namespace JobBank.Server
             RegisterJobMessage(ISchedulingAccount account, 
                                PromiseRetriever promiseRetriever,
                                in PromisedWork work, 
+                               bool registerClient,
                                CancellationToken cancellationToken,
                                out Promise promise)
         {
@@ -327,6 +333,7 @@ namespace JobBank.Server
 
             // Retry loop for concurrently cancelled promises
             while ((message = TryRegisterJobMessage(account, promise, work, 
+                                                    registerClient,
                                                     cancellationToken,
                                                     out outputTask)) is null)
             {
@@ -364,6 +371,7 @@ namespace JobBank.Server
                 // been queued yet, there should be no harm.
                 if (!awaiting)
                 {
+                    // FIXME client should be cancelled too
                     RemoveCachedFuture(promise.Id);
                     return null;
                 }
@@ -380,11 +388,19 @@ namespace JobBank.Server
         }
 
         /// <summary>
+        /// Callback to unregister a client of a micro job, when
+        /// client request tracking is enabled.
+        /// </summary>
+        private readonly SharedFuture<PromisedWork, PromiseData>.ClientFinishingAction
+            _unregisterClientJobAction;
+
+        /// <summary>
         /// One iteration in the retry loop of <see cref="RegisterJobMessage" />.
         /// </summary>
         private JobMessage? TryRegisterJobMessage(ISchedulingAccount account,
                                                   Promise promise,
                                                   in PromisedWork work,
+                                                  bool registerClient,
                                                   CancellationToken cancellationToken,
                                                   out Task<PromiseData>? outputTask)
         {
@@ -398,6 +414,9 @@ namespace JobBank.Server
 
             var promiseId = promise.Id;
 
+            var onClientFinish = registerClient ? _unregisterClientJobAction
+                                                : null;
+
             lock (_microPromises)
             {
                 ref var entry = ref CollectionsMarshal.GetValueRefOrAddDefault(
@@ -409,9 +428,19 @@ namespace JobBank.Server
                 {
                     future = entry!;
 
-                    if (future.TryShareJob(account, cancellationToken, null)
+                    if (registerClient && 
+                        !TryRegisterClientRequest(promiseId, cancellationToken, future))
+                    {
+                        return null;
+                    }
+
+                    if (future.TryShareJob(account, cancellationToken, onClientFinish)
                         is not JobMessage existingMessage)
                     {
+                        // Back out if sharing the job failed
+                        if (registerClient)
+                            UnregisterClientRequest(promiseId, cancellationToken);
+
                         return null;
                     }
 
@@ -427,7 +456,7 @@ namespace JobBank.Server
                                 work.InitialWait,
                                 account,
                                 cancellationToken,
-                                null,
+                                onClientFinish,
                                 _timingQueue,
                                 out future);
                     }
@@ -435,6 +464,14 @@ namespace JobBank.Server
                     {
                         _microPromises.Remove(promiseId);
                         throw;
+                    }
+
+                    if (registerClient &&
+                        !TryRegisterClientRequest(promiseId, cancellationToken, future))
+                    {
+                        // Probably should not happen
+                        _microPromises.Remove(promiseId);
+                        return null;
                     }
 
                     outputTask = future.OutputTask;
@@ -481,6 +518,7 @@ namespace JobBank.Server
 
             var message = RegisterJobMessage(
                             queue.SchedulingAccount, promiseRetriever, work,
+                            registerClient: false,
                             cancellationToken,
                             out var promise);
 
@@ -531,6 +569,7 @@ namespace JobBank.Server
 
             var message = RegisterJobMessage(
                             queue.SchedulingAccount, promiseRetriever, work,
+                            registerClient: true,
                             queue.CancellationToken,
                             out var promise);
 
