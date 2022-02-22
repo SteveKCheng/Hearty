@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Channels;
 
 namespace JobBank.Scheduling
@@ -9,11 +10,19 @@ namespace JobBank.Scheduling
     /// De-queues from sub-queues according to their priority class.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This class is used to implement prioritized fair scheduling.
     /// The server that wants to schedule its jobs this way
     /// creates a fixed set of "priority classes" that can be
     /// assigned weights.  Job items to be scheduled are queued
     /// into the sub-queue for that priority class.
+    /// </para>
+    /// <para>
+    /// The number of priority classes is fixed at construction.
+    /// It is expected that a server would set up a fixed number of 
+    /// priority classes,
+    /// though their weights can change dynamically. 
+    /// </para>
     /// </remarks>
     /// <typeparam name="TMessage">
     /// The type of job or message being delivered by this queue system.
@@ -26,29 +35,22 @@ namespace JobBank.Scheduling
         where TQueue : ISchedulingFlow<TMessage>
     {
         /// <summary>
-        /// Prepare for fair scheduling on a fixed number of
-        /// priority classes.
+        /// Prepare for fair scheduling on some set of abstract
+        /// queues, one for each priority class.
         /// </summary>
-        /// <param name="capacity">
-        /// The number of priority classes in this queue system.
-        /// It cannot be changed after construction, as it is expected
-        /// that a server would set up a fixed number of priority classes,
-        /// though their weights can change dynamically. 
+        /// <param name="queues">
+        /// The sequence of abstract queues for each priority
+        /// class, in order from class 0 to <see cref="Count" /> minus one.
         /// </param>
-        /// <param name="factory">
-        /// Called to instantiate the abstract queue for each priority class.
-        /// </param>
-        public PrioritizedQueueSystem(int capacity, Func<TQueue> factory)
+        /// <remarks>
+        public PrioritizedQueueSystem(IEnumerable<TQueue> queues)
         {
-            _schedulingGroup = new SchedulingGroup<TMessage>(capacity);
+            var members = queues.ToArray();
 
-            var members = new TQueue[capacity];
+            _schedulingGroup = new SchedulingGroup<TMessage>(members.Length);
+
             for (int i = 0; i < members.Length; ++i)
-            {
-                var member = factory();
-                members[i] = member;
-                _schedulingGroup.AdmitChild(member.AsFlow(), activate: false);
-            }
+                _schedulingGroup.AdmitChild(members[i].AsFlow(), activate: false);
 
             _members = members;
         }

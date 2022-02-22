@@ -74,11 +74,17 @@ namespace JobBank.Server
             _logger = logger;
             _exceptionTranslator = exceptionTranslator;
 
-            PriorityClasses = new(countPriorities, 
-                () => new ClientQueueSystem<JobMessage, IJobQueueOwner, ClientJobQueue>(
-                    key => new ClientJobQueue(),
-                    new SimpleExpiryQueue(60000, 20)));
+            static IEnumerable<ClientQueueSystem<JobMessage, IJobQueueOwner, ClientJobQueue>> GenerateQueues(int countPriorities)
+            {
+                for (int i = 0; i < countPriorities; ++i)
+                {
+                    yield return new(key => new ClientJobQueue(),
+                                     new SimpleExpiryQueue(60000, 20));
+                }
+            }
 
+            PriorityClasses = new(GenerateQueues(countPriorities));
+                
             for (int i = 0; i < countPriorities; ++i)
                 PriorityClasses.ResetWeight(priority: i, weight: (i + 1) * 10);
 
