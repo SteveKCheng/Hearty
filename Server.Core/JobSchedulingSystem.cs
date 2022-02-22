@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace JobBank.Server
 {
-    using JobMessage = ScheduledJob<PromisedWork, PromiseData>;
+    using JobMessage = ILaunchableJob<PromisedWork, PromiseData>;
     using MacroJobExpansion = IAsyncEnumerable<(PromiseRetriever, PromisedWork)>;
 
     /// <summary>
@@ -404,7 +404,6 @@ namespace JobBank.Server
                                                   CancellationToken cancellationToken,
                                                   out Task<PromiseData>? outputTask)
         {
-            JobMessage message;
             SharedFuture<PromisedWork, PromiseData> future;
             outputTask = null;
 
@@ -434,8 +433,7 @@ namespace JobBank.Server
                         return null;
                     }
 
-                    if (future.TryShareJob(account, cancellationToken, onClientFinish)
-                        is not JobMessage existingMessage)
+                    if (!future.TryShareJob(account, cancellationToken, onClientFinish))
                     {
                         // Back out if sharing the job failed
                         if (registerClient)
@@ -443,22 +441,19 @@ namespace JobBank.Server
 
                         return null;
                     }
-
-                    message = existingMessage;
                 }
                 else
                 {
                     // Usual case: completely new job
                     try
                     {
-                        message = SharedFuture<PromisedWork, PromiseData>.CreateJob(
+                        future = new SharedFuture<PromisedWork, PromiseData>(
                                 work.ReplacePromise(promise),
                                 work.InitialWait,
                                 account,
                                 cancellationToken,
                                 onClientFinish,
-                                _timingQueue,
-                                out future);
+                                _timingQueue);
                     }
                     catch
                     {
@@ -479,7 +474,7 @@ namespace JobBank.Server
                 }
             }
 
-            return message;
+            return future;
         }
 
         /// <summary>
@@ -523,7 +518,7 @@ namespace JobBank.Server
                             out var promise);
 
             if (message is not null)
-                queue.Enqueue(message.GetValueOrDefault());
+                queue.Enqueue(message);
 
             return promise;
         }
@@ -574,7 +569,7 @@ namespace JobBank.Server
                             out var promise);
 
             if (message is not null)
-                queue.Enqueue(message.GetValueOrDefault());
+                queue.Enqueue(message);
 
             return promise;
         }

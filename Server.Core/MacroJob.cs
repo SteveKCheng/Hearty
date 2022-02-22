@@ -8,7 +8,7 @@ using JobBank.Utilities;
 
 namespace JobBank.Server;
 
-using JobMessage = ScheduledJob<PromisedWork, PromiseData>;
+using JobMessage = ILaunchableJob<PromisedWork, PromiseData>;
 using MacroJobExpansion = IAsyncEnumerable<(PromiseRetriever, PromisedWork)>;
 
 using MacroJobLinks = CircularListLinks<MacroJobMessage, MacroJobMessage.ListLinksAccessor>;
@@ -369,7 +369,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
 
                 // Do not schedule work if promise is already complete
                 if (message is not null)
-                    yield return message.GetValueOrDefault();
+                    yield return message;
             }
 
             try

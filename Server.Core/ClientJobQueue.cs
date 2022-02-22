@@ -10,15 +10,15 @@ namespace JobBank.Server;
 /// part in <see cref="JobSchedulingSystem" />.
 /// </summary>
 public class ClientJobQueue
-    : ISchedulingFlow<ScheduledJob<PromisedWork, PromiseData>>
+    : ISchedulingFlow<ILaunchableJob<PromisedWork, PromiseData>>
 {
-    private readonly SchedulingQueue<ScheduledJob<PromisedWork, PromiseData>>
+    private readonly SchedulingQueue<ILaunchableJob<PromisedWork, PromiseData>>
         _flow = new();
 
     private readonly CancellationTokenSource _cancellationSource = new();
 
-    SchedulingFlow<ScheduledJob<PromisedWork, PromiseData>> 
-        ISchedulingFlow<ScheduledJob<PromisedWork, PromiseData>>.AsFlow()
+    SchedulingFlow<ILaunchableJob<PromisedWork, PromiseData>> 
+        ISchedulingFlow<ILaunchableJob<PromisedWork, PromiseData>>.AsFlow()
         => _flow;
 
     internal ClientJobQueue()
@@ -41,7 +41,7 @@ public class ClientJobQueue
     /// <param name="job">
     /// The (micro) job to enqueue.
     /// </param>
-    public void Enqueue(ScheduledJob<PromisedWork, PromiseData> job)
+    public void Enqueue(ILaunchableJob<PromisedWork, PromiseData> job)
         => _flow.Enqueue(job);
 
     /// <summary>
@@ -51,7 +51,7 @@ public class ClientJobQueue
     /// <param name="job">
     /// The macro job to enqueue.
     /// </param>
-    public void Enqueue(IAsyncEnumerable<ScheduledJob<PromisedWork, PromiseData>> jobs)
+    public void Enqueue(IAsyncEnumerable<ILaunchableJob<PromisedWork, PromiseData>> jobs)
         => _flow.Enqueue(jobs);
 
     /// <summary>

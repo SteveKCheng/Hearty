@@ -38,7 +38,7 @@ namespace JobBank.Scheduling
         /// <paramref name="cancellationToken"/> signals cancellation.
         /// </exception>
         public static async Task RunJobsAsync<TInput, TOutput>(
-            ChannelReader<ScheduledJob<TInput, TOutput>> jobsChannel,
+            ChannelReader<ILaunchableJob<TInput, TOutput>> jobsChannel,
             ChannelReader<JobVacancy<TInput, TOutput>> vacanciesChannel,
             CancellationToken cancellationToken)
         {

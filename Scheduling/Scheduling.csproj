@@ -38,7 +38,6 @@
     <Compile Include="MiscArithmetic.cs" />
     <Compile Include="PrioritizedQueueSystem.cs" />
     <Compile Include="ClientQueueSystem.cs" />
-    <Compile Include="ScheduledJob.cs" />
     <Compile Include="SchedulingActivationEventArgs.cs" />
     <Compile Include="SharedFuture.cs" />
     <Compile Include="SchedulingGroup.AsFlow.cs" />

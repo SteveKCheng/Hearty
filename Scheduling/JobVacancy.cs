@@ -56,14 +56,14 @@ namespace JobBank.Scheduling
         /// True if the job has just been launched; false
         /// if it had already been launched earlier.
         /// </returns>
-        public bool TryLaunchJob(in ScheduledJob<TInput, TOutput> job)
+        public bool TryLaunchJob(ILaunchableJob<TInput, TOutput> job)
         {
             var worker = _worker;
             if (worker is null)
                 throw new ObjectDisposedException(nameof(JobVacancy<TInput, TOutput>));
 
             _worker = null;
-            return job.Future.TryLaunchJob(worker, ExecutionId);
+            return job.TryLaunchJob(worker, ExecutionId);
         }
 
         /// <summary>

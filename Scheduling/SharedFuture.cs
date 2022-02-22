@@ -384,7 +384,7 @@ namespace JobBank.Scheduling
         /// Prepare a job that can eventually be launched on some worker.
         /// </summary>
         /// <param name="input">The input describing the job. </param>
-        /// <param name="initialCharge">The initial estimate of the
+        /// <param name="estimatedWait">The initial estimate of the
         /// time to execute the job, in milliseconds.
         /// </param>
         /// <param name="cancellationToken">
@@ -404,13 +404,16 @@ namespace JobBank.Scheduling
         /// An optional function invoked to clean up for the first client 
         /// (represented by <paramref name="account" />) of this job 
         /// when it disengages from this job or when this job completes.
+        /// This function is particularly useful because it will 
+        /// receive a reference to the new job whereas the methods of
+        /// <see cref="ISchedulingAccount" /> do not.
         /// </param>
-        private SharedFuture(in TInput input, 
-                             int initialCharge, 
-                             ISchedulingAccount account,
-                             CancellationToken cancellationToken,
-                             ClientFinishingAction? onClientFinish,
-                             SimpleExpiryQueue timingQueue)
+        public SharedFuture(in TInput input, 
+                            int estimatedWait, 
+                            ISchedulingAccount account,
+                            CancellationToken cancellationToken,
+                            ClientFinishingAction? onClientFinish,
+                            SimpleExpiryQueue timingQueue)
         {
             _account = account;
             _timingQueue = timingQueue;
@@ -421,7 +424,7 @@ namespace JobBank.Scheduling
             _ = _taskBuilder.Task;
 
             Input = input;
-            EstimatedWait = initialCharge;
+            EstimatedWait = estimatedWait;
 
             _cancellationSourceUse = CancellationSourcePool.Rent();
 
@@ -591,65 +594,6 @@ namespace JobBank.Scheduling
                                                    CancellationToken cancellationToken);
 
         /// <summary>
-        /// Create a new job to push into a job-scheduling queue. 
-        /// </summary>
-        /// <param name="input">The input describing the job. </param>
-        /// <param name="initialCharge">The initial estimate of the
-        /// time to execute the job, in milliseconds.
-        /// </param>
-        /// <param name="cancellationToken">
-        /// Cancellation token for the initial client that it can trigger
-        /// when it is no longer interested in the returned job.  
-        /// The job may remain running if it is subsequently 
-        /// shared with other clients before the first client cancels.
-        /// </param>
-        /// <param name="account">
-        /// Where to charge back for the time taken when the job is executed,
-        /// There must be an "original" account, representing the initial
-        /// client, passed as a parameter here.
-        /// More accounts can share the charges by attaching them implicitly
-        /// through <see cref="TryShareJob" />.
-        /// </param>
-        /// <param name="onClientFinish">
-        /// An optional function invoked to clean up for the first client 
-        /// (represented by <paramref name="account" />) of this job 
-        /// when it disengages from this job or when this job completes.
-        /// This function is particularly useful because it will 
-        /// receive a reference to the new job whereas the methods of
-        /// <see cref="ISchedulingAccount" /> do not.
-        /// </param>
-        /// <param name="timingQueue">
-        /// Used to periodically fire timers to update the estimate
-        /// of the time needed to execute the job.
-        /// </param>
-        /// <param name="future">
-        /// The instance of this class that has been created and set
-        /// into the property <see cref="ScheduledJob{TInput, TOutput}.Future" />
-        /// of the returned structure.
-        /// </param>
-        /// <returns>
-        /// The new future object paired with the accounting information,
-        /// generally used as a job message in a job queuing system.
-        /// </returns>
-        public static ScheduledJob<TInput, TOutput> 
-            CreateJob(in TInput input,
-                      int initialCharge,
-                      ISchedulingAccount account,
-                      CancellationToken cancellationToken,
-                      ClientFinishingAction? onClientFinish,
-                      SimpleExpiryQueue timingQueue,
-                      out SharedFuture<TInput, TOutput> future)
-        {
-            future = new SharedFuture<TInput, TOutput>(input,
-                                                       initialCharge,
-                                                       account,
-                                                       cancellationToken,
-                                                       onClientFinish,
-                                                       timingQueue);
-            return new ScheduledJob<TInput, TOutput>(future, account);
-        }
-
-        /// <summary>
         /// Represent an existing job for a new client, 
         /// to push into a job-scheduling queue. 
         /// </summary>
@@ -695,17 +639,14 @@ namespace JobBank.Scheduling
         /// </remarks>
         /// <returns>
         /// When the client has been successfully attached, this method
-        /// returns this same future object paired with the accounting 
-        /// information of the new client.  The value is generally used as a 
-        /// job message in a job queuing system.  When this method
+        /// returns true.  When this method
         /// fails to attach the client because the future object has
         /// already been cancelled by its other clients, the return value
-        /// is null.
+        /// is false.
         /// </returns>
-        public ScheduledJob<TInput, TOutput>? 
-            TryShareJob(ISchedulingAccount account,
-                        CancellationToken cancellationToken,
-                        ClientFinishingAction? onClientFinish)
+        public bool TryShareJob(ISchedulingAccount account,
+                                CancellationToken cancellationToken,
+                                ClientFinishingAction? onClientFinish)
         {
             // Strictly speaking we are not supposed to use _accountLock,
             // which is a pooled object, after it has been returned to
@@ -713,14 +654,14 @@ namespace JobBank.Scheduling
             // likely minor, but still, avoid surprises by checking 
             // the status first outside the lock.
             if (_activeCount <= 0)
-                return null;
+                return false;
 
             SchedulingAccountSplitter<ClientData>? splitter;
             lock (_accountLock)
             {
                 // Do not bother to add participant if future is done.
                 if (_activeCount <= 0)
-                    return null;
+                    return false;
 
                 // Install a new SchedulingAccountSplitter unless it already
                 // exists because this future object is already shared.
@@ -770,10 +711,10 @@ namespace JobBank.Scheduling
             if (!splitter.AddParticipant(account, clientData))
             {
                 UnregisterClient(account, clientData);
-                return null;
+                return false;
             }
 
-            return new ScheduledJob<TInput, TOutput>(this, account);
+            return true;
         }
 
         /// <summary>
