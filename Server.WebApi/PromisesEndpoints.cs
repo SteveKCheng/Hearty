@@ -159,12 +159,16 @@ namespace JobBank.Server.WebApi
 
             try
             {
-                var jobInput = new PromiseRequest(services.PromiseStorage,
-                                                  services.PathsDirectory,
-                                                  httpRequest.ContentType,
-                                                  httpRequest.ContentLength,
-                                                  httpRequest.BodyReader,
-                                                  cancellationToken);
+                var jobInput = new PromiseRequest
+                {
+                    Storage = services.PromiseStorage,
+                    Directory = services.PathsDirectory,
+                    RouteKey = routeKey,
+                    ContentType = httpRequest.ContentType,
+                    ContentLength = httpRequest.ContentLength,
+                    PipeReader = httpRequest.BodyReader,
+                    CancellationToken = cancellationToken
+                };
 
                 promiseId = await executor.Invoke(jobInput)
                                           .ConfigureAwait(false);

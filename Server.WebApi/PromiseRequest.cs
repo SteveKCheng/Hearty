@@ -76,7 +76,7 @@ namespace JobBank.Server.WebApi
         /// This member corresponds with the "Content-Type" field
         /// sent by the client in the HTTP POST request.
         /// </remarks>
-        public string? ContentType { get; }
+        public string? ContentType { get; init; }
 
         /// <summary>
         /// Supposed size of the payload, in bytes.
@@ -89,7 +89,7 @@ namespace JobBank.Server.WebApi
         /// The final size of the payload can only be determined by
         /// consuming <see cref="PipeReader"/> (fully).
         /// </remarks>
-        public long? ContentLength { get; }
+        public long? ContentLength { get; init; }
 
         /// <summary>
         /// Incrementally reads the byte stream of the payload.
@@ -100,27 +100,18 @@ namespace JobBank.Server.WebApi
         /// from on partially received data; the protocols used
         /// for the Web APIs from Job Bank impose this restriction.
         /// </remarks>
-        public PipeReader PipeReader { get; }
+        public PipeReader PipeReader { get; init; }
 
         /// <summary>
         /// For cancelling the job when requested by users, or on some
         /// otherwise non-recoverable error.
         /// </summary>
-        public CancellationToken CancellationToken { get; }
+        public CancellationToken CancellationToken { get; init; }
 
-        internal PromiseRequest(PromiseStorage storage,
-                                PathsDirectory directory,
-                                string? contentType, 
-                                long? contentLength, 
-                                PipeReader pipeReader, 
-                                CancellationToken cancellationToken)
-        {
-            Storage = storage;
-            Directory = directory;
-            ContentType = contentType;
-            ContentLength = contentLength;
-            PipeReader = pipeReader;
-            CancellationToken = cancellationToken;
-        }
+        /// <summary>
+        /// Routing key for the endpoint that received this request
+        /// from the remote client.
+        /// </summary>
+        public string? RouteKey { get; init; }
     }
 }
