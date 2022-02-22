@@ -72,7 +72,7 @@ namespace JobBank.Server.Program
             });
 
             services.AddSingleton<PathsDirectory, InMemoryPathsDirectory>();
-            services.AddSingleton<JobSchedulingSystem>();
+            services.AddSingleton<JobsManager>();
             services.AddSingleton<TimeoutProvider, SimpleTimeoutProvider>();
             services.AddSingleton<WorkerDistribution<PromisedWork, PromiseData>>(p =>
             {
@@ -143,7 +143,7 @@ namespace JobBank.Server.Program
 
                 endpoints.MapRemoteWorkersWebSocket();
 
-                var jobScheduling = app.ApplicationServices.GetRequiredService<JobSchedulingSystem>();
+                var jobsManager = app.ApplicationServices.GetRequiredService<JobsManager>();
 
                 endpoints.MapPostJob("pricing", async input =>
                 {
@@ -159,14 +159,14 @@ namespace JobBank.Server.Program
                     var promise = input.Storage.CreatePromise(request);
 
                     var queueKey = new JobQueueKey(_dummyQueueOwner, 5, string.Empty);
-                    jobScheduling.PushJobAndOwnCancellation(queueKey,
+                    jobsManager.PushJobAndOwnCancellation(queueKey,
                         static w => w.Promise ?? throw new ArgumentNullException(),
                         new PromisedWork(request) { InitialWait = 100000, Promise = promise });
 
                     return promise.Id;
                 });
 
-                endpoints.MapPostJob("multi", input => PriceMultipleAsync(jobScheduling, input));
+                endpoints.MapPostJob("multi", input => PriceMultipleAsync(jobsManager, input));
 
                 endpoints.MapGetPromiseById();
                 endpoints.MapPostPromiseById();
@@ -174,7 +174,7 @@ namespace JobBank.Server.Program
             });
         }
 
-        private static async ValueTask<PromiseId> PriceMultipleAsync(JobSchedulingSystem jobScheduling, PromiseRequest input)
+        private static async ValueTask<PromiseId> PriceMultipleAsync(JobsManager jobScheduling, PromiseRequest input)
         {
             // Cannot pass the stream directly to JsonSerializer.DeserializeAsync,
             // because we also need to retain the inputs to store in the promise.

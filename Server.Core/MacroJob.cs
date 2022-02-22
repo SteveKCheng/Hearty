@@ -15,7 +15,7 @@ using MacroJobLinks = CircularListLinks<MacroJobMessage, MacroJobMessage.ListLin
 
 /// <summary>
 /// The message type put into the queues managed by
-/// <see cref="JobSchedulingSystem" /> that implements
+/// <see cref="JobsManager" /> that implements
 /// a "macro job".
 /// </summary>
 /// <remarks>
@@ -144,7 +144,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
 
     /// <summary>
     /// If true, the client's request needs to be unregistered 
-    /// from <see cref="JobSchedulingSystem" /> when the macro
+    /// from <see cref="JobsManager" /> when the macro
     /// job finishes.
     /// </summary>
     private bool _isTrackingClientRequest;
@@ -155,7 +155,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
     /// </summary>
     /// <remarks>
     /// Owing to certain technical reasons in the correct
-    /// implementation of <see cref="JobSchedulingSystem" />,
+    /// implementation of <see cref="JobsManager" />,
     /// the client tracking cannot be enabled until this instance 
     /// has been constructed, so enabling this feature can race
     /// with the macro job being killed, and so the caller
@@ -168,10 +168,10 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
     /// </returns>
     public bool TryTrackClientRequest()
     {
-        var jobScheduling = Source.JobScheduling;
+        var jobsManager = Source.JobsManager;
         var promiseId = Source.PromiseId;
 
-        if (!jobScheduling.TryRegisterClientRequest(promiseId, ClientToken, this))
+        if (!jobsManager.TryRegisterClientRequest(promiseId, ClientToken, this))
             return false;
 
         _isTrackingClientRequest = true;
@@ -187,7 +187,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
         // acquire+release barrier is required for correctness.
         if (Interlocked.CompareExchange(ref _isInvalid, 0, 0) != 0)
         {
-            jobScheduling.UnregisterClientRequest(promiseId, ClientToken);
+            jobsManager.UnregisterClientRequest(promiseId, ClientToken);
             return false;
         }
 
@@ -272,7 +272,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
 
         var jobCancelToken = new CancellationToken(canceled: true);
 
-        JobSchedulingSystem jobScheduling = Source.JobScheduling;
+        JobsManager jobScheduling = Source.JobsManager;
         IPromiseListBuilder resultBuilder = Source.ResultBuilder;
 
         // Whether an exception indicates cancellation from the token
@@ -416,7 +416,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
         _clientCancellationRegistration = default;
 
         if (_isTrackingClientRequest)
-            Source.JobScheduling.UnregisterClientRequest(Source.PromiseId, ClientToken);
+            Source.JobsManager.UnregisterClientRequest(Source.PromiseId, ClientToken);
 
         return Source.RemoveParticipant(this);
     }
@@ -546,7 +546,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
 /// </summary>
 internal sealed class MacroJob : IJobCancellation
 {
-    public readonly JobSchedulingSystem JobScheduling;
+    public readonly JobsManager JobsManager;
     public readonly IPromiseListBuilder ResultBuilder;
     public readonly PromiseId PromiseId;
     public readonly MacroJobExpansion Expansion;
@@ -558,7 +558,7 @@ internal sealed class MacroJob : IJobCancellation
     /// Construct with information about the job 
     /// shared instances of <see cref="MacroJobMessage" />.
     /// </summary>
-    /// <param name="jobScheduling">
+    /// <param name="jobsManager">
     /// The job scheduling system that this message is for.
     /// This reference is needed to push micro jobs into
     /// the job queue.
@@ -569,7 +569,7 @@ internal sealed class MacroJob : IJobCancellation
     /// </param>
     /// <param name="promiseId">
     /// The promise ID for the macro job, needed to unregister
-    /// it from <paramref name="jobScheduling" /> when the macro
+    /// it from <paramref name="jobsManager" /> when the macro
     /// job has finished expanding.
     /// </param>
     /// <param name="expansion">
@@ -577,12 +577,12 @@ internal sealed class MacroJob : IJobCancellation
     /// the promise objects and work descriptions for
     /// the micro jobs.
     /// </param>
-    public MacroJob(JobSchedulingSystem jobScheduling,
+    public MacroJob(JobsManager jobsManager,
                     IPromiseListBuilder resultBuilder,
                     PromiseId promiseId,
                     MacroJobExpansion expansion)
     {
-        JobScheduling = jobScheduling;
+        JobsManager = jobsManager;
         ResultBuilder = resultBuilder;
         PromiseId = promiseId;
         Expansion = expansion;
@@ -685,7 +685,7 @@ internal sealed class MacroJob : IJobCancellation
         }
 
         if (dead)
-            JobScheduling.UnregisterMacroJob(PromiseId);
+            JobsManager.UnregisterMacroJob(PromiseId);
 
         return dead;
     }

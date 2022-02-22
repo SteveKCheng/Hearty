@@ -12,9 +12,8 @@ namespace JobBank.Server
     /// for distributed job scheduling.
     /// </summary>
     /// <remarks>
-    /// This class proxies for a remote worker in the distributed job scheduling
-    /// implemented by <see cref="JobSchedulingSystem" />.  The job inputs
-    /// are serialized and sent to the remote host for
+    /// This class proxies for a remote worker in the distributed job scheduling.
+    /// The job inputs are serialized and sent to the remote host for
     /// processing, over an asynchronous RPC protocol.
     /// </remarks>
     internal sealed class RemoteWorkerProxy : IJobWorker<PromisedWork, PromiseData>

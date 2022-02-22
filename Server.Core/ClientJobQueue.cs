@@ -7,7 +7,7 @@ namespace JobBank.Server;
 
 /// <summary>
 /// Queue for job messages submitted by one client, to take
-/// part in <see cref="JobSchedulingSystem" />.
+/// part in <see cref="JobsManager" />.
 /// </summary>
 public class ClientJobQueue
     : ISchedulingFlow<ILaunchableJob<PromisedWork, PromiseData>>

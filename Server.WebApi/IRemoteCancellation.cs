@@ -33,12 +33,12 @@ namespace JobBank.Server.WebApi
     /// This interface was originally made for 
     /// <see cref="PromisesEndpoints" /> to be able to
     /// cancel promises obtain 
-    /// from <see cref="JobSchedulingSystem" />.  However,
+    /// from <see cref="JobsManager" />.  However,
     /// the latter is deliberately 
     /// not a dependency of the former because the user
     /// of the library should be able to completely
     /// customize job scheduling, or not even use
-    /// <see cref="JobSchedulingSystem" /> at all. 
+    /// <see cref="JobsManager" /> at all. 
     /// So cancellation needed to be abstracted away,
     /// along with any authorization policies.
     /// </para>

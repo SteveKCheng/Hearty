@@ -14,7 +14,7 @@ namespace JobBank.Server
     using MacroJobExpansion = IAsyncEnumerable<(PromiseRetriever, PromisedWork)>;
 
     /// <summary>
-    /// Schedules execution of promises using a hierarchy of job queues.
+    /// Schedules jobs, on behalf of clients, to fulfill promises.
     /// </summary>
     /// <remarks>
     /// The systems for managing job queueing, distributing jobs to 
@@ -23,7 +23,7 @@ namespace JobBank.Server
     /// into a coherent service for applications to schedule execution 
     /// of promises.
     /// </remarks>
-    public class JobSchedulingSystem
+    public class JobsManager
     {
         /// <summary>
         /// Logs important operations performed by this instance.
@@ -56,7 +56,7 @@ namespace JobBank.Server
         /// Accepts client jobs after they have been registered and de-duplicated
         /// by this class.
         /// </param>        
-        public JobSchedulingSystem(ILogger<JobSchedulingSystem> logger, 
+        public JobsManager(ILogger<JobsManager> logger, 
                                    PromiseExceptionTranslator exceptionTranslator,
                                    IJobQueueSystem jobQueues)
         {
@@ -870,7 +870,7 @@ namespace JobBank.Server
     }
 
     /// <summary>
-    /// Function type for <see cref="JobSchedulingSystem" />
+    /// Function type for <see cref="JobsManager" />
     /// to instantiate the output object for a macro job.
     /// </summary>
     /// <param name="promise">
@@ -884,14 +884,14 @@ namespace JobBank.Server
     public delegate IPromiseListBuilder PromiseListBuilderFactory(Promise promise);
 
     /// <summary>
-    /// Invoked by <see cref="JobSchedulingSystem" /> to obtain
+    /// Invoked by <see cref="JobsManager" /> to obtain
     /// a promise object that will receive the output from a job.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Unfortunately, the instance of <see cref="Promise" />
     /// cannot be passed directly to the methods of 
-    /// <see cref="JobSchedulingSystem" /> because of a fundamental
+    /// <see cref="JobsManager" /> because of a fundamental
     /// race condition in scheduling jobs that can be shared.  Any 
     /// promise that gets passed in may receive a cancellation
     /// result (i.e. <see cref="OperationCanceledException"/> 
@@ -901,9 +901,9 @@ namespace JobBank.Server
     /// </para>
     /// <para>
     /// The race condition can only be resolved inside the implementation
-    /// of <see cref="JobSchedulingSystem" />, not by its caller.
+    /// of <see cref="JobsManager" />, not by its caller.
     /// Since promise outputs are immutable, when the race happens, 
-    /// <see cref="JobSchedulingSystem" /> must request a fresh
+    /// <see cref="JobsManager" /> must request a fresh
     /// <see cref="Promise" /> object to receive the results of
     /// the restarted job.  It does so using this delegate.
     /// </para>
@@ -915,9 +915,9 @@ namespace JobBank.Server
     /// </para>
     /// </remarks>
     /// <param name="work">
-    /// The description of the work that <see cref="JobSchedulingSystem" />
+    /// The description of the work that <see cref="JobsManager" />
     /// has been asked to schedule.  This argument is a copy of 
-    /// what the caller of <see cref="JobSchedulingSystem" /> has
+    /// what the caller of <see cref="JobsManager" /> has
     /// passed in, except that the property <see cref="PromisedWork.Promise" />
     /// will be set to null if a fresh promise object is needed.
     /// </param>
