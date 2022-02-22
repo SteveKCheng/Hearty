@@ -20,10 +20,12 @@
     <Compile Include="ExpiryQueue.cs" />
     <Compile Include="HttpTokenParsingRules.cs" />
     <Compile Include="IJobQueueOwner.cs" />
+    <Compile Include="IJobQueueSystem.cs" />
     <Compile Include="IncrementalAsyncList.cs" />
     <Compile Include="InMemoryPathsDirectory.cs" />
     <Compile Include="IPromiseClientInfo.cs" />
     <Compile Include="IPromiseListBuilder.cs" />
+    <Compile Include="JobQueueSystem.cs" />
     <Compile Include="JobSchedulingSystem.cs" />
     <Compile Include="LocalWorkerAdaptor.cs" />
     <Compile Include="MacroJob.cs" />
