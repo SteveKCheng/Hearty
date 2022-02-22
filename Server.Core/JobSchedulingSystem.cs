@@ -26,21 +26,6 @@ namespace JobBank.Server
     public class JobSchedulingSystem
     {
         /// <summary>
-        /// The hierarchy of job queues with priority scheduling.
-        /// </summary>
-        public PrioritizedQueueSystem<
-                JobMessage, 
-                ClientQueueSystem<JobMessage, IJobQueueOwner, ClientJobQueue>>
-            PriorityClasses { get; }
-
-        /// <summary>
-        /// The set of workers that can accept jobs to execute
-        /// as they come off the job queues.
-        /// </summary>
-        public WorkerDistribution<PromisedWork, PromiseData>
-            WorkerDistribution { get; }
-
-        /// <summary>
         /// Logs important operations performed by this instance.
         /// </summary>
         private readonly ILogger _logger;
@@ -49,6 +34,12 @@ namespace JobBank.Server
         /// Translates exceptions from executing a job into promise output.
         /// </summary>
         private readonly PromiseExceptionTranslator _exceptionTranslator;
+
+        /// <summary>
+        /// Accepts client jobs after they have been registered and de-duplicated
+        /// by this class.
+        /// </summary>
+        private readonly IJobQueueSystem _jobQueues;
 
         /// <summary>
         /// Prepare the system to schedule jobs and assign them to workers.
@@ -61,18 +52,17 @@ namespace JobBank.Server
         /// Translates .NET exceptions when they occur as a result of 
         /// executing the work for promises.
         /// </param>
-        /// <param name="countPriorities">
-        /// The number of priority classes for jobs.  This is typically
-        /// a constant for the application.  The actual weights for
-        /// each priority class are dynamically adjustable.
+        /// <param name="jobQueues">
+        /// Accepts client jobs after they have been registered and de-duplicated
+        /// by this class.
         /// </param>        
         public JobSchedulingSystem(ILogger<JobSchedulingSystem> logger, 
                                    PromiseExceptionTranslator exceptionTranslator,
-                                   WorkerDistribution<PromisedWork, PromiseData> workerDistribution,
-                                   int countPriorities = 10)
+                                   IJobQueueSystem jobQueues)
         {
             _logger = logger;
             _exceptionTranslator = exceptionTranslator;
+            _jobQueues = jobQueues;
 
             static IEnumerable<ClientQueueSystem<JobMessage, IJobQueueOwner, ClientJobQueue>> GenerateQueues(int countPriorities)
             {
@@ -82,18 +72,6 @@ namespace JobBank.Server
                                      new SimpleExpiryQueue(60000, 20));
                 }
             }
-
-            PriorityClasses = new(GenerateQueues(countPriorities));
-                
-            for (int i = 0; i < countPriorities; ++i)
-                PriorityClasses.ResetWeight(priority: i, weight: (i + 1) * 10);
-
-            WorkerDistribution = workerDistribution;
-
-            _jobRunnerTask = JobScheduling.RunJobsAsync(
-                                PriorityClasses.AsChannel(),
-                                workerDistribution.AsChannel(),
-                                CancellationToken.None);
 
             _unregisterClientJobAction = (future, _, clientToken) =>
                     this.UnregisterClientRequest(future.Input.Promise!.Id, 
@@ -106,11 +84,6 @@ namespace JobBank.Server
         /// </summary>
         private readonly SimpleExpiryQueue _timingQueue
             = new SimpleExpiryQueue(1000, 50);
-
-        /// <summary>
-        /// Task that de-queues jobs and dispatches them to workers.
-        /// </summary>
-        private readonly Task _jobRunnerTask;
 
         #region Registration of client requests
 
@@ -154,8 +127,8 @@ namespace JobBank.Server
         /// Cancel a job that had been pushed earlier
         /// without an explicit cancellation token.
         /// </summary>
-        /// <param name="owner">
-        /// The owner that had requested the job earlier. 
+        /// <param name="queueKey">
+        /// Identifies the queue to remove the job from.
         /// </param>
         /// <param name="promiseId">
         /// The ID of the promise associated to the job.
@@ -165,13 +138,10 @@ namespace JobBank.Server
         /// registered.  True if the combination is registered
         /// and cancellation has been requested.
         /// </returns>
-        public bool TryCancelForClient(IJobQueueOwner owner, PromiseId promiseId)
+        public bool TryCancelForClient(JobQueueKey queueKey, PromiseId promiseId)
         {
-            // FIXME The priority needs to be passed in or implied
-            //       by the name of the queue.
-            int priority = 5;
-
-            if (!PriorityClasses[priority].TryGetValue(owner, out var queue))
+            var queue = _jobQueues.TryGetJobQueue(queueKey);
+            if (queue is null)
                 return false;
 
             var clientToken = queue.CancellationToken;
@@ -486,12 +456,8 @@ namespace JobBank.Server
         /// <summary>
         /// Create and push a job to complete a promise.
         /// </summary>
-        /// <param name="owner">
-        /// Owner of the queue.
-        /// </param>
-        /// <param name="priority">
-        /// The desired priority that the job should be enqueued into.  It is expressed
-        /// using the same integer key as used by <see cref="PriorityClasses" />.
+        /// <param name="queueKey">
+        /// Selects the queue to push the job into.
         /// </param>
         /// <param name="promiseRetriever">
         /// Callback to the user's code to obtain the promise which 
@@ -509,13 +475,12 @@ namespace JobBank.Server
         /// <param name="cancellationToken">
         /// Used by the caller to request cancellation of the job.
         /// </param>
-        public Promise PushJob(IJobQueueOwner owner,
-                               int priority,
+        public Promise PushJob(JobQueueKey queueKey,
                                PromiseRetriever promiseRetriever,
                                in PromisedWork work,
                                CancellationToken cancellationToken)
         {
-            var queue = PriorityClasses[priority].GetOrAdd(owner);
+            var queue = _jobQueues.GetOrAddJobQueue(queueKey);
 
             var message = RegisterJobMessage(
                             queue.SchedulingAccount, promiseRetriever, work,
@@ -541,12 +506,8 @@ namespace JobBank.Server
         /// any connection state.  The job can be cancelled instead
         /// via <see cref="TryCancelForClient" />.
         /// </remarks>
-        /// <param name="owner">
-        /// Owner of the queue.
-        /// </param>
-        /// <param name="priority">
-        /// The desired priority that the job should be enqueued into.  It is expressed
-        /// using the same integer key as used by <see cref="PriorityClasses" />.
+        /// <param name="queueKey">
+        /// Selects the queue to push the job into.
         /// </param>
         /// <param name="promiseRetriever">
         /// Callback to the user's code to obtain the promise which 
@@ -561,12 +522,11 @@ namespace JobBank.Server
         /// will effectively be ignored if the promise already
         /// has a job associated with it.
         /// </param>
-        public Promise PushJobAndOwnCancellation(IJobQueueOwner owner,
-                                                 int priority,
+        public Promise PushJobAndOwnCancellation(JobQueueKey queueKey,
                                                  PromiseRetriever promiseRetriever,
                                                  in PromisedWork work)
         {
-            var queue = PriorityClasses[priority].GetOrAdd(owner);
+            var queue = _jobQueues.GetOrAddJobQueue(queueKey);
 
             var message = RegisterJobMessage(
                             queue.SchedulingAccount, promiseRetriever, work,
@@ -776,8 +736,9 @@ namespace JobBank.Server
         /// Create a push a "macro job" into a job queue which
         /// dynamically expands into many "micro jobs".
         /// </summary>
-        /// <param name="owner">The owner of the queue. </param>
-        /// <param name="priority">The desired priority class of the jobs. </param>
+        /// <param name="queueKey">
+        /// Selects the queue to push the jobs into.
+        /// </param>
         /// <param name="promiseRetriever">
         /// Callback to the user's code to obtain the promise which 
         /// should receive the results from the job.  The desired 
@@ -804,15 +765,14 @@ namespace JobBank.Server
         /// Used by the caller to request cancellation of the macro job
         /// and any micro jobs created from it.
         /// </param>
-        public Promise PushMacroJob(IJobQueueOwner owner, 
-                                    int priority,
+        public Promise PushMacroJob(JobQueueKey queueKey,
                                     PromiseRetriever promiseRetriever,
                                     PromisedWork work,
                                     PromiseListBuilderFactory builderFactory,
                                     MacroJobExpansion expansion,
                                     CancellationToken cancellationToken)
         {
-            var queue = PriorityClasses[priority].GetOrAdd(owner);
+            var queue = _jobQueues.GetOrAddJobQueue(queueKey);
 
             var message = RegisterMacroJob(queue,
                                            promiseRetriever, work,
@@ -841,8 +801,9 @@ namespace JobBank.Server
         /// dynamically expands into many "micro jobs",
         /// and create and track a cancellation token for it. 
         /// </summary>
-        /// <param name="owner">The owner of the queue. </param>
-        /// <param name="priority">The desired priority class of the jobs. </param>
+        /// <param name="queueKey">
+        /// Selects the queue to push the jobs into.
+        /// </param>
         /// <param name="promiseRetriever">
         /// Callback to the user's code to obtain the promise which 
         /// should receive the results from the job.  The desired 
@@ -865,14 +826,13 @@ namespace JobBank.Server
         /// Expands the macro job into the micro jobs once 
         /// it has been de-queued and ready to run.
         /// </param>
-        public Promise PushMacroJobAndOwnCancellation(IJobQueueOwner owner,
-                                                      int priority,
+        public Promise PushMacroJobAndOwnCancellation(JobQueueKey queueKey,
                                                       PromiseRetriever promiseRetriever,
                                                       PromisedWork work,
                                                       PromiseListBuilderFactory builderFactory,
                                                       MacroJobExpansion expansion)
         {
-            var queue = PriorityClasses[priority].GetOrAdd(owner);
+            var queue = _jobQueues.GetOrAddJobQueue(queueKey);
 
             var clientToken = queue.CancellationToken;
 

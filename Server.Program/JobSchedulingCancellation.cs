@@ -13,7 +13,8 @@ namespace JobBank.Server.Program
 
         public ValueTask<CancellationStatus> TryCancelAsync(ClaimsPrincipal client, PromiseId target, bool force)
         {
-            var success = _jobScheduling.TryCancelForClient(Startup._dummyQueueOwner, target);
+            var queueKey = new JobQueueKey(Startup._dummyQueueOwner, 5, string.Empty);
+            var success = _jobScheduling.TryCancelForClient(queueKey, target);
             return ValueTask.FromResult(success ? CancellationStatus.Cancelled 
                                                 : CancellationStatus.NotFound);
         }

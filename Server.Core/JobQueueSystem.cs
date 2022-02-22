@@ -131,13 +131,23 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     /// Construct with a fixed number of priority classes.
     /// </summary>
     /// <param name="countPriorities">
-    /// The desired number of priority classes.
+    /// The desired number of priority classes for jobs.  
+    /// This number is typically constant for the application.  
+    /// The actual weights for each priority class are dynamically 
+    /// adjustable.
+    /// </param>
+    /// <param name="workerDistribution">
+    /// The set of workers that can accept jobs to execute
+    /// as they come off the job queues.
     /// </param>
     public JobQueueSystem(int countPriorities,
                           WorkerDistribution<PromisedWork, PromiseData> workerDistribution)
     {
         _expiryQueue = new SimpleExpiryQueue(60000, 20);
         _priorityClasses = new(GenerateMiddleQueueSystems(countPriorities));
+
+        for (int i = 0; i < countPriorities; ++i)
+            _priorityClasses.ResetWeight(priority: i, weight: (i + 1) * 10);
 
         _cancelSource = new CancellationTokenSource();
 

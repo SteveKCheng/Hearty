@@ -41,8 +41,8 @@ namespace JobBank.Server.Program.Pages
 
                 var promise = _promiseStorage.CreatePromise(request);
                 var work = new PromisedWork(request) { InitialWait = waitingTime, Promise = promise };
-                _jobScheduling.PushJob(GetClient(client),
-                                       priority,
+                var queueKey = new JobQueueKey(GetClient(client), priority, string.Empty);
+                _jobScheduling.PushJob(queueKey,
                                        static w => w.Promise ?? throw new ArgumentNullException(),
                                        work,
                                        CancellationToken.None);

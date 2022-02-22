@@ -1,6 +1,6 @@
 ﻿@page "/priority-classes"
 
-@inject JobSchedulingSystem _jobScheduling
+@inject IJobQueueSystem _jobQueues
 @inject TimeoutProvider _timeoutProvider
 
 <h1>Priority classes</h1>
@@ -20,25 +20,24 @@
         </tr>
     </thead>
 
-    @for (int i = _jobScheduling.PriorityClasses.Count; i > 0; --i)
+    @for (int i = _jobQueues.PriorityClassesCount; i > 0; --i)
     {
-        var classe = _jobScheduling.PriorityClasses[i - 1];
-
         <tbody>
             <tr class="priority-class">
                 <th>Priority Class @(i-1)</th>
-                <th>Weight @classe.AsFlow().Weight</th>
+                <th>Weight @_jobQueues.GetPriorityClassWeight(i-1)</th>
                 <th><i>(label)</i></th>
             </tr>
 
-            @foreach (var (key, client) in classe.ListMembers().OrderBy(item => item.Key.Title))
+            @foreach (var (key, queue) in _jobQueues.GetClientQueues(i-1)
+                                                    .OrderBy(item => item.Key.Owner.Title))
             {
-                var stats = client.CompletionStatistics;
+                var stats = queue.CompletionStatistics;
                 var seconds = (double)stats.CumulativeCharge / 1000.0;
 
                 <tr class="job-queue">
-                    <td>@key</td>
-                    <td>@client.Count</td>
+                    <td>@key.Owner.Title</td>
+                    <td>@queue.Count</td>
                     <td>@seconds.ToString("F3")</td>
                 </tr>
             }

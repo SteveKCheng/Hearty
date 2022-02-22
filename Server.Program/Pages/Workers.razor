@@ -1,6 +1,7 @@
 ﻿@page "/workers"
+@using JobBank.Scheduling
 
-@inject JobSchedulingSystem _jobScheduling
+@inject WorkerDistribution<PromisedWork, PromiseData> _workerDistribution
 @inject TimeoutProvider _timeoutProvider
 
 <h1>Workers</h1>
@@ -18,7 +19,7 @@
         </tr>
     </thead>
     <tbody>
-        @foreach (var (name, worker) in _jobScheduling.WorkerDistribution)
+        @foreach (var (name, worker) in _workerDistribution)
         {
             <tr>
                 <td>@name</td>

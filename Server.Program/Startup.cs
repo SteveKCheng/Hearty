@@ -85,6 +85,11 @@ namespace JobBank.Server.Program
                 d.TryCreateWorker(new LocalWorkerAdaptor(w, w.Name) , 10, out _);
                 return d;
             });
+            services.AddSingleton<IJobQueueSystem>(
+                p => new JobQueueSystem(
+                            countPriorities: 10, 
+                            p.GetRequiredService<WorkerDistribution<PromisedWork, PromiseData>>()));
+
             services.AddSingleton<IRemoteCancellation<PromiseId>, JobSchedulingCancellation>();
             services.AddSingleton<PromiseExceptionTranslator>(BasicExceptionTranslator.Instance);
 
@@ -153,7 +158,8 @@ namespace JobBank.Server.Program
 
                     var promise = input.Storage.CreatePromise(request);
 
-                    jobScheduling.PushJobAndOwnCancellation(_dummyQueueOwner, 5, 
+                    var queueKey = new JobQueueKey(_dummyQueueOwner, 5, string.Empty);
+                    jobScheduling.PushJobAndOwnCancellation(queueKey,
                         static w => w.Promise ?? throw new ArgumentNullException(),
                         new PromisedWork(request) { InitialWait = 100000, Promise = promise });
 
@@ -200,8 +206,10 @@ namespace JobBank.Server.Program
                 return (r, new PromisedWork(d) { InitialWait = g.Next(200, 7000), Promise = p });
             });
 
+            var queueKey = new JobQueueKey(_dummyQueueOwner, 5, string.Empty);
             jobScheduling.PushMacroJobAndOwnCancellation(
-                _dummyQueueOwner, 5, static w => w.Promise! ?? throw new ArgumentNullException(), 
+                queueKey,
+                static w => w.Promise! ?? throw new ArgumentNullException(), 
                 new PromisedWork(request) { Promise = promise }, 
                 _ => new PromiseList(input.Storage),
                 AsAsyncEnumerable(microJobs));
