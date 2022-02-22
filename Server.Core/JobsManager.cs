@@ -5,7 +5,6 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using JobBank.Scheduling;
-using JobBank.Utilities;
 using Microsoft.Extensions.Logging;
 
 namespace JobBank.Server
@@ -57,21 +56,12 @@ namespace JobBank.Server
         /// by this class.
         /// </param>        
         public JobsManager(ILogger<JobsManager> logger, 
-                                   PromiseExceptionTranslator exceptionTranslator,
-                                   IJobQueueSystem jobQueues)
+                           PromiseExceptionTranslator exceptionTranslator,
+                           IJobQueueSystem jobQueues)
         {
             _logger = logger;
             _exceptionTranslator = exceptionTranslator;
             _jobQueues = jobQueues;
-
-            static IEnumerable<ClientQueueSystem<JobMessage, IJobQueueOwner, ClientJobQueue>> GenerateQueues(int countPriorities)
-            {
-                for (int i = 0; i < countPriorities; ++i)
-                {
-                    yield return new(key => new ClientJobQueue(),
-                                     new SimpleExpiryQueue(60000, 20));
-                }
-            }
 
             _unregisterClientJobAction = (future, _, clientToken) =>
                     this.UnregisterClientRequest(future.Input.Promise!.Id, 
