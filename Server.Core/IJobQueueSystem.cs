@@ -55,4 +55,43 @@ public interface IJobQueueSystem
     /// The number of priority classes available.
     /// </summary>
     int PriorityClassesCount { get; }
+
+    /// <summary>
+    /// Get the weight assigned to a priority class.
+    /// </summary>
+    /// <param name="priority">
+    /// The priority class, numbered from 0 to 
+    /// <see cref="PriorityClassesCount" /> minus one.
+    /// </param>
+    /// <returns>
+    /// The assigned weight as a positive integer.
+    /// </returns>
+    int GetPriorityClassWeight(int priority);
+
+    /// <summary>
+    /// List out the queues for one priority class and queue owner.
+    /// </summary>
+    /// <param name="owner">Representation of the owner of the queue. </param>
+    /// <param name="priority">
+    /// The priority class, numbered from 0 to 
+    /// <see cref="IJobQueueSystem.PriorityClassesCount" /> minus one.
+    /// </param>
+    /// <returns>
+    /// Snapshot of the list of queues.
+    /// </returns>
+    IReadOnlyList<KeyValuePair<string, ClientJobQueue>> 
+        GetClientQueues(IJobQueueOwner owner, int priority);
+
+    /// <summary>
+    /// List out the queues for one priority class.
+    /// </summary>
+    /// <param name="priority">
+    /// The priority class, numbered from 0 to 
+    /// <see cref="IJobQueueSystem.PriorityClassesCount" /> minus one.
+    /// </param>
+    /// <returns>
+    /// Snapshot of the list of queues.
+    /// </returns>
+    IReadOnlyList<KeyValuePair<JobQueueKey, ClientJobQueue>>
+        GetClientQueues(int priority);
 }

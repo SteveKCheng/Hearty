@@ -237,18 +237,20 @@ namespace JobBank.Scheduling
         /// </summary>
         public KeyValuePair<TKey, TQueue>[] ListMembers()
         {
-            KeyValuePair<TKey, TQueue>[] items;
-
             lock (_members)
             {
-                items = new KeyValuePair<TKey, TQueue>[_members.Count];
+                int count = _members.Count;
+                if (count == 0)
+                    return Array.Empty<KeyValuePair<TKey, TQueue>>();
+
+                var items = new KeyValuePair<TKey, TQueue>[count];
 
                 int index = 0;
                 foreach (var item in _members)
                     items[index++] = new(item.Key, item.Value.Queue);
-            }
 
-            return items;
+                return items;
+            }
         }
 
         /// <inheritdoc cref="IEnumerable{T}.GetEnumerator" />

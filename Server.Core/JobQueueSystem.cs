@@ -87,6 +87,46 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     /// </summary>
     public void Dispose() => DisposeAsync().AsTask().Wait();
 
+    /// <inheritdoc cref="IJobQueueSystem.GetPriorityClassWeight" />
+    public int GetPriorityClassWeight(int priority) 
+        => _priorityClasses[priority].AsFlow().Weight;
+
+    /// <inheritdoc cref="IJobQueueSystem.GetClientQueues(IJobQueueOwner, int)" />
+    public IReadOnlyList<KeyValuePair<string, ClientJobQueue>> 
+        GetClientQueues(IJobQueueOwner owner, int priority)
+    {
+        var priorityClass = _priorityClasses[priority];
+        if (!priorityClass.TryGetValue(owner, out var innerQueueSystem))
+            return Array.Empty<KeyValuePair<string, ClientJobQueue>>();
+
+        return innerQueueSystem.ListMembers();
+    }
+
+    /// <inheritdoc cref="IJobQueueSystem.GetClientQueues(int)" />
+    public IReadOnlyList<KeyValuePair<JobQueueKey, ClientJobQueue>>
+        GetClientQueues(int priority)
+    {
+        var priorityClass = _priorityClasses[priority];
+        if (priorityClass.Count == 0)
+            return Array.Empty<KeyValuePair<JobQueueKey, ClientJobQueue>>();
+
+        var result = new List<KeyValuePair<JobQueueKey, ClientJobQueue>>();
+
+        foreach (var (owner, innerQueueSystem) in priorityClass.ListMembers())
+        {
+            var innerMembers = innerQueueSystem.ListMembers();
+            result.EnsureCapacity(result.Count + innerMembers.Length);
+
+            foreach (var (name, queue) in innerMembers)
+            {
+                var key = new JobQueueKey(owner, priority, name);
+                result.Add(new(key, queue));
+            }
+        }
+
+        return result;
+    }
+
     /// <summary>
     /// Construct with a fixed number of priority classes.
     /// </summary>
