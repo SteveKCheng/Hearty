@@ -97,7 +97,7 @@ namespace JobBank.Server.Program
         }
 
         internal static readonly IJobQueueOwner _dummyQueueOwner =
-            new SimpleQueueOwner("testClient");
+            new JobQueueOwner("testClient");
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
@@ -158,8 +158,7 @@ namespace JobBank.Server.Program
 
                     var promise = input.Storage.CreatePromise(request);
 
-                    var queueKey = new JobQueueKey(_dummyQueueOwner, 5, string.Empty);
-                    jobsManager.PushJobAndOwnCancellation(queueKey,
+                    jobsManager.PushJobAndOwnCancellation(input.JobQueueKey,
                         static w => w.Promise ?? throw new ArgumentNullException(),
                         new PromisedWork(request) { InitialWait = 100000, Promise = promise });
 
@@ -206,9 +205,8 @@ namespace JobBank.Server.Program
                 return (r, new PromisedWork(d) { InitialWait = g.Next(200, 7000), Promise = p });
             });
 
-            var queueKey = new JobQueueKey(_dummyQueueOwner, 5, string.Empty);
             jobScheduling.PushMacroJobAndOwnCancellation(
-                queueKey,
+                input.JobQueueKey,
                 static w => w.Promise! ?? throw new ArgumentNullException(), 
                 new PromisedWork(request) { Promise = promise }, 
                 _ => new PromiseList(input.Storage),

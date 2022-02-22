@@ -27,5 +27,15 @@ namespace JobBank.Common
         /// ordering.
         /// </summary>
         public static readonly string Ordinal = "Ordinal";
+
+        /// <summary>
+        /// Header for the client to specify the name of the desired job queue.
+        /// </summary>
+        public static readonly string JobQueueName = "Job-Queue-Name";
+
+        /// <summary>
+        /// Header for the client to specify the desired priority of a job.
+        /// </summary>
+        public static readonly string JobPriority = "Job-Priority";
     }
 }

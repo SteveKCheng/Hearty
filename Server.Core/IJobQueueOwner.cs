@@ -19,7 +19,9 @@ namespace JobBank.Server
     /// of queues is up to the application.  At the formal
     /// level, instances of this interface are only used as
     /// look-up keys to the set of queues owned the formal
-    /// owner.
+    /// owner.  Owners are not keyed with plain strings,
+    /// for type safety, and to allow metadata about
+    /// the owner to be hung off this object.
     /// </para>
     /// <para>
     /// This interface needs to implement <see cref="IComparable{T}" />

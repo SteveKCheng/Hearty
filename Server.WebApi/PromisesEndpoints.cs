@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Primitives;
 using System;
+using System.IO;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
@@ -144,6 +145,61 @@ namespace JobBank.Server.WebApi
             }
         }
 
+        private static readonly IJobQueueOwner _defaultJobQueueOwner = new JobQueueOwner("default");
+
+        private static string? ParseQueueName(StringValues input)
+        {
+            if (input.Count == 0)
+                return null;
+
+            if (input.Count > 1)
+                throw new InvalidDataException("There is more than one queue name present. ");
+
+            var name = input[0].Trim();
+            if (name.Length == 0 || HasWhitespace(name))
+                throw new InvalidDataException("The queue name is invalid. ");
+
+            return name;
+        }
+
+        private static bool HasWhitespace(ReadOnlySpan<char> input)
+        {
+            for (int i = 0; i < input.Length; ++i)
+            {
+                if (char.IsWhiteSpace(input[i]))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static int? ParseQueuePriority(StringValues input)
+        {
+            if (input.Count == 0)
+                return null;
+
+            if (input.Count > 1)
+                throw new InvalidDataException("There is more than one priority specified. ");
+
+            if (!int.TryParse(input[0], out int priority) || priority < 0)
+                throw new InvalidDataException("Job priority is incorrect. ");
+
+            return priority;
+        }
+
+        private static JobQueueKey ParseJobQueueKey(HttpRequest httpRequest)
+        {
+            var queueName = ParseQueueName(httpRequest.Query["queue"])
+                            ?? ParseQueueName(httpRequest.Headers[JobBankHttpHeaders.JobQueueName])
+                            ?? "default";
+
+            var priority = ParseQueuePriority(httpRequest.Query["priority"])
+                            ?? ParseQueuePriority(httpRequest.Headers[JobBankHttpHeaders.JobPriority])
+                            ?? 5;
+
+            return new JobQueueKey(_defaultJobQueueOwner, priority, queueName);
+        }
+
         /// <summary>
         /// Invokes a job executor to process a job posted by an HTTP client.
         /// </summary>
@@ -164,6 +220,7 @@ namespace JobBank.Server.WebApi
                     Storage = services.PromiseStorage,
                     Directory = services.PathsDirectory,
                     RouteKey = routeKey,
+                    JobQueueKey = ParseJobQueueKey(httpRequest),
                     ContentType = httpRequest.ContentType,
                     ContentLength = httpRequest.ContentLength,
                     PipeReader = httpRequest.BodyReader,

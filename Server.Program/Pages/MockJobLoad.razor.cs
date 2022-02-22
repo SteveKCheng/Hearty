@@ -12,9 +12,9 @@ namespace JobBank.Server.Program.Pages
     {
         private readonly IJobQueueOwner[] _clients = new IJobQueueOwner[3]
         {
-            new SimpleQueueOwner("Alice"),
-            new SimpleQueueOwner("Bobby"),
-            new SimpleQueueOwner("Charlie")
+            new JobQueueOwner("Alice"),
+            new JobQueueOwner("Bobby"),
+            new JobQueueOwner("Charlie")
         };
 
         private IJobQueueOwner GetClient(int index) => _clients[index];

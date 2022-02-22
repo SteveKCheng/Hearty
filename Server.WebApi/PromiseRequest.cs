@@ -1,7 +1,6 @@
 ﻿using System;
 using System.IO.Pipelines;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace JobBank.Server.WebApi
 {
@@ -113,5 +112,15 @@ namespace JobBank.Server.WebApi
         /// from the remote client.
         /// </summary>
         public string? RouteKey { get; init; }
+
+        /// <summary>
+        /// The job queue selected by the client for any jobs that 
+        /// need to be pushed to satisfy this request.
+        /// </summary>
+        /// <remarks>
+        /// The receiver of this information needs to explicitly
+        /// ensure the client is authorized to use this queue.
+        /// </remarks>
+        public JobQueueKey JobQueueKey { get; init; }
     }
 }
