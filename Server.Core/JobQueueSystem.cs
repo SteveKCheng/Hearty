@@ -156,11 +156,15 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
         for (int i = 0; i < countPriorities; ++i)
             _priorityClasses.ResetWeight(priority: i, weight: (i + 1) * 10);
 
-        _jobRunnerTask = JobScheduling.RunJobsAsync(
-                            _priorityClasses.AsChannel(),
-                            workerDistribution.AsChannel(),
-                            throwOnCancellation: false,
-                            _cancelSource.Token);
+        // Do not eagerly run RunJobsAsync inside this constructor.
+        // This is the workaround for "Task.Yield" + "ConfigureAwait(false)":
+        //   https://stackoverflow.com/questions/28309185/task-yield-in-library-needs-configurewaitfalse
+        _jobRunnerTask = Task.Run(() => JobScheduling.RunJobsAsync(
+                                            _priorityClasses.AsChannel(),
+                                            _workerDistribution.AsChannel(),
+                                            throwOnCancellation: false,
+                                            _cancelSource.Token), 
+                                  _cancelSource.Token);
     }
 
     /// <summary>
