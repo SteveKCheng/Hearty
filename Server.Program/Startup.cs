@@ -110,7 +110,7 @@ namespace JobBank.Server.Program
                     });
         }
 
-        private readonly byte[] _jwtSigningKey
+        internal static readonly byte[] _jwtSigningKey
             = Encoding.ASCII.GetBytes(@"^^y;I:HEI{+&pU5om>UR$!:tA*$y$)8[9X<zXk3CH{Rc>;yY");
 
         internal static readonly IJobQueueOwner _dummyQueueOwner =
@@ -193,6 +193,8 @@ namespace JobBank.Server.Program
                 endpoints.MapGetPromiseById();
                 endpoints.MapPostPromiseById();
                 endpoints.MapGetPromiseByPath();
+
+                endpoints.MapJwtLogin();
             });
         }
 

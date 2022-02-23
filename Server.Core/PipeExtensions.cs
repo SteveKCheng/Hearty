@@ -11,7 +11,7 @@ namespace JobBank.Server
     /// <summary>
     /// Extension methods for working with pipes (from System.IO.Pipelines).
     /// </summary>
-    internal static class PipeExtensions
+    public static class PipeExtensions
     {
         /// <summary>
         /// Write a byte sequence into a pipe.
