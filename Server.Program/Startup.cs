@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpsPolicy;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -19,6 +20,8 @@ using Microsoft.AspNetCore.Http;
 using System.Text.Json;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 namespace JobBank.Server.Program
 {
@@ -94,7 +97,21 @@ namespace JobBank.Server.Program
             services.AddSingleton<PromiseExceptionTranslator>(BasicExceptionTranslator.Instance);
 
             services.AddSingleton<MockWorkerHosts>();
+
+            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                    .AddJwtBearer(options =>
+                    {
+                        var p = options.TokenValidationParameters;
+                        p.ValidateIssuerSigningKey = true;
+                        p.ValidateIssuer = true;
+                        p.ValidIssuer = "http://localhost:5000/";
+                        p.IssuerSigningKey = new SymmetricSecurityKey(_jwtSigningKey);
+                        options.Audience = "https://localhost:5001/";
+                    });
         }
+
+        private readonly byte[] _jwtSigningKey
+            = Encoding.ASCII.GetBytes(@"^^y;I:HEI{+&pU5om>UR$!:tA*$y$)8[9X<zXk3CH{Rc>;yY");
 
         internal static readonly IJobQueueOwner _dummyQueueOwner =
             new JobQueueOwner("testClient");
@@ -124,6 +141,9 @@ namespace JobBank.Server.Program
             app.UseStaticFiles();
 
             app.UseRouting();
+
+            app.UseAuthentication();
+            app.UseAuthorization();
 
             app.UseWebSockets();
 
@@ -166,6 +186,9 @@ namespace JobBank.Server.Program
                 });
 
                 endpoints.MapPostJob("multi", input => PriceMultipleAsync(jobsManager, input));
+
+                endpoints.MapPostJob("multi2", input => PriceMultipleAsync(jobsManager, input))
+                         .RequireAuthorization();
 
                 endpoints.MapGetPromiseById();
                 endpoints.MapPostPromiseById();
