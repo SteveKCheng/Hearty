@@ -22,6 +22,8 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using idunno.Authentication.Basic;
+using System.Security.Claims;
 
 namespace JobBank.Server.Program
 {
@@ -112,7 +114,43 @@ namespace JobBank.Server.Program
                         p.ValidIssuer = c.SiteUrl;
                         options.Audience = c.SiteUrl;
                         options.RequireHttpsMetadata = false;
+                    })
+                    .AddBasic(options =>
+                    {
+                        // N.B. Basic Authentication is only used for retrieving JSON Web Tokens.
+                        //      Other endpoints requiring authorization require JSON Web Tokens
+                        //      pass as "Bearer" tokens.
+                        options.AllowInsecureProtocol = true;
+                        options.Events = new BasicAuthenticationEvents
+                        {
+                            OnValidateCredentials = context =>
+                            {
+                                if (context.Username == context.Password)
+                                {
+                                    var claims = new Claim[]
+                                    {
+                                        new(ClaimTypes.NameIdentifier, context.Username, ClaimValueTypes.String, context.Options.ClaimsIssuer),
+                                        new(ClaimTypes.Name, context.Username, ClaimValueTypes.String, context.Options.ClaimsIssuer)
+                                    };
+
+                                    context.Principal = new ClaimsPrincipal(new ClaimsIdentity(claims, context.Scheme.Name));
+                                    context.Success();
+                                }
+
+                                return Task.CompletedTask;
+                            }
+                        };
                     });
+
+            services.AddAuthorization(options =>
+            {
+                options.AddPolicy("basic", policy =>
+                {
+                    policy.AddAuthenticationSchemes("Basic");
+                    policy.RequireAuthenticatedUser();
+                });
+            });
+
         }
 
         internal static readonly IJobQueueOwner _dummyQueueOwner =
@@ -192,11 +230,13 @@ namespace JobBank.Server.Program
                 endpoints.MapPostJob("multi2", input => PriceMultipleAsync(jobsManager, input))
                          .RequireAuthorization();
 
+
                 endpoints.MapGetPromiseById();
                 endpoints.MapPostPromiseById();
                 endpoints.MapGetPromiseByPath();
 
-                endpoints.MapJwtLogin();
+                endpoints.MapJwtLogin()
+                         .RequireAuthorization("basic");
             });
         }
 

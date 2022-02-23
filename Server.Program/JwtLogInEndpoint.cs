@@ -116,9 +116,11 @@ public static class JwtLogInEndpoint
                 return;
             }
 
+            var user = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
             var claims = new Claim[]
             {
-                new("user", "default")
+                new("user", string.IsNullOrWhiteSpace(user) ? "default" : user)
             };
 
             var now = DateTime.UtcNow;
