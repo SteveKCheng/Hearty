@@ -193,6 +193,12 @@ namespace JobBank.Scheduling
             => _schedulingGroup.AsChannelReader();
 
         /// <summary>
+        /// Stop receiving job vacancies from the channel returned by
+        /// <see cref="AsChannel" />.
+        /// </summary>
+        public void TerminateChannel() => _schedulingGroup.TerminateChannelReader();
+
+        /// <summary>
         /// User-specified fallback when a distributed worker fails to execute
         /// a job.
         /// </summary>

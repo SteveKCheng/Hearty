@@ -23,6 +23,8 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
                                 string,
                                 ClientJobQueue>>> _priorityClasses;
 
+    private readonly WorkerDistribution<PromisedWork, PromiseData> _workerDistribution;
+
     private readonly SimpleExpiryQueue _expiryQueue;
 
     /// <inheritdoc cref="IJobQueueSystem.PriorityClassesCount" />
@@ -77,7 +79,10 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     /// </summary>
     public ValueTask DisposeAsync()
     {
+        _priorityClasses.TerminateChannel();
+        _workerDistribution.TerminateChannel();
         _cancelSource.Cancel();
+        
         return new ValueTask(_jobRunnerTask);
     }
 
@@ -145,20 +150,22 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     {
         _expiryQueue = new SimpleExpiryQueue(60000, 20);
         _priorityClasses = new(GenerateMiddleQueueSystems(countPriorities));
+        _workerDistribution = workerDistribution;
+        _cancelSource = new CancellationTokenSource();
 
         for (int i = 0; i < countPriorities; ++i)
             _priorityClasses.ResetWeight(priority: i, weight: (i + 1) * 10);
 
-        _cancelSource = new CancellationTokenSource();
-
         _jobRunnerTask = JobScheduling.RunJobsAsync(
                             _priorityClasses.AsChannel(),
                             workerDistribution.AsChannel(),
+                            throwOnCancellation: false,
                             _cancelSource.Token);
     }
 
     /// <summary>
-    /// Used to stop <see cref="_jobRunnerTask" />.
+    /// Used to stop <see cref="_jobRunnerTask" /> even when there are
+    /// still jobs in the channel.
     /// </summary>
     private readonly CancellationTokenSource _cancelSource;
 

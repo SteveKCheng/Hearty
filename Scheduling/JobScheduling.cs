@@ -27,7 +27,13 @@ namespace JobBank.Scheduling
         /// like the one from this library.
         /// </param>
         /// <param name="cancellationToken">
-        /// Can be used to stop processing jobs.
+        /// Can be used to interrupt processing of jobs.
+        /// </param>
+        /// <param name="throwOnCancellation">
+        /// If true, throw <see cref="OperationCanceledException" />
+        /// when <paramref name="cancellationToken" /> is cancelled.
+        /// If false, the returned asynchronous task exits normally
+        /// when cancelled.
         /// </param>
         /// <returns>
         /// Asynchronous task that completes when interrupted by 
@@ -40,20 +46,28 @@ namespace JobBank.Scheduling
         public static async Task RunJobsAsync<TInput, TOutput>(
             ChannelReader<ILaunchableJob<TInput, TOutput>> jobsChannel,
             ChannelReader<JobVacancy<TInput, TOutput>> vacanciesChannel,
+            bool throwOnCancellation,
             CancellationToken cancellationToken)
         {
-            while (await vacanciesChannel.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+            try
             {
-                if (!await jobsChannel.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
-                    break;
-
-                if (vacanciesChannel.TryRead(out var vacancy))
+                while (await vacanciesChannel.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
                 {
-                    if (jobsChannel.TryRead(out var job))
-                        vacancy.TryLaunchJob(job);
-                    else
-                        vacancy.Dispose();
+                    if (!await jobsChannel.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+                        break;
+
+                    if (vacanciesChannel.TryRead(out var vacancy))
+                    {
+                        if (jobsChannel.TryRead(out var job))
+                            vacancy.TryLaunchJob(job);
+                        else
+                            vacancy.Dispose();
+                    }
                 }
+            }
+            catch (OperationCanceledException e) 
+                when (!throwOnCancellation && e.CancellationToken == cancellationToken)
+            {
             }
         }
     }
