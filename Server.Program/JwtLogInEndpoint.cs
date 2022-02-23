@@ -8,6 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Web;
 
 namespace JobBank.Server.Program;
 
@@ -49,6 +50,45 @@ public static class JwtLogInEndpoint
         return new SymmetricSecurityKey(bytes);
     }
 
+    /// <summary>
+    /// Supports content negotiation for the endpoint returning the JSON Web Token.
+    /// </summary>
+    private static readonly ContentFormatInfo[] _contentFormatInfo = new ContentFormatInfo[]
+    {
+        new(mediaType: "application/jwt", ContentPreference.Best),
+        new(mediaType: "application/json", ContentPreference.Good),
+        new(mediaType: "text/plain", ContentPreference.Fair)
+    };
+
+    /// <summary>
+    /// The variant formats that JSON Web Token could be presented in.
+    /// </summary>
+    private enum JwtContentFormat
+    {
+        /// <summary>
+        /// Client requested a format that is not supported by the server.
+        /// </summary>
+        Unsupported = -1,
+
+        /// <summary>
+        /// The compact text serialization of the JSON Web Token,
+        /// presented as "application/jwt".
+        /// </summary>
+        Jwt = 0,
+
+        /// <summary>
+        /// JSON wrapper around the compact text serialization JSON Web Token,
+        /// for clients that cannot decode "application/jwt" directly.
+        /// </summary>
+        Json = 1,
+
+        /// <summary>
+        /// The compact text serialization of the JSON Web Token,
+        /// presented as "text/plain".
+        /// </summary>
+        Text = 2,
+    }
+
     public static IEndpointConventionBuilder
         MapJwtLogin(this IEndpointRouteBuilder endpoints)
     {
@@ -66,6 +106,16 @@ public static class JwtLogInEndpoint
 
         return endpoints.MapPost("/jwt", async httpContext =>
         {
+            var httpResponse = httpContext.Response;
+
+            var format = (JwtContentFormat)ContentFormatInfo.Negotiate(_contentFormatInfo,
+                                                                       httpContext.Request.Headers.Accept);
+            if (format == JwtContentFormat.Unsupported)
+            {
+                httpResponse.StatusCode = StatusCodes.Status406NotAcceptable;
+                return;
+            }
+
             var claims = new Claim[]
             {
                 new("user", "default")
@@ -82,11 +132,33 @@ public static class JwtLogInEndpoint
 
             var tokenString = tokenHandler.WriteToken(token);
 
-            var httpResponse = httpContext.Response;
             httpResponse.StatusCode = StatusCodes.Status200OK;
-            httpResponse.ContentType = "application/jwt";
-            httpResponse.ContentLength = tokenString.Length;
-            httpResponse.BodyWriter.WriteUtf8String(tokenString);
+
+            switch (format)
+            {
+                case JwtContentFormat.Jwt:
+                    httpResponse.ContentType = "application/jwt";
+                    goto JwtTextCommon;
+                case JwtContentFormat.Text:
+                    httpResponse.ContentType = "text/plain";
+                    goto JwtTextCommon;
+                JwtTextCommon:
+                    httpResponse.ContentLength = tokenString.Length;
+                    httpResponse.BodyWriter.WriteUtf8String(tokenString);
+                    break;
+
+                case JwtContentFormat.Json:
+                    string tokenJson = HttpUtility.JavaScriptStringEncode(tokenString);
+                    string jsonPrefix = @"{ ""token"": """;
+                    string jsonSuffix = @""" }";
+                    httpResponse.ContentType = "application/json";
+                    httpResponse.ContentLength = jsonPrefix.Length + tokenJson.Length + jsonSuffix.Length;
+                    httpResponse.BodyWriter.WriteUtf8String(jsonPrefix);
+                    httpResponse.BodyWriter.WriteUtf8String(tokenJson);
+                    httpResponse.BodyWriter.WriteUtf8String(jsonSuffix);
+                    break;
+            }
+
             await httpResponse.BodyWriter.CompleteAsync().ConfigureAwait(false);
         });
     }
