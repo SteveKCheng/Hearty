@@ -97,9 +97,9 @@ namespace JobBank.Server
 
             var responseQuality = responsePreference switch
             {
-                ContentPreference.Bad => 10,
-                ContentPreference.Fair => 100,
-                ContentPreference.Good => 500,
+                ContentPreference.Bad => 850,
+                ContentPreference.Fair => 900,
+                ContentPreference.Good => 950,
                 _ => 1000
             };
 

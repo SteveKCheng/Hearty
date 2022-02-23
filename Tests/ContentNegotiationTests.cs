@@ -29,5 +29,24 @@ namespace JobBank.Tests
             int best = ContentFormatInfo.Negotiate(available, requests);
             Assert.Equal(1, best);
         }
+
+        [Fact]
+        public void SelectBestFormat2()
+        {
+            var available = new ContentFormatInfo[]
+            {
+                new(mediaType: "application/jwt", ContentPreference.Best),
+                new(mediaType: "application/json", ContentPreference.Good),
+                new(mediaType: "text/plain", ContentPreference.Fair),
+                new(mediaType: "application/xhtml+xml", ContentPreference.Fair)
+            };
+
+            // This Accept line comes from Microsoft Edge
+            var requests = new StringValues(
+                "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9");
+
+            int best = ContentFormatInfo.Negotiate(available, requests);
+            Assert.Equal(3, best);
+        }
     }
 }
