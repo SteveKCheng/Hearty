@@ -101,17 +101,19 @@ namespace JobBank.Server.Program
             services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     .AddJwtBearer(options =>
                     {
+                        var c = Configuration.GetRequiredSection("JsonWebToken")
+                                             .Get<JwtSiteConfiguration>();
+                        var signingKey = JwtLogInEndpoint.CreateSecurityKeyFromString(c.SigningKey);
+
                         var p = options.TokenValidationParameters;
+                        p.IssuerSigningKey = signingKey;
                         p.ValidateIssuerSigningKey = true;
                         p.ValidateIssuer = true;
-                        p.ValidIssuer = "http://localhost:5000/";
-                        p.IssuerSigningKey = new SymmetricSecurityKey(_jwtSigningKey);
-                        options.Audience = "https://localhost:5001/";
+                        p.ValidIssuer = c.SiteUrl;
+                        options.Audience = c.SiteUrl;
+                        options.RequireHttpsMetadata = false;
                     });
         }
-
-        internal static readonly byte[] _jwtSigningKey
-            = Encoding.ASCII.GetBytes(@"^^y;I:HEI{+&pU5om>UR$!:tA*$y$)8[9X<zXk3CH{Rc>;yY");
 
         internal static readonly IJobQueueOwner _dummyQueueOwner =
             new JobQueueOwner("testClient");
