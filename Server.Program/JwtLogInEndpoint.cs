@@ -8,7 +8,6 @@ using Microsoft.IdentityModel.Tokens;
 using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Web;
 
 namespace JobBank.Server.Program;
 
@@ -57,7 +56,8 @@ public static class JwtLogInEndpoint
     {
         new(mediaType: "application/jwt", ContentPreference.Best),
         new(mediaType: "application/json", ContentPreference.Good),
-        new(mediaType: "text/plain", ContentPreference.Fair)
+        new(mediaType: "text/plain", ContentPreference.Fair),
+        new(mediaType: "application/xhtml+xml", ContentPreference.Fair)
     };
 
     /// <summary>
@@ -87,6 +87,11 @@ public static class JwtLogInEndpoint
         /// presented as "text/plain".
         /// </summary>
         Text = 2,
+
+        /// <summary>
+        /// JSON Web Token wrapped in XHTML, for compatibility with Web browsers
+        /// </summary>
+        XHtml = 3,
     }
 
     public static IEndpointConventionBuilder
@@ -114,12 +119,17 @@ public static class JwtLogInEndpoint
             if (format == JwtContentFormat.Unsupported)
             {
                 httpResponse.StatusCode = StatusCodes.Status406NotAcceptable;
+                httpResponse.Headers.CacheControl = "private";
+                httpResponse.Headers.Vary = "Accept";
                 return;
             }
 
             if (string.Equals(httpRequest.Method, HttpMethods.Head, StringComparison.OrdinalIgnoreCase))
             {
                 httpResponse.StatusCode = StatusCodes.Status200OK;
+                httpResponse.ContentType = _contentFormatInfo[(int)format].MediaType;
+                httpResponse.Headers.CacheControl = "private";
+                httpResponse.Headers.Vary = "Accept";
                 return;
             }
 
@@ -139,33 +149,52 @@ public static class JwtLogInEndpoint
                     claims: claims,
                     signingCredentials: credentials);
 
+            // N.B. The compact serialization of JSON Web Tokens use
+            //      Base64URL encoding so it needs no escaping here.
+            //      It uses only the characters: A-Z, a-z, 0-9, - and _
             var tokenString = tokenHandler.WriteToken(token);
 
             httpResponse.StatusCode = StatusCodes.Status200OK;
             httpResponse.Headers.CacheControl = "private";
 
+            httpResponse.ContentType = _contentFormatInfo[(int)format].MediaType;
+
             switch (format)
             {
                 case JwtContentFormat.Jwt:
-                    httpResponse.ContentType = "application/jwt";
-                    goto JwtTextCommon;
                 case JwtContentFormat.Text:
-                    httpResponse.ContentType = "text/plain";
-                    goto JwtTextCommon;
-                JwtTextCommon:
                     httpResponse.ContentLength = tokenString.Length;
                     httpResponse.BodyWriter.WriteUtf8String(tokenString);
                     break;
 
                 case JwtContentFormat.Json:
-                    string tokenJson = HttpUtility.JavaScriptStringEncode(tokenString);
                     string jsonPrefix = @"{ ""token"": """;
                     string jsonSuffix = @""" }";
-                    httpResponse.ContentType = "application/json";
-                    httpResponse.ContentLength = jsonPrefix.Length + tokenJson.Length + jsonSuffix.Length;
+                    httpResponse.ContentLength = jsonPrefix.Length + tokenString.Length + jsonSuffix.Length;
                     httpResponse.BodyWriter.WriteUtf8String(jsonPrefix);
-                    httpResponse.BodyWriter.WriteUtf8String(tokenJson);
+                    httpResponse.BodyWriter.WriteUtf8String(tokenString);
                     httpResponse.BodyWriter.WriteUtf8String(jsonSuffix);
+                    break;
+
+                case JwtContentFormat.XHtml:
+                    string htmlPrefix = @"<?xml version=""1.0"" encoding=""utf-8"" ?>
+<!DOCTYPE html PUBLIC ""-//W3C//DTD XHTML 1.0 Strict//EN"" ""http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"" >
+<html xmlns=""http://www.w3.org/1999/xhtml"">
+  <head>
+    <title>JSON Web Token</title>
+  </head>
+  <body>
+    <p><samp style=""word-wrap: break-word"">
+";
+                    string htmlSuffix = @"
+    </samp></p>
+  </body>
+</html>
+";
+                    httpResponse.ContentLength = htmlPrefix.Length + tokenString.Length + htmlSuffix.Length;
+                    httpResponse.BodyWriter.WriteUtf8String(htmlPrefix);
+                    httpResponse.BodyWriter.WriteUtf8String(tokenString);
+                    httpResponse.BodyWriter.WriteUtf8String(htmlSuffix);
                     break;
             }
 
