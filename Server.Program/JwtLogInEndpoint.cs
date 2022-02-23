@@ -104,15 +104,22 @@ public static class JwtLogInEndpoint
 
         var siteUrl = siteConfig.SiteUrl;
 
-        return endpoints.MapPost("/jwt", async httpContext =>
+        return endpoints.MapMethods("/jwt", new[] { HttpMethods.Get, HttpMethods.Head }, async httpContext =>
         {
+            var httpRequest = httpContext.Request;
             var httpResponse = httpContext.Response;
 
             var format = (JwtContentFormat)ContentFormatInfo.Negotiate(_contentFormatInfo,
-                                                                       httpContext.Request.Headers.Accept);
+                                                                       httpRequest.Headers.Accept);
             if (format == JwtContentFormat.Unsupported)
             {
                 httpResponse.StatusCode = StatusCodes.Status406NotAcceptable;
+                return;
+            }
+
+            if (string.Equals(httpRequest.Method, HttpMethods.Head, StringComparison.OrdinalIgnoreCase))
+            {
+                httpResponse.StatusCode = StatusCodes.Status200OK;
                 return;
             }
 
@@ -135,6 +142,7 @@ public static class JwtLogInEndpoint
             var tokenString = tokenHandler.WriteToken(token);
 
             httpResponse.StatusCode = StatusCodes.Status200OK;
+            httpResponse.Headers.CacheControl = "private";
 
             switch (format)
             {
