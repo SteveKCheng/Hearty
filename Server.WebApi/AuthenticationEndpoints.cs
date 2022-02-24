@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication;
@@ -8,10 +10,13 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Cryptography.KeyDerivation;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
@@ -355,14 +360,15 @@ public static class AuthenticationEndpoints
     /// <param name="authBuilder">
     /// Builder for authentication schemes in ASP.NET Core.
     /// </param>
-    /// <param name="siteUrl">
-    /// URL of the site to identify the self-generated tokens with.
-    /// </param>
     /// <param name="passphrase">
     /// Passphrase used to generate the secret key that the JSON Web Tokens
     /// will be signed with.  If null, the secret key will be randomly
     /// generated, and it will not be persisted beyond the lifetime of the
     /// web server host.
+    /// </param>
+    /// <param name="siteUrl">
+    /// URL of the site to identify the self-generated tokens with.
+    /// If null, the URL is automatically determined from the web host.
     /// </param>
     /// <param name="authenticationScheme">
     /// The name ASP.NET Core to register the new authentication scheme as.
@@ -372,11 +378,11 @@ public static class AuthenticationEndpoints
     /// <returns></returns>
     public static AuthenticationBuilder 
         AddSelfIssuedJwtBearer(this AuthenticationBuilder authBuilder,
-                               string? siteUrl = null, 
                                string? passphrase = null,
+                               string? siteUrl = null,
                                string? authenticationScheme = null)
     {
-        siteUrl ??= "http://localhost/";
+        //siteUrl ??= "http://localhost/";
         authenticationScheme ??= JwtBearerDefaults.AuthenticationScheme;
 
         SecurityKey signingKey;
@@ -385,17 +391,90 @@ public static class AuthenticationEndpoints
         else
             signingKey = CreateSecurityKeyFromString(passphrase);
 
-        authBuilder.AddJwtBearer(authenticationScheme, options =>
+        if (siteUrl is null)
         {
-            var p = options.TokenValidationParameters;
-            p.IssuerSigningKey = signingKey;
-            p.ValidateIssuerSigningKey = true;
-            p.ValidateIssuer = true;
-            p.ValidIssuer = siteUrl;
-            options.Audience = siteUrl;
-            options.RequireHttpsMetadata = false;
-        });
+            // Need dependency injection to get IServer to determine server
+            // address if the caller did not specify it. 
+            //
+            // Unfortunately neither authBuilder.AddJwtBearer nor
+            // authBuilder.AddScheme support injecting a dependency to
+            // initialize JwtBearerOptions even though IServiceCollection
+            // supports such functionality, so we have to re-implement
+            // authBuilder.AddJwtBearer here.
+
+            authBuilder.Services
+                       .TryAddEnumerable(
+                            ServiceDescriptor.Singleton<IPostConfigureOptions<JwtBearerOptions>, 
+                                                        JwtBearerPostConfigureOptions>());
+
+            authBuilder.AddSchemeWithDependency(
+                authenticationScheme,
+                "Self-issued JSON Web Token",
+                typeof(JwtBearerHandler),
+                (JwtBearerOptions options, IServer server) =>
+                {
+                    var actualSiteUrl = server.Features
+                                              .Get<IServerAddressesFeature>()
+                                              ?.Addresses
+                                              .FirstOrDefault()
+                                              ?? "http://localhost/";
+
+                    SetJwtBearerOptions(options, signingKey, actualSiteUrl);
+                });
+        }
+        else
+        {
+            authBuilder.AddJwtBearer(authenticationScheme, options =>
+            {
+                SetJwtBearerOptions(options, signingKey, siteUrl);
+            });
+        }
 
         return authBuilder;
+    }
+
+    private static void SetJwtBearerOptions(JwtBearerOptions options, SecurityKey signingKey, string siteUrl)
+    {
+        var p = options.TokenValidationParameters;
+        p.IssuerSigningKey = signingKey;
+        p.ValidateIssuerSigningKey = true;
+        p.ValidateIssuer = true;
+        p.ValidIssuer = siteUrl;
+        options.Audience = siteUrl;
+        options.RequireHttpsMetadata = false;
+    }
+
+    private static void
+        AddSchemeWithDependency<TOptions, TService>
+            (
+                this AuthenticationBuilder authBuilder, 
+                string authenticationScheme, 
+                string? displayName,
+                [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type handlerType,
+                Action<TOptions, TService> configureOptions
+            )
+            where TOptions : AuthenticationSchemeOptions, new()
+            where TService : class
+    {
+        IServiceCollection services = authBuilder.Services;
+
+        services.Configure<AuthenticationOptions>(o =>
+        {
+            o.AddScheme(authenticationScheme, scheme =>
+            {
+                scheme.HandlerType = handlerType;
+                scheme.DisplayName = displayName;
+            });
+        });
+
+        services.AddOptions<TOptions>(authenticationScheme)
+                .Validate(o =>
+                {
+                    o.Validate(authenticationScheme);
+                    return true;
+                })
+                .Configure<TService>(configureOptions);
+
+        services.AddTransient(handlerType);
     }
 }

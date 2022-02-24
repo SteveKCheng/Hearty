@@ -106,8 +106,7 @@ namespace JobBank.Server.Program
             var jwtSiteConfig = Configuration.GetRequiredSection("JsonWebToken")
                                              .Get<JwtSiteConfiguration>();
 
-            authBuilder.AddSelfIssuedJwtBearer(jwtSiteConfig.SiteUrl,
-                                               jwtSiteConfig.SigningKey);
+            authBuilder.AddSelfIssuedJwtBearer(jwtSiteConfig.SigningKey);
 
             authBuilder.AddBasic(options =>
             {
