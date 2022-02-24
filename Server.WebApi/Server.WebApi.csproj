@@ -18,7 +18,7 @@
   <ItemGroup>
     <Compile Include="AuthenticationEndpoints.cs" />
     <Compile Include="BasicPromiseClientInfo.cs" />
-    <Compile Include="IRemoteCancellation.cs" />
+    <Compile Include="JobQueueOwnerRetriever.cs" />
     <Compile Include="PromisesEndpoints.cs" />
     <Compile Include="PayloadTooLargeException.cs" />
     <Compile Include="PromiseRequest.cs" />
