@@ -48,5 +48,21 @@ namespace JobBank.Tests
             int best = ContentFormatInfo.Negotiate(available, requests);
             Assert.Equal(3, best);
         }
+
+        [Fact]
+        public void SelectFormatWithSuffix()
+        {
+            var available = new ContentFormatInfo[]
+            {
+                new(mediaType: "application/html", ContentPreference.Best),
+                new(mediaType: "application/vnd.hearty.exception+json", ContentPreference.Best),
+                new(mediaType: "text/plain", ContentPreference.Fair)
+            };
+
+            var requests = new StringValues("application/json,*/*");
+
+            int best = ContentFormatInfo.Negotiate(available, requests);
+            Assert.Equal(1, best);
+        }
     }
 }
