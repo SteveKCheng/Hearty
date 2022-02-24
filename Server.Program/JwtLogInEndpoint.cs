@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Cryptography.KeyDerivation;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -6,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using System;
+using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
@@ -94,6 +97,18 @@ public static class JwtLogInEndpoint
         XHtml = 3,
     }
 
+    private static IReadOnlyList<Claim> CreateClaims(HttpContext httpContext)
+    {
+        var user = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        var claims = new Claim[]
+        {
+                new("user", string.IsNullOrWhiteSpace(user) ? "default" : user)
+        };
+
+        return claims;
+    }
+
     public static IEndpointConventionBuilder
         MapJwtLogin(this IEndpointRouteBuilder endpoints)
     {
@@ -124,7 +139,7 @@ public static class JwtLogInEndpoint
                 return;
             }
 
-            if (string.Equals(httpRequest.Method, HttpMethods.Head, StringComparison.OrdinalIgnoreCase))
+            if (IsHeadRequest(httpRequest))
             {
                 httpResponse.StatusCode = StatusCodes.Status200OK;
                 httpResponse.ContentType = _contentFormatInfo[(int)format].MediaType;
@@ -133,12 +148,7 @@ public static class JwtLogInEndpoint
                 return;
             }
 
-            var user = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-            var claims = new Claim[]
-            {
-                new("user", string.IsNullOrWhiteSpace(user) ? "default" : user)
-            };
+            var claims = CreateClaims(httpContext);
 
             var now = DateTime.UtcNow;
             var token = new JwtSecurityToken(
@@ -199,6 +209,41 @@ public static class JwtLogInEndpoint
             }
 
             await httpResponse.BodyWriter.CompleteAsync().ConfigureAwait(false);
+        });
+    }
+
+    private static bool IsHeadRequest(HttpRequest httpRequest)
+        => string.Equals(httpRequest.Method,
+                         HttpMethods.Head,
+                         StringComparison.OrdinalIgnoreCase);
+
+    public static IEndpointConventionBuilder
+        MapAuthCookieRetrieval(this IEndpointRouteBuilder endpoints)
+    {
+        return endpoints.MapMethods("/auth/cookie", new[] { HttpMethods.Get, HttpMethods.Head }, async httpContext =>
+        {
+            var httpRequest = httpContext.Request;
+            var httpResponse = httpContext.Response;
+
+            var isHead = IsHeadRequest(httpRequest);
+
+            httpResponse.StatusCode = isHead ? StatusCodes.Status200OK
+                                             : StatusCodes.Status204NoContent;
+            httpResponse.Headers.CacheControl = "private";
+
+            if (isHead)
+                return;
+
+            var claims = CreateClaims(httpContext);
+
+            var claimsIdentity = new ClaimsIdentity(
+                                    claims, 
+                                    CookieAuthenticationDefaults.AuthenticationScheme);
+
+            var principal = new ClaimsPrincipal(claimsIdentity);
+
+            await httpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
+                                          principal).ConfigureAwait(false);
         });
     }
 }

@@ -100,27 +100,30 @@ namespace JobBank.Server.Program
 
             services.AddSingleton<MockWorkerHosts>();
 
-            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-                    .AddJwtBearer(options =>
-                    {
-                        var c = Configuration.GetRequiredSection("JsonWebToken")
-                                             .Get<JwtSiteConfiguration>();
-                        var signingKey = JwtLogInEndpoint.CreateSecurityKeyFromString(c.SigningKey);
+            var authBuilder = services.AddAuthentication(
+                                JwtBearerDefaults.AuthenticationScheme);
 
-                        var p = options.TokenValidationParameters;
-                        p.IssuerSigningKey = signingKey;
-                        p.ValidateIssuerSigningKey = true;
-                        p.ValidateIssuer = true;
-                        p.ValidIssuer = c.SiteUrl;
-                        options.Audience = c.SiteUrl;
-                        options.RequireHttpsMetadata = false;
-                    })
-                    .AddBasic(options =>
-                    {
-                        // N.B. Basic Authentication is only used for retrieving JSON Web Tokens.
-                        //      Other endpoints requiring authorization require JSON Web Tokens
-                        //      pass as "Bearer" tokens.
-                        options.AllowInsecureProtocol = true;
+            authBuilder.AddJwtBearer(options =>
+            {
+                var c = Configuration.GetRequiredSection("JsonWebToken")
+                                        .Get<JwtSiteConfiguration>();
+                var signingKey = JwtLogInEndpoint.CreateSecurityKeyFromString(c.SigningKey);
+
+                var p = options.TokenValidationParameters;
+                p.IssuerSigningKey = signingKey;
+                p.ValidateIssuerSigningKey = true;
+                p.ValidateIssuer = true;
+                p.ValidIssuer = c.SiteUrl;
+                options.Audience = c.SiteUrl;
+                options.RequireHttpsMetadata = false;
+            });
+
+            authBuilder.AddBasic(options =>
+            {
+                // N.B. Basic Authentication is only used for retrieving JSON Web Tokens.
+                //      Other endpoints requiring authorization require JSON Web Tokens
+                //      pass as "Bearer" tokens.
+                options.AllowInsecureProtocol = true;
                         options.Events = new BasicAuthenticationEvents
                         {
                             OnValidateCredentials = context =>
@@ -129,8 +132,8 @@ namespace JobBank.Server.Program
                                 {
                                     var claims = new Claim[]
                                     {
-                                        new(ClaimTypes.NameIdentifier, context.Username, ClaimValueTypes.String, context.Options.ClaimsIssuer),
-                                        new(ClaimTypes.Name, context.Username, ClaimValueTypes.String, context.Options.ClaimsIssuer)
+                                new(ClaimTypes.NameIdentifier, context.Username, ClaimValueTypes.String, context.Options.ClaimsIssuer),
+                                new(ClaimTypes.Name, context.Username, ClaimValueTypes.String, context.Options.ClaimsIssuer)
                                     };
 
                                     context.Principal = new ClaimsPrincipal(new ClaimsIdentity(claims, context.Scheme.Name));
@@ -140,13 +143,20 @@ namespace JobBank.Server.Program
                                 return Task.CompletedTask;
                             }
                         };
-                    });
+            });
+
+            authBuilder.AddCookie(options =>
+            {
+                options.ExpireTimeSpan = TimeSpan.FromMinutes(20);
+                options.SlidingExpiration = true;
+                options.AccessDeniedPath = "/";
+            });
 
             services.AddAuthorization(options =>
             {
                 options.AddPolicy("basic", policy =>
                 {
-                    policy.AddAuthenticationSchemes("Basic");
+                    policy.AddAuthenticationSchemes(BasicAuthenticationDefaults.AuthenticationScheme);
                     policy.RequireAuthenticatedUser();
                 });
             });
@@ -236,6 +246,9 @@ namespace JobBank.Server.Program
                 endpoints.MapGetPromiseByPath();
 
                 endpoints.MapJwtLogin()
+                         .RequireAuthorization("basic");
+
+                endpoints.MapAuthCookieRetrieval()
                          .RequireAuthorization("basic");
             });
         }
