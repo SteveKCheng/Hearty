@@ -352,15 +352,22 @@ public static class AuthenticationEndpoints
     /// If this argument is null, it defaults to 
     /// <see cref="JwtBearerDefaults.AuthenticationScheme" />.
     /// </param>
-    /// <returns></returns>
+    /// <param name="displayName">
+    /// The displayed name or title to the new authentication scheme to 
+    /// register.  If null, this method supplies a default.
+    /// </param>
+    /// <returns>
+    /// Returns back <paramref name="authBuilder" />.
+    /// </returns>
     public static AuthenticationBuilder 
         AddSelfIssuedJwtBearer(this AuthenticationBuilder authBuilder,
                                string? passphrase = null,
                                string? siteUrl = null,
+                               string? displayName = null,
                                string? authenticationScheme = null)
     {
-        //siteUrl ??= "http://localhost/";
         authenticationScheme ??= JwtBearerDefaults.AuthenticationScheme;
+        displayName ??= "Self-issued JSON Web Tokens";
 
         SecurityKey signingKey;
         if (string.IsNullOrEmpty(passphrase))
@@ -386,7 +393,7 @@ public static class AuthenticationEndpoints
 
             authBuilder.AddSchemeWithDependency(
                 authenticationScheme,
-                "Self-issued JSON Web Token",
+                displayName,
                 typeof(JwtBearerHandler),
                 (JwtBearerOptions options, IServer server) =>
                 {
@@ -401,7 +408,7 @@ public static class AuthenticationEndpoints
         }
         else
         {
-            authBuilder.AddJwtBearer(authenticationScheme, options =>
+            authBuilder.AddJwtBearer(authenticationScheme, displayName, options =>
             {
                 SetJwtBearerOptions(options, signingKey, siteUrl);
             });
