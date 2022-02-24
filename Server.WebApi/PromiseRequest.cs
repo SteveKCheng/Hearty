@@ -118,9 +118,18 @@ namespace JobBank.Server.WebApi
         /// need to be pushed to satisfy this request.
         /// </summary>
         /// <remarks>
-        /// The receiver of this information needs to explicitly
-        /// ensure the client is authorized to use this queue.
+        /// The receiver of this information may assume the client 
+        /// has been authorized for this queue.  Authorization
+        /// is expected to be the responsibility of the overall 
+        /// server framework, e.g. ASP.NET Core.
         /// </remarks>
-        public JobQueueKey JobQueueKey { get; init; }
+        public JobQueueKey? JobQueueKey { get; init; }
+
+        /// <summary>
+        /// Retrieve <see cref="JobQueueKeyRequired" /> and require it to
+        /// be not null.
+        /// </summary>
+        public JobQueueKey JobQueueKeyRequired => 
+            JobQueueKey ?? throw new InvalidOperationException("Job queue key not specified. ");
     }
 }

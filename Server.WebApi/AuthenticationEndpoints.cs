@@ -102,7 +102,7 @@ public static class AuthenticationEndpoints
 
         var claims = new Claim[]
         {
-            new("user", string.IsNullOrWhiteSpace(user) ? "default" : user)
+            new(ClaimTypes.NameIdentifier, string.IsNullOrWhiteSpace(user) ? "anonymous" : user)
         };
 
         return claims;

@@ -79,6 +79,13 @@ namespace JobBank.Server.WebApi
             /// created promises.
             /// </summary>
             public IRemoteCancellation<PromiseId> RemoteCancellation { get; init; }
+
+            /// <summary>
+            /// Obtains the instance of <see cref="IJobQueueOwner"/> 
+            /// given the client's credentials and any explicitly specified
+            /// queue owner in the incoming request.
+            /// </summary>
+            public JobQueueOwnerRetriever? JobQueueOwnerRetrieval { get; init; }
         }
 
         /// <summary>
@@ -95,7 +102,8 @@ namespace JobBank.Server.WebApi
                 PathsDirectory = p.GetRequiredService<PathsDirectory>(),
                 ExceptionTranslator = p.GetRequiredService<PromiseExceptionTranslator>(),
                 RemoteCancellation = p.GetService<IRemoteCancellation<PromiseId>>()
-                                        ?? _dummyRemoteCancellation
+                                        ?? _dummyRemoteCancellation,
+                JobQueueOwnerRetrieval = p.GetService<JobQueueOwnerRetriever>()
             };
         }
 
@@ -145,8 +153,6 @@ namespace JobBank.Server.WebApi
             }
         }
 
-        private static readonly IJobQueueOwner _defaultJobQueueOwner = new JobQueueOwner("default");
-
         private static string? ParseQueueName(StringValues input)
         {
             if (input.Count == 0)
@@ -187,17 +193,20 @@ namespace JobBank.Server.WebApi
             return priority;
         }
 
-        private static JobQueueKey ParseJobQueueKey(HttpRequest httpRequest)
+        private static string ParseQueueName(HttpRequest httpRequest)
         {
             var queueName = ParseQueueName(httpRequest.Query["queue"])
                             ?? ParseQueueName(httpRequest.Headers[JobBankHttpHeaders.JobQueueName])
                             ?? "default";
+            return queueName;
+        }
 
+        private static int ParseQueuePriority(HttpRequest httpRequest)
+        {
             var priority = ParseQueuePriority(httpRequest.Query["priority"])
                             ?? ParseQueuePriority(httpRequest.Headers[JobBankHttpHeaders.JobPriority])
                             ?? 5;
-
-            return new JobQueueKey(_defaultJobQueueOwner, priority, queueName);
+            return priority;
         }
 
         /// <summary>
@@ -215,12 +224,27 @@ namespace JobBank.Server.WebApi
 
             try
             {
+                int queuePriority = ParseQueuePriority(httpRequest);
+                string queueName = ParseQueueName(httpRequest);
+
+                IJobQueueOwner? queueOwner = null;
+                if (services.JobQueueOwnerRetrieval is not null)
+                {
+                    queueOwner = await services.JobQueueOwnerRetrieval
+                                               .Invoke(httpContext.User, null)
+                                               .ConfigureAwait(false);
+                }
+
+                JobQueueKey? queueKey = default;
+                if (queueOwner is not null)
+                    queueKey = new JobQueueKey(queueOwner, queuePriority, queueName);
+
                 var jobInput = new PromiseRequest
                 {
                     Storage = services.PromiseStorage,
                     Directory = services.PathsDirectory,
                     RouteKey = routeKey,
-                    JobQueueKey = ParseJobQueueKey(httpRequest),
+                    JobQueueKey = queueKey,
                     ContentType = httpRequest.ContentType,
                     ContentLength = httpRequest.ContentLength,
                     PipeReader = httpRequest.BodyReader,

@@ -100,6 +100,12 @@ namespace JobBank.Server.Program
 
             services.AddSingleton<MockWorkerHosts>();
 
+            services.AddSingleton<JobQueueOwnerRetriever>((ClaimsPrincipal? principal, string? id) =>
+            {
+                var name = principal?.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anonymous";
+                return new ValueTask<IJobQueueOwner?>(new JobQueueOwner(name, principal));
+            });
+
             var authBuilder = services.AddAuthentication(
                                 JwtBearerDefaults.AuthenticationScheme);
 
@@ -216,7 +222,7 @@ namespace JobBank.Server.Program
 
                     var promise = input.Storage.CreatePromise(request);
 
-                    jobsManager.PushJobAndOwnCancellation(input.JobQueueKey,
+                    jobsManager.PushJobAndOwnCancellation(input.JobQueueKeyRequired,
                         static w => w.Promise ?? throw new ArgumentNullException(),
                         new PromisedWork(request) { InitialWait = 100000, Promise = promise });
 
@@ -274,7 +280,7 @@ namespace JobBank.Server.Program
             });
 
             jobScheduling.PushMacroJobAndOwnCancellation(
-                input.JobQueueKey,
+                input.JobQueueKeyRequired,
                 static w => w.Promise! ?? throw new ArgumentNullException(), 
                 new PromisedWork(request) { Promise = promise }, 
                 _ => new PromiseList(input.Storage),

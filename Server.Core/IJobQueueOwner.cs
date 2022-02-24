@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -35,5 +36,11 @@ namespace JobBank.Server
         /// The title or short text description of this owner, for display.
         /// </summary>
         string Title { get; }
+
+        /// <summary>
+        /// Optional user identity that may be established by
+        /// a server-side framework such as ASP.NET Core.
+        /// </summary>
+        ClaimsPrincipal? Principal { get; }
     }
 }
