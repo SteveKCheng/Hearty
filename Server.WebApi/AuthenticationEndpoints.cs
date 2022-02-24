@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -58,11 +59,8 @@ public static class AuthenticationEndpoints
     /// 256-bit key derived from running the PBKDF2 algorithm on
     /// <paramref name="password" />.
     /// </returns>
-    public static SymmetricSecurityKey CreateSecurityKeyFromString(string? password)
+    private static SymmetricSecurityKey CreateSecurityKeyFromString(string password)
     {
-        if (string.IsNullOrEmpty(password))
-            password = "Unset password";
-
         byte[] bytes = KeyDerivation.Pbkdf2(password,
                                             Array.Empty<byte>(),
                                             KeyDerivationPrf.HMACSHA256,
@@ -349,5 +347,55 @@ public static class AuthenticationEndpoints
             await httpContext.SignInAsync(authenticationScheme,
                                           principal).ConfigureAwait(false);
         });
+    }
+
+    /// <summary>
+    /// Configure the web server host to accept JSON Web Tokens served by itself.
+    /// </summary>
+    /// <param name="authBuilder">
+    /// Builder for authentication schemes in ASP.NET Core.
+    /// </param>
+    /// <param name="siteUrl">
+    /// URL of the site to identify the self-generated tokens with.
+    /// </param>
+    /// <param name="passphrase">
+    /// Passphrase used to generate the secret key that the JSON Web Tokens
+    /// will be signed with.  If null, the secret key will be randomly
+    /// generated, and it will not be persisted beyond the lifetime of the
+    /// web server host.
+    /// </param>
+    /// <param name="authenticationScheme">
+    /// The name ASP.NET Core to register the new authentication scheme as.
+    /// If this argument is null, it defaults to 
+    /// <see cref="JwtBearerDefaults.AuthenticationScheme" />.
+    /// </param>
+    /// <returns></returns>
+    public static AuthenticationBuilder 
+        AddSelfIssuedJwtBearer(this AuthenticationBuilder authBuilder,
+                               string? siteUrl = null, 
+                               string? passphrase = null,
+                               string? authenticationScheme = null)
+    {
+        siteUrl ??= "http://localhost/";
+        authenticationScheme ??= JwtBearerDefaults.AuthenticationScheme;
+
+        SecurityKey signingKey;
+        if (string.IsNullOrEmpty(passphrase))
+            signingKey = new SymmetricSecurityKey(RandomNumberGenerator.GetBytes(256 / 8));
+        else
+            signingKey = CreateSecurityKeyFromString(passphrase);
+
+        authBuilder.AddJwtBearer(authenticationScheme, options =>
+        {
+            var p = options.TokenValidationParameters;
+            p.IssuerSigningKey = signingKey;
+            p.ValidateIssuerSigningKey = true;
+            p.ValidateIssuer = true;
+            p.ValidIssuer = siteUrl;
+            options.Audience = siteUrl;
+            options.RequireHttpsMetadata = false;
+        });
+
+        return authBuilder;
     }
 }

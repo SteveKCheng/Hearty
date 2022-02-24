@@ -103,20 +103,11 @@ namespace JobBank.Server.Program
             var authBuilder = services.AddAuthentication(
                                 JwtBearerDefaults.AuthenticationScheme);
 
-            authBuilder.AddJwtBearer(options =>
-            {
-                var c = Configuration.GetRequiredSection("JsonWebToken")
-                                        .Get<JwtSiteConfiguration>();
-                var signingKey = AuthenticationEndpoints.CreateSecurityKeyFromString(c.SigningKey);
+            var jwtSiteConfig = Configuration.GetRequiredSection("JsonWebToken")
+                                             .Get<JwtSiteConfiguration>();
 
-                var p = options.TokenValidationParameters;
-                p.IssuerSigningKey = signingKey;
-                p.ValidateIssuerSigningKey = true;
-                p.ValidateIssuer = true;
-                p.ValidIssuer = c.SiteUrl;
-                options.Audience = c.SiteUrl;
-                options.RequireHttpsMetadata = false;
-            });
+            authBuilder.AddSelfIssuedJwtBearer(jwtSiteConfig.SiteUrl,
+                                               jwtSiteConfig.SigningKey);
 
             authBuilder.AddBasic(options =>
             {
