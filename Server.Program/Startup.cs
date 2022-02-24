@@ -95,7 +95,7 @@ namespace JobBank.Server.Program
                             countPriorities: 10, 
                             p.GetRequiredService<WorkerDistribution<PromisedWork, PromiseData>>()));
 
-            services.AddSingleton<IRemoteCancellation<PromiseId>, JobSchedulingCancellation>();
+            services.AddSingleton<IRemoteJobCancellation>(p => p.GetRequiredService<JobsManager>());
             services.AddSingleton<PromiseExceptionTranslator>(BasicExceptionTranslator.Instance);
 
             services.AddSingleton<MockWorkerHosts>();
@@ -236,7 +236,9 @@ namespace JobBank.Server.Program
 
 
                 endpoints.MapGetPromiseById();
-                endpoints.MapPostPromiseById();
+                endpoints.MapCancelJobById()
+                         .RequireAuthorization();
+
                 endpoints.MapGetPromiseByPath();
 
                 endpoints.MapAuthTokenRetrieval()

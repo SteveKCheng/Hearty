@@ -22,7 +22,7 @@ namespace JobBank.Server
     /// into a coherent service for applications to schedule execution 
     /// of promises.
     /// </remarks>
-    public class JobsManager
+    public class JobsManager : IRemoteJobCancellation
     {
         /// <summary>
         /// Logs important operations performed by this instance.
@@ -113,21 +113,7 @@ namespace JobBank.Server
                 return _clientRequests.TryAdd((promiseId, clientToken), job);
         }
 
-        /// <summary>
-        /// Cancel a job that had been pushed earlier
-        /// without an explicit cancellation token.
-        /// </summary>
-        /// <param name="queueKey">
-        /// Identifies the queue to remove the job from.
-        /// </param>
-        /// <param name="promiseId">
-        /// The ID of the promise associated to the job.
-        /// </param>
-        /// <returns>
-        /// False if the combination of client and promise is no longer
-        /// registered.  True if the combination is registered
-        /// and cancellation has been requested.
-        /// </returns>
+        /// <inheritdoc cref="IRemoteJobCancellation" />
         public bool TryCancelForClient(JobQueueKey queueKey, PromiseId promiseId)
         {
             var queue = _jobQueues.TryGetJobQueue(queueKey);

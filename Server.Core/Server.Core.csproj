@@ -25,6 +25,7 @@
     <Compile Include="InMemoryPathsDirectory.cs" />
     <Compile Include="IPromiseClientInfo.cs" />
     <Compile Include="IPromiseListBuilder.cs" />
+    <Compile Include="IRemoteJobCancellation.cs" />
     <Compile Include="JobQueueOwner.cs" />
     <Compile Include="JobQueueSystem.cs" />
     <Compile Include="JobsManager.cs" />

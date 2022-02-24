@@ -78,7 +78,7 @@ namespace JobBank.Server.WebApi
             /// Services requests for cancelling previously
             /// created promises.
             /// </summary>
-            public IRemoteCancellation<PromiseId> RemoteCancellation { get; init; }
+            public IRemoteJobCancellation RemoteCancellation { get; init; }
 
             /// <summary>
             /// Obtains the instance of <see cref="IJobQueueOwner"/> 
@@ -101,7 +101,7 @@ namespace JobBank.Server.WebApi
                 PromiseStorage = p.GetRequiredService<PromiseStorage>(),
                 PathsDirectory = p.GetRequiredService<PathsDirectory>(),
                 ExceptionTranslator = p.GetRequiredService<PromiseExceptionTranslator>(),
-                RemoteCancellation = p.GetService<IRemoteCancellation<PromiseId>>()
+                RemoteCancellation = p.GetService<IRemoteJobCancellation>()
                                         ?? _dummyRemoteCancellation,
                 JobQueueOwnerRetrieval = p.GetService<JobQueueOwnerRetriever>()
             };
@@ -111,17 +111,17 @@ namespace JobBank.Server.WebApi
         /// Dummy implementation for <see cref="Services.RemoteCancellation" />
         /// if there is none supplied by dependency injection.
         /// </summary>
-        private static readonly IRemoteCancellation<PromiseId> _dummyRemoteCancellation
+        private static readonly IRemoteJobCancellation _dummyRemoteCancellation
             = new DummyRemoteCancellation();
 
         /// <summary>
         /// Dummy implementation for <see cref="Services.RemoteCancellation" />
         /// if there is none supplied by dependency injection.
         /// </summary>
-        private class DummyRemoteCancellation : IRemoteCancellation<PromiseId>
+        private class DummyRemoteCancellation : IRemoteJobCancellation
         {
-            public ValueTask<CancellationStatus> TryCancelAsync(ClaimsPrincipal client, PromiseId target, bool force)
-                => ValueTask.FromResult(CancellationStatus.NotSupported);
+            public bool TryCancelForClient(JobQueueKey queueKey, PromiseId target)
+                => false;
         }
 
         /// <summary>
@@ -193,20 +193,29 @@ namespace JobBank.Server.WebApi
             return priority;
         }
 
-        private static string ParseQueueName(HttpRequest httpRequest)
+        private static async ValueTask<JobQueueKey?> 
+            GetJobQueueKey(Services services, HttpContext httpContext)
         {
+            var httpRequest = httpContext.Request;
+
             var queueName = ParseQueueName(httpRequest.Query["queue"])
                             ?? ParseQueueName(httpRequest.Headers[JobBankHttpHeaders.JobQueueName])
                             ?? "default";
-            return queueName;
-        }
-
-        private static int ParseQueuePriority(HttpRequest httpRequest)
-        {
             var priority = ParseQueuePriority(httpRequest.Query["priority"])
                             ?? ParseQueuePriority(httpRequest.Headers[JobBankHttpHeaders.JobPriority])
                             ?? 5;
-            return priority;
+
+            IJobQueueOwner? queueOwner = null;
+            if (services.JobQueueOwnerRetrieval is not null)
+            {
+                queueOwner = await services.JobQueueOwnerRetrieval
+                                           .Invoke(httpContext.User, null)
+                                           .ConfigureAwait(false);
+            }
+
+            return queueOwner is not null
+                    ? new JobQueueKey(queueOwner, priority, queueName)
+                    : null;
         }
 
         /// <summary>
@@ -224,20 +233,8 @@ namespace JobBank.Server.WebApi
 
             try
             {
-                int queuePriority = ParseQueuePriority(httpRequest);
-                string queueName = ParseQueueName(httpRequest);
-
-                IJobQueueOwner? queueOwner = null;
-                if (services.JobQueueOwnerRetrieval is not null)
-                {
-                    queueOwner = await services.JobQueueOwnerRetrieval
-                                               .Invoke(httpContext.User, null)
-                                               .ConfigureAwait(false);
-                }
-
-                JobQueueKey? queueKey = default;
-                if (queueOwner is not null)
-                    queueKey = new JobQueueKey(queueOwner, queuePriority, queueName);
+                JobQueueKey? queueKey = await GetJobQueueKey(services, httpContext)
+                                                .ConfigureAwait(false);
 
                 var jobInput = new PromiseRequest
                 {
@@ -301,17 +298,12 @@ namespace JobBank.Server.WebApi
         /// used to customize its handling by the ASP.NET Core framework.
         /// </returns>
         public static IEndpointConventionBuilder
-            MapPostPromiseById(this IEndpointRouteBuilder endpoints)
+            MapCancelJobById(this IEndpointRouteBuilder endpoints)
         {
             var services = endpoints.GetServices();
-
-            // FIXME This should be managed by a cache
-            IPromiseClientInfo clientInfo = new BasicPromiseClientInfo();
-
-            return endpoints.MapPost(
-                    pattern: "/jobs/v1/id/{serviceId}/{sequenceNumber}",
-                    requestDelegate: httpContext => PostPromiseByIdAsync(services,
-                                                                         httpContext));
+            return endpoints.MapDelete(
+                    "/jobs/v1/id/{serviceId}/{sequenceNumber}",
+                    httpContext => CancelJobAsync(services, httpContext));
         }
 
         /// <summary>
@@ -370,35 +362,6 @@ namespace JobBank.Server.WebApi
             var serviceIdStr = (string)httpContext.GetRouteValue("serviceId")!;
             var sequenceNumberStr = (string)httpContext.GetRouteValue("sequenceNumber")!;
             return PromiseId.TryParse(serviceIdStr, sequenceNumberStr, out promiseId);
-        }
-
-        private static Task PostPromiseByIdAsync(Services services, 
-                                                 HttpContext httpContext)
-        {
-            var httpRequest = httpContext.Request;
-            var httpResponse = httpContext.Response;
-            var cancellationToken = httpContext.RequestAborted;
-
-            bool success = TryParsePromiseId(httpContext, out var promiseId) &
-                           TryParseEnum<PromisePostAction>(httpContext, "action", out var action);
-
-            if (success)
-            {
-                switch (action)
-                {
-                    case PromisePostAction.Cancel:
-                        return RespondToCancelPromiseAsync(services, httpResponse, promiseId,
-                                                           httpContext.User, cancellationToken);
-                }
-            }
-
-            httpResponse.StatusCode = StatusCodes.Status400BadRequest;
-            return Task.CompletedTask;
-        }
-
-        private enum PromisePostAction
-        {
-            Cancel
         }
 
         private static bool TryParseEnum<T>(HttpContext httpContext, string key, out T value)
@@ -468,47 +431,27 @@ namespace JobBank.Server.WebApi
                                             client, cancellationToken);
         }
 
-        private static Task CancelPromiseByIdAsync(Services services, 
-                                                   HttpContext httpContext,
-                                                   IPromiseClientInfo client)
+        private static async Task CancelJobAsync(Services services,
+                                                 HttpContext httpContext)
         {
-            var httpRequest = httpContext.Request;
             var httpResponse = httpContext.Response;
-            var cancellationToken = httpContext.RequestAborted;
 
             var serviceIdStr = (string)httpContext.GetRouteValue("serviceId")!;
             var sequenceNumberStr = (string)httpContext.GetRouteValue("sequenceNumber")!;
             if (!PromiseId.TryParse(serviceIdStr, sequenceNumberStr, out var promiseId))
             {
                 httpResponse.StatusCode = StatusCodes.Status400BadRequest;
-                return Task.CompletedTask;
+                return;
             }
 
-            return RespondToCancelPromiseAsync(services,
-                                               httpResponse,
-                                               promiseId,
-                                               httpContext.User,
-                                               cancellationToken);
-        }
+            var queueKey = (await GetJobQueueKey(services, httpContext).ConfigureAwait(false))
+                                ?? throw new InvalidOperationException("Queue must be specified. ");
 
-        private static async Task RespondToCancelPromiseAsync(Services services, 
-                                                              HttpResponse response,
-                                                              PromiseId promiseId,
-                                                              ClaimsPrincipal principal,
-                                                              CancellationToken cancellationToken)
-        {
-            var status = await services.RemoteCancellation
-                                       .TryCancelAsync(principal, promiseId, force: false)
-                                       .ConfigureAwait(false);
+            var success = services.RemoteCancellation
+                                  .TryCancelForClient(queueKey, promiseId);
 
-            response.StatusCode = status switch
-            {
-                CancellationStatus.Cancelled => StatusCodes.Status202Accepted,
-                CancellationStatus.NotFound => StatusCodes.Status404NotFound,
-                CancellationStatus.Forbidden => StatusCodes.Status403Forbidden,
-                CancellationStatus.NotSupported => StatusCodes.Status501NotImplemented,
-                _ => StatusCodes.Status500InternalServerError
-            };
+            httpResponse.StatusCode = success ? StatusCodes.Status202Accepted
+                                              : StatusCodes.Status404NotFound;
         }
 
         private static async Task RespondToGetPromiseAsync(Services services,
