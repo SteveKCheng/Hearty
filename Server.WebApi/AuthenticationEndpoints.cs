@@ -59,7 +59,8 @@ public static class AuthenticationEndpoints
         new(mediaType: "application/jwt", ContentPreference.Best),
         new(mediaType: "application/json", ContentPreference.Good),
         new(mediaType: "text/plain", ContentPreference.Fair),
-        new(mediaType: "application/xhtml+xml", ContentPreference.Fair)
+        new(mediaType: "application/xhtml+xml", ContentPreference.Fair),
+        new(mediaType: "application/jwt+json", ContentPreference.Fair)
     };
 
     /// <summary>
@@ -94,6 +95,15 @@ public static class AuthenticationEndpoints
         /// JSON Web Token wrapped in XHTML, for compatibility with Web browsers
         /// </summary>
         XHtml = 3,
+
+        /// <summary>
+        /// The payload to be encoded by the JSON Web Token, serialized to JSON.
+        /// </summary>
+        /// <remarks>
+        /// This format is used for debugging only.  It does not encrypt
+        /// the token, and the result cannot be used to authenticate.
+        /// </remarks>
+        JwtJson = 4,
     }
 
     private static IReadOnlyList<Claim> CreateClaims(HttpContext httpContext)
@@ -209,7 +219,7 @@ public static class AuthenticationEndpoints
             var claims = CreateClaims(httpContext);
 
             var now = DateTime.UtcNow;
-            var token = new JwtSecurityToken(
+            var tokenData = new JwtSecurityToken(
                     issuer,
                     audience,
                     notBefore: now,
@@ -220,7 +230,7 @@ public static class AuthenticationEndpoints
             // N.B. The compact serialization of JSON Web Tokens use
             //      Base64URL encoding so it needs no escaping here.
             //      It uses only the characters: A-Z, a-z, 0-9, - and _
-            var tokenString = tokenHandler.WriteToken(token);
+            var tokenString = tokenHandler.WriteToken(tokenData);
 
             httpResponse.StatusCode = StatusCodes.Status200OK;
             httpResponse.Headers.CacheControl = "private";
@@ -263,6 +273,12 @@ public static class AuthenticationEndpoints
                     httpResponse.BodyWriter.WriteUtf8String(htmlPrefix);
                     httpResponse.BodyWriter.WriteUtf8String(tokenString);
                     httpResponse.BodyWriter.WriteUtf8String(htmlSuffix);
+                    break;
+
+                case JwtContentFormat.JwtJson:
+                    var tokenDataSerialized = tokenData.Payload.SerializeToJson();
+                    httpResponse.ContentLength = tokenDataSerialized.Length;
+                    httpResponse.BodyWriter.WriteUtf8String(tokenDataSerialized);
                     break;
             }
 
