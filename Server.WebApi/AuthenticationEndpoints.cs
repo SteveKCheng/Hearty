@@ -4,12 +4,14 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Cryptography.KeyDerivation;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace JobBank.Server;
@@ -136,6 +138,13 @@ public static class AuthenticationEndpoints
     /// <param name="path">
     /// The path for the endpoint.  If null, defaults to "/auth/token".
     /// </param>
+    /// <param name="authenticationScheme">
+    /// The name of the authentication scheme in ASP.NET Core.
+    /// The scheme must refer to JSON Web Token authentication, 
+    /// with the required settings for self-issued tokens.
+    /// If this argument is null, it defaults to 
+    /// <see cref="JwtBearerDefaults.AuthenticationScheme" />.
+    /// </param>
     /// <remarks>
     /// The token is in the format of a JSON Web Token in its compact
     /// serialization, but it may be considered an implementation
@@ -151,21 +160,47 @@ public static class AuthenticationEndpoints
     /// </returns>
     public static IEndpointConventionBuilder
         MapAuthTokenRetrieval(this IEndpointRouteBuilder endpoints,
-                              string? path = null)
+                              string? path = null,
+                              string? authenticationScheme = null)
     {
         path ??= "/auth/token";
+        authenticationScheme ??= JwtBearerDefaults.AuthenticationScheme;
 
-        var siteConfig = endpoints.ServiceProvider
-                                  .GetRequiredService<IConfiguration>()
-                                  .GetRequiredSection("JsonWebToken")
-                                  .Get<JwtSiteConfiguration>();
+        var jwtOptions = endpoints.ServiceProvider
+                                  .GetRequiredService<IOptionsMonitor<JwtBearerOptions>>()
+                                  .Get(authenticationScheme);
+        var audience = jwtOptions.Audience;
+
+        if (string.IsNullOrEmpty(audience))
+        {
+            throw new InvalidOperationException(
+                "JwtBearerOptions.Audience is required for the endpoint " +
+                "to retrieve the authentication token, but has not been set. ");
+        }
+
+        var validationParameters = jwtOptions.TokenValidationParameters;
+        var signingKey = validationParameters.IssuerSigningKey;
+        var issuer = validationParameters.ValidIssuer;
+
+        if (signingKey is not SymmetricSecurityKey)
+        {
+            throw new InvalidOperationException(
+                "TokenValidationParameters.IssuerSigningKey is required for the endpoint " +
+                "to retrieve the authentication token, but has not been set to a key " +
+                "for symmetric encryption. ");
+        }
+
+        if (string.IsNullOrEmpty(issuer))
+        {
+            throw new InvalidOperationException(
+                "TokenValidationParameters.ValidIssuer is required for the endpoint " +
+                "to retrieve the authentication token, but has not been set. ");
+        }
 
         var tokenHandler = new JwtSecurityTokenHandler();
         var credentials = new SigningCredentials(
-                            key: CreateSecurityKeyFromString(siteConfig.SigningKey),
+                            key: signingKey,
                             algorithm: SecurityAlgorithms.HmacSha256);
-
-        var siteUrl = siteConfig.SiteUrl;
 
         return endpoints.MapMethods(path, new[] { HttpMethods.Get, HttpMethods.Head }, async httpContext =>
         {
@@ -195,8 +230,8 @@ public static class AuthenticationEndpoints
 
             var now = DateTime.UtcNow;
             var token = new JwtSecurityToken(
-                    issuer: siteUrl,
-                    audience: siteUrl,
+                    issuer,
+                    audience,
                     notBefore: now,
                     expires: now.AddYears(1),
                     claims: claims,
