@@ -113,8 +113,8 @@ namespace JobBank.Server
                 return _clientRequests.TryAdd((promiseId, clientToken), job);
         }
 
-        /// <inheritdoc cref="IRemoteJobCancellation" />
-        public bool TryCancelForClient(JobQueueKey queueKey, PromiseId promiseId)
+        /// <inheritdoc cref="IRemoteJobCancellation.TryCancelJobForClient" />
+        public bool TryCancelJobForClient(JobQueueKey queueKey, PromiseId promiseId)
         {
             var queue = _jobQueues.TryGetJobQueue(queueKey);
             if (queue is null)
@@ -127,6 +127,32 @@ namespace JobBank.Server
                 _clientRequests.Remove((promiseId, clientToken), out target);
 
             return target?.CancelForClient(clientToken, background: true) ?? false;
+        }
+
+        /// <inheritdoc cref="IRemoteJobCancellation.TryKillJob" />
+        public bool TryKillJob(PromiseId promiseId)
+        {
+            SharedFuture<PromisedWork, PromiseData>? future;
+            lock (_microPromises)
+                _microPromises.Remove(promiseId, out future);
+
+            if (future is not null)
+            {
+                future.Kill(background: true);
+                return true;
+            }
+
+            MacroJob? macroJob;
+            lock (_macroPromises)
+                _macroPromises.Remove(promiseId, out macroJob);
+
+            if (macroJob is not null)
+            {
+                macroJob.Kill(background: true);
+                return true;
+            }
+
+            return false;
         }
 
         #endregion
@@ -480,7 +506,7 @@ namespace JobBank.Server
         /// needed to cancel a job, e.g. if the request is coming
         /// from a ReST API endpoint that may not necessarily retain
         /// any connection state.  The job can be cancelled instead
-        /// via <see cref="TryCancelForClient" />.
+        /// via <see cref="TryCancelJobForClient" />.
         /// </remarks>
         /// <param name="queueKey">
         /// Selects the queue to push the job into.

@@ -239,6 +239,9 @@ namespace JobBank.Server.Program
                 endpoints.MapCancelJobById()
                          .RequireAuthorization();
 
+                endpoints.MapKillJobById()
+                         .RequireAuthorization();
+
                 endpoints.MapGetPromiseByPath();
 
                 endpoints.MapAuthTokenRetrieval()

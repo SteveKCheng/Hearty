@@ -38,7 +38,7 @@ namespace JobBank.Server
     public interface IRemoteJobCancellation
     {
         /// <summary>
-        /// Cancel a job that had been scheduled by a client earlier.
+        /// Cancel a job for one client that scheduled it earlier.
         /// </summary>
         /// <param name="queueKey">
         /// Identifies the queue to remove and cancel the job from.
@@ -51,6 +51,23 @@ namespace JobBank.Server
         /// registered.  True if the combination is registered
         /// and cancellation has been requested.
         /// </returns>
-        bool TryCancelForClient(JobQueueKey queueKey, PromiseId target);
+        bool TryCancelJobForClient(JobQueueKey queueKey, PromiseId target);
+
+        /// <summary>
+        /// Forcibly kill a job for all clients.
+        /// </summary>
+        /// <param name="target">
+        /// The ID of the promise associated to the job.
+        /// </param>
+        /// <returns>
+        /// False if the job does not exist.  True if it exists
+        /// and it has been requested to be killed.  
+        /// </returns>
+        /// <remarks>
+        /// This method is intended to be used by administrators.
+        /// The server framework that is the caller is responsible
+        /// for authorizing the request.
+        /// </remarks>
+        bool TryKillJob(PromiseId target);
     }
 }

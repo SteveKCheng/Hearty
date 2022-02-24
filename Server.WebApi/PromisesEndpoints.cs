@@ -119,8 +119,10 @@ namespace JobBank.Server.WebApi
         /// </summary>
         private class DummyRemoteCancellation : IRemoteJobCancellation
         {
-            public bool TryCancelForClient(JobQueueKey queueKey, PromiseId target)
+            public bool TryCancelJobForClient(JobQueueKey queueKey, PromiseId target)
                 => false;
+
+            public bool TryKillJob(PromiseId target) => false;
         }
 
         /// <summary>
@@ -293,7 +295,7 @@ namespace JobBank.Server.WebApi
         /// Maps the HTTP route that enables a client to cancel a created promise.
         /// </summary>
         /// <param name="endpoints">Builds all the HTTP endpoints used by the application. </param>
-        /// <returns>Builder specific to the new job executor's endpoint that may be
+        /// <returns>Builder specific to the new endpoint that may be
         /// used to customize its handling by the ASP.NET Core framework.
         /// </returns>
         public static IEndpointConventionBuilder
@@ -302,7 +304,25 @@ namespace JobBank.Server.WebApi
             var services = endpoints.GetServices();
             return endpoints.MapDelete(
                     "/jobs/v1/id/{serviceId}/{sequenceNumber}",
-                    httpContext => CancelJobAsync(services, httpContext));
+                    httpContext => CancelJobAsync(services, httpContext, kill: false));
+        }
+
+        /// <summary>
+        /// Maps the HTTP route that enables an administrator to kill a job
+        /// (for all clients).
+        /// </summary>
+        /// <param name="endpoints">Builds all the HTTP endpoints used by the application. </param>
+        /// <returns>Builder specific to the new endpoint that may be
+        /// used to customize its handling by the ASP.NET Core framework.
+        /// Typically it should be set to require administrator-level authorization.
+        /// </returns>
+        public static IEndpointConventionBuilder
+            MapKillJobById(this IEndpointRouteBuilder endpoints)
+        {
+            var services = endpoints.GetServices();
+            return endpoints.MapDelete(
+                    "/jobs/v1/admin/id/{serviceId}/{sequenceNumber}",
+                    httpContext => CancelJobAsync(services, httpContext, kill: true));
         }
 
         /// <summary>
@@ -431,7 +451,8 @@ namespace JobBank.Server.WebApi
         }
 
         private static async Task CancelJobAsync(Services services,
-                                                 HttpContext httpContext)
+                                                 HttpContext httpContext,
+                                                 bool kill)
         {
             var httpResponse = httpContext.Response;
 
@@ -443,11 +464,20 @@ namespace JobBank.Server.WebApi
                 return;
             }
 
-            var queueKey = (await GetJobQueueKey(services, httpContext).ConfigureAwait(false))
-                                ?? throw new InvalidOperationException("Queue must be specified. ");
+            bool success;
 
-            var success = services.RemoteCancellation
-                                  .TryCancelForClient(queueKey, promiseId);
+            if (kill)
+            {
+                success = services.RemoteCancellation.TryKillJob(promiseId);
+            }
+            else
+            {
+                var queueKey = (await GetJobQueueKey(services, httpContext).ConfigureAwait(false))
+                                    ?? throw new InvalidOperationException("Queue must be specified. ");
+
+                success = services.RemoteCancellation
+                                  .TryCancelJobForClient(queueKey, promiseId);
+            }
 
             httpResponse.StatusCode = success ? StatusCodes.Status202Accepted
                                               : StatusCodes.Status404NotFound;
