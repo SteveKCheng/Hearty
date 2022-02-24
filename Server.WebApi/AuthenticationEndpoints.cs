@@ -23,29 +23,6 @@ using Microsoft.IdentityModel.Tokens;
 namespace JobBank.Server;
 
 /// <summary>
-/// Settings for a web server to issue its own JSON Web Tokens,
-/// intended to be accessible from <see cref="IConfiguration" />.
-/// </summary>
-public class JwtSiteConfiguration
-{
-    /// <summary>
-    /// URL used for both the "audience" and "issuer" in the
-    /// self-issued JSON Web Token.
-    /// </summary>
-    public string SiteUrl { get; set; } = "http://localhost/";
-
-    /// <summary>
-    /// Secret string key used to encrypt JSON Web Tokens to prevent forgery.
-    /// </summary>
-    /// <remarks>
-    /// This string is passed through the PBKDF2+HMACSHA256 algorithm to derive
-    /// the actual 256-bit key in the HMAC algorithm to create the JSON
-    /// Web Token.
-    /// </remarks>
-    public string SigningKey { get; set; } = string.Empty;
-}
-
-/// <summary>
 /// Sets up endpoints for programmatic retrieval of credentials.
 /// </summary>
 /// <remarks>
