@@ -107,7 +107,7 @@ namespace JobBank.Server.Program
             {
                 var c = Configuration.GetRequiredSection("JsonWebToken")
                                         .Get<JwtSiteConfiguration>();
-                var signingKey = JwtLogInEndpoint.CreateSecurityKeyFromString(c.SigningKey);
+                var signingKey = AuthenticationEndpoints.CreateSecurityKeyFromString(c.SigningKey);
 
                 var p = options.TokenValidationParameters;
                 p.IssuerSigningKey = signingKey;
@@ -245,7 +245,7 @@ namespace JobBank.Server.Program
                 endpoints.MapPostPromiseById();
                 endpoints.MapGetPromiseByPath();
 
-                endpoints.MapJwtLogin()
+                endpoints.MapAuthTokenRetrieval()
                          .RequireAuthorization("basic");
 
                 endpoints.MapAuthCookieRetrieval()

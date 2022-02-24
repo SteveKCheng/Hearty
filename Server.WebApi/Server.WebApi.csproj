@@ -16,6 +16,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="AuthenticationEndpoints.cs" />
     <Compile Include="BasicPromiseClientInfo.cs" />
     <Compile Include="IRemoteCancellation.cs" />
     <Compile Include="PromisesEndpoints.cs" />
@@ -29,6 +30,10 @@
   <ItemGroup>
     <ProjectReference Include="..\Server.Core\Server.Core.csproj" />
     <ProjectReference Include="..\Utilities\Utilities.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="6.0.2" />
   </ItemGroup>
 
 </Project>

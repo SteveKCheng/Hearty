@@ -1,4 +1,8 @@
-﻿using Microsoft.AspNetCore.Authentication;
+﻿using System;
+using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Cryptography.KeyDerivation;
@@ -7,12 +11,8 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
-using System;
-using System.Collections.Generic;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 
-namespace JobBank.Server.Program;
+namespace JobBank.Server;
 
 /// <summary>
 /// Settings for a web server to issue its own JSON Web Tokens,
@@ -37,9 +37,26 @@ public class JwtSiteConfiguration
     public string SigningKey { get; set; } = string.Empty;
 }
 
-public static class JwtLogInEndpoint
+/// <summary>
+/// Sets up endpoints for programmatic retrieval of credentials.
+/// </summary>
+/// <remarks>
+/// These endpoints have nothing to do with the functionality of Job Bank,
+/// but they are useful building blocks for a Job Bank server host.
+/// </remarks>
+public static class AuthenticationEndpoints
 {
-    internal static SymmetricSecurityKey CreateSecurityKeyFromString(string? password)
+    /// <summary>
+    /// Derive a key for symmetric encryption from a text string.
+    /// </summary>
+    /// <param name="password">
+    /// The password or passphrase.
+    /// </param>
+    /// <returns>
+    /// 256-bit key derived from running the PBKDF2 algorithm on
+    /// <paramref name="password" />.
+    /// </returns>
+    public static SymmetricSecurityKey CreateSecurityKeyFromString(string? password)
     {
         if (string.IsNullOrEmpty(password))
             password = "Unset password";
@@ -103,15 +120,41 @@ public static class JwtLogInEndpoint
 
         var claims = new Claim[]
         {
-                new("user", string.IsNullOrWhiteSpace(user) ? "default" : user)
+            new("user", string.IsNullOrWhiteSpace(user) ? "default" : user)
         };
 
         return claims;
     }
 
+    /// <summary>
+    /// Add an endpoint to get a bearer token for authenticating
+    /// other API endpoints.
+    /// </summary>
+    /// <param name="endpoints">
+    /// Endpoint route builder from the ASP.NET Core framework.
+    /// </param>
+    /// <param name="path">
+    /// The path for the endpoint.  If null, defaults to "/auth/token".
+    /// </param>
+    /// <remarks>
+    /// The token is in the format of a JSON Web Token in its compact
+    /// serialization, but it may be considered an implementation
+    /// detail.  The token is an opaque string to clients.
+    /// The JSON Web Token is self-issued so nothing else than this
+    /// server needs to parse it.
+    /// </remarks>
+    /// <returns>Builder specific to the new job executor's endpoint that may be
+    /// used to customize its handling by the ASP.NET Core framework.
+    /// In particular, this endpoint may be set to require authorization,
+    /// via some other authentication scheme, to determine the user
+    /// identity that the cookie should be issued for.
+    /// </returns>
     public static IEndpointConventionBuilder
-        MapJwtLogin(this IEndpointRouteBuilder endpoints)
+        MapAuthTokenRetrieval(this IEndpointRouteBuilder endpoints,
+                              string? path = null)
     {
+        path ??= "/auth/token";
+
         var siteConfig = endpoints.ServiceProvider
                                   .GetRequiredService<IConfiguration>()
                                   .GetRequiredSection("JsonWebToken")
@@ -124,7 +167,7 @@ public static class JwtLogInEndpoint
 
         var siteUrl = siteConfig.SiteUrl;
 
-        return endpoints.MapMethods("/jwt", new[] { HttpMethods.Get, HttpMethods.Head }, async httpContext =>
+        return endpoints.MapMethods(path, new[] { HttpMethods.Get, HttpMethods.Head }, async httpContext =>
         {
             var httpRequest = httpContext.Request;
             var httpResponse = httpContext.Response;
@@ -217,9 +260,36 @@ public static class JwtLogInEndpoint
                          HttpMethods.Head,
                          StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Add an endpoint to set an authentication cookie 
+    /// on the connecting HTTP client.
+    /// </summary>
+    /// <param name="endpoints">
+    /// Endpoint route builder from the ASP.NET Core framework.
+    /// </param>
+    /// <param name="path">
+    /// The path for the endpoint.  If null, defaults to "/auth/cookie".
+    /// </param>
+    /// <param name="authenticationScheme">
+    /// The name of the authentication scheme in ASP.NET Core.
+    /// The scheme must refer to cookie authentication, with whatever
+    /// desired options.  If null, defaults to 
+    /// <see cref="CookieAuthenticationDefaults.AuthenticationScheme" />.
+    /// </param>
+    /// <returns>Builder specific to the new job executor's endpoint that may be
+    /// used to customize its handling by the ASP.NET Core framework.
+    /// In particular, this endpoint may be set to require authorization,
+    /// via some other authentication scheme, to determine the user
+    /// identity that the cookie should be issued for.
+    /// </returns>
     public static IEndpointConventionBuilder
-        MapAuthCookieRetrieval(this IEndpointRouteBuilder endpoints)
+        MapAuthCookieRetrieval(this IEndpointRouteBuilder endpoints, 
+                               string? path = null,
+                               string? authenticationScheme = null)
     {
+        path ??= "/auth/cookie";
+        authenticationScheme ??= CookieAuthenticationDefaults.AuthenticationScheme;
+
         return endpoints.MapMethods("/auth/cookie", new[] { HttpMethods.Get, HttpMethods.Head }, async httpContext =>
         {
             var httpRequest = httpContext.Request;
@@ -236,13 +306,12 @@ public static class JwtLogInEndpoint
 
             var claims = CreateClaims(httpContext);
 
-            var claimsIdentity = new ClaimsIdentity(
-                                    claims, 
-                                    CookieAuthenticationDefaults.AuthenticationScheme);
+            var claimsIdentity = new ClaimsIdentity(claims, 
+                                                    authenticationScheme);
 
             var principal = new ClaimsPrincipal(claimsIdentity);
 
-            await httpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
+            await httpContext.SignInAsync(authenticationScheme,
                                           principal).ConfigureAwait(false);
         });
     }
