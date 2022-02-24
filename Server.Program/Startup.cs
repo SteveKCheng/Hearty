@@ -24,6 +24,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using idunno.Authentication.Basic;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication.Cookies;
 
 namespace JobBank.Server.Program
 {
@@ -124,11 +125,21 @@ namespace JobBank.Server.Program
                             {
                                 if (context.Username == context.Password)
                                 {
-                                    var claims = new Claim[]
+                                    Claim? adminClaim = null;
+                                    int claimsCount = 2;
+
+                                    if (context.Username == "admin")
                                     {
-                                new(ClaimTypes.NameIdentifier, context.Username, ClaimValueTypes.String, context.Options.ClaimsIssuer),
-                                new(ClaimTypes.Name, context.Username, ClaimValueTypes.String, context.Options.ClaimsIssuer)
-                                    };
+                                        adminClaim = new(ClaimTypes.Role, AuthenticationClaims.Admin);
+                                        claimsCount++;
+                                    }
+
+                                    var claims = new Claim[claimsCount];
+
+                                    claims[0] = new(ClaimTypes.NameIdentifier, context.Username, ClaimValueTypes.String, context.Options.ClaimsIssuer);
+                                    claims[1] = new(ClaimTypes.Name, context.Username, ClaimValueTypes.String, context.Options.ClaimsIssuer);
+                                    if (adminClaim is not null)
+                                        claims[2] = adminClaim;
 
                                     context.Principal = new ClaimsPrincipal(new ClaimsIdentity(claims, context.Scheme.Name));
                                     context.Success();
@@ -148,9 +159,16 @@ namespace JobBank.Server.Program
 
             services.AddAuthorization(options =>
             {
-                options.AddPolicy("basic", policy =>
+                options.AddPolicy(AuthorizationPolicies.Basic, policy =>
                 {
                     policy.AddAuthenticationSchemes(BasicAuthenticationDefaults.AuthenticationScheme);
+                    policy.RequireAuthenticatedUser();
+                });
+
+                options.AddPolicy(AuthorizationPolicies.Admin, policy =>
+                {
+                    policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+                    policy.RequireRole(AuthenticationClaims.Admin);
                     policy.RequireAuthenticatedUser();
                 });
             });
@@ -240,15 +258,15 @@ namespace JobBank.Server.Program
                          .RequireAuthorization();
 
                 endpoints.MapKillJobById()
-                         .RequireAuthorization();
+                         .RequireAuthorization(AuthorizationPolicies.Admin);
 
                 endpoints.MapGetPromiseByPath();
 
                 endpoints.MapAuthTokenRetrieval()
-                         .RequireAuthorization("basic");
+                         .RequireAuthorization(AuthorizationPolicies.Basic);
 
                 endpoints.MapAuthCookieRetrieval()
-                         .RequireAuthorization("basic");
+                         .RequireAuthorization(AuthorizationPolicies.Basic);
             });
         }
 
