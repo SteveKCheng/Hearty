@@ -219,13 +219,23 @@ public static class AuthenticationEndpoints
             var claims = CreateClaims(httpContext);
 
             var now = DateTime.UtcNow;
-            var tokenData = new JwtSecurityToken(
-                    issuer,
-                    audience,
-                    notBefore: now,
-                    expires: now.AddYears(1),
-                    claims: claims,
-                    signingCredentials: credentials);
+
+            // The factory method must be used instead of the constructor
+            // of JwtSecurityToken because it maps the .NET names of
+            // the claims in ClaimsPrincipal to the names normally
+            // used in JSON Web Tokens, according to the OpenID standard:
+            // see https://openid.net/specs/openid-connect-core-1_0.html#StandardClaims.
+            //
+            // Also: the .NET names are URLs which makes the resulting
+            // JSON Web Token payload bloated, if not mapped to the shorter
+            // names everybody else uses.
+            JwtSecurityToken tokenData = tokenHandler.CreateJwtSecurityToken(
+                                issuer,
+                                audience,
+                                notBefore: now,
+                                expires: now.AddYears(1),
+                                subject: httpContext.User.Identities.FirstOrDefault(),
+                                signingCredentials: credentials);
 
             // N.B. The compact serialization of JSON Web Tokens use
             //      Base64URL encoding so it needs no escaping here.
