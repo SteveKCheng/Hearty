@@ -187,7 +187,21 @@ public static class AuthenticationEndpoints
                 "to retrieve the authentication token, but has not been set. ");
         }
 
-        var tokenHandler = new JwtSecurityTokenHandler();
+        // Use the same token handler registered in jwtOptions 
+        // if it is of the right type.
+        static JwtSecurityTokenHandler? ExtractJwtSecurityTokenHandler(IList<ISecurityTokenValidator> validators)
+        {
+            foreach (var validator in validators)
+            {
+                if (validator is JwtSecurityTokenHandler jwtTokenHandler)
+                    return jwtTokenHandler;
+            }
+
+            return null;
+        }
+        var tokenHandler = ExtractJwtSecurityTokenHandler(jwtOptions.SecurityTokenValidators)
+                            ?? new JwtSecurityTokenHandler();
+
         var credentials = new SigningCredentials(
                             key: signingKey,
                             algorithm: SecurityAlgorithms.HmacSha256);
