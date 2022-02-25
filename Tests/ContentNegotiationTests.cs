@@ -12,7 +12,7 @@ namespace Hearty.Tests
         {
             var available = new ContentFormatInfo[]
             {
-                new("application/messagepack", ContentPreference.Best),
+                new("application/msgpack", ContentPreference.Best),
                 new("application/json", ContentPreference.Good),
                 new("application/xml", ContentPreference.Bad)
             };
@@ -21,7 +21,7 @@ namespace Hearty.Tests
             {
                 // Deliberate use some strange syntax here to check that
                 // parsing is RFC-correct
-                @"text/plain, application/messagepack; dummy=""5\"","", application/json ,",
+                @"text/plain, application/msgpack; dummy=""5\"","", application/json ,",
                 "application/xml",
                 ", multipart/mixed, application/*"
             });

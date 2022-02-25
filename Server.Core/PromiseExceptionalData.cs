@@ -113,8 +113,8 @@ namespace Hearty.Server
             => (Format)format switch
             {
                 Format.Text => new("text/plain", ContentPreference.Fair),
-                Format.Json => new("application/json", ContentPreference.Good),
-                Format.MessagePack => new("application/messagepack", ContentPreference.Best),
+                Format.Json => new("application/vnd.hearty.exception+json", ContentPreference.Good),
+                Format.MessagePack => new("application/vnd.hearty.exception+msgpack", ContentPreference.Best),
                 _ => throw new ArgumentOutOfRangeException(nameof(format))
             };
     }
