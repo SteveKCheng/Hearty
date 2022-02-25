@@ -125,6 +125,14 @@ namespace Hearty.Server.Tests
             */
         }
 
+        [Fact]
+        public async Task BearerTokenRetrieval()
+        {
+            using var client = new HeartyClient(CreateClient());
+            await client.SignInAsync();
+            Assert.NotNull(client.BearerToken);
+        }
+
         public void Dispose()
         {
             _webServer.Dispose();

@@ -202,6 +202,37 @@ namespace Hearty.Client
 
             return true;
         }
+
+        private static string EncodeBasicAuthentication(string user, string password)
+        {
+            int len = user.Length + password.Length;
+            if (len > short.MaxValue)
+                throw new InvalidOperationException("User name and/or password is too long. ");
+
+            Span<byte> buffer = stackalloc byte[len * 4 + 1];
+
+            int n = Encoding.UTF8.GetBytes(user.AsSpan(), buffer);
+            buffer[n++] = (byte)':';
+            n += Encoding.UTF8.GetBytes(password.AsSpan(), buffer[n..]);
+
+            return Convert.ToBase64String(buffer[0..n]);
+        }
+
+        public async Task SignInAsync()
+        {
+            var url = "auth/token";
+
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", EncodeBasicAuthentication("admin", "admin"));
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/jwt"));
+            var response = await _httpClient.SendAsync(request)
+                                            .ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            BearerToken = await response.Content.ReadAsStringAsync()
+                                                .ConfigureAwait(false);
+        }
+
+        public string? BearerToken { get; set; }
     }
 
     public delegate ValueTask<T> PayloadProcessor<T>(string? contentType,
