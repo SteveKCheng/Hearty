@@ -74,15 +74,28 @@ namespace Hearty.Server
         /// <inheritdoc />
         public override ValueTask<Stream> GetByteStreamAsync(int format, CancellationToken cancellationToken)
         {
-            var payload = GetPayload(format, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var payload = GetPayload(format);
             Stream stream = new MemoryReadingStream(payload);
             return ValueTask.FromResult(stream);
         }
 
-        private ReadOnlySequence<byte> GetPayload(int format, CancellationToken cancellationToken)
+        /// <summary>
+        /// Get the exception serialized into buffers of bytes.
+        /// </summary>
+        /// <param name="format">
+        /// The desired format of the data to present.  Must 
+        /// be in the range of 0 to <see cref="CountFormats" /> minus one.
+        /// </param>
+        /// <returns>
+        /// The payload as a sequence of blocks of bytes,
+        /// which may in fact be what is internally stored
+        /// by the implementation.  The result is the same as what
+        /// is wrapped by <see cref="GetPayloadAsync" />; for this
+        /// implementation the result is always available synchronously.
+        /// </returns>
+        public ReadOnlySequence<byte> GetPayload(int format)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
             var bytes = (Format)format switch
             {
                 Format.Text => FormatAsText(_payload),
@@ -96,12 +109,16 @@ namespace Hearty.Server
 
         /// <inheritdoc />
         public override ValueTask<ReadOnlySequence<byte>> GetPayloadAsync(int format, CancellationToken cancellationToken)
-            => ValueTask.FromResult(GetPayload(format, cancellationToken));
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(GetPayload(format));
+        }
 
         /// <inheritdoc />
         public override ValueTask WriteToPipeAsync(int format, PipeWriter writer, long position, CancellationToken cancellationToken)
         {
-            var payload = GetPayload(format, cancellationToken).Slice(position);
+            cancellationToken.ThrowIfCancellationRequested();
+            var payload = GetPayload(format).Slice(position);
             return writer.WriteAsync(payload, cancellationToken);
         }
 
