@@ -104,5 +104,17 @@ namespace Hearty.Common
                 Trace = exception.StackTrace,
             };
         }
+
+        /// <summary>
+        /// Construct a .NET exception object from this (serialized) payload.
+        /// </summary>
+        public Exception ToException()
+        {
+            if (Cancelling)
+                return new OperationCanceledException();
+
+            // FIXME Should use RemoteWorkException
+            return new Exception(Description);
+        }
     }
 }

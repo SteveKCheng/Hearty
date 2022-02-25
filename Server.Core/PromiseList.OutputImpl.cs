@@ -136,13 +136,37 @@ public partial class PromiseList
     {
         public static readonly MultiPartImpl Instance = new();
 
-        public override ValueTask<int> WriteEndAsync(PromiseList self,
-                                                     PipeWriter writer,
-                                                     Exception? exception,
-                                                     CancellationToken cancellationToken)
+        public override async ValueTask<int> WriteEndAsync(PromiseList self,
+                                                           PipeWriter writer,
+                                                           Exception? exception,
+                                                           CancellationToken cancellationToken)
         {
-            int numBytes = WriteBoundary(writer, isEnd: true);
+            int numBytes = 0;
+            if (exception is not null)
+            {
+                numBytes += WriteBoundary(writer, isEnd: false);
 
+                writer.WriteUtf8String(HeartyHttpHeaders.Ordinal);
+                writer.WriteUtf8String(": Trailer");
+                writer.WriteCrLf();
+
+                var output = new PromiseExceptionalData(exception);
+                var payload = output.GetPayload(format: 0);
+
+                writer.WriteUtf8String("Content-Type: ");
+                writer.WriteUtf8String(output.ContentType);
+                writer.WriteCrLf();
+
+                writer.WriteUtf8String("Content-Length: ");
+                writer.WriteDecimalInteger(payload.Length);
+                writer.WriteCrLf();
+                writer.WriteCrLf();
+
+                await writer.WriteAsync(payload, cancellationToken)
+                            .ConfigureAwait(false);
+            }
+
+            numBytes += WriteBoundary(writer, isEnd: true);
             if (exception is not null)
             {
                 bool isCancellation = exception is OperationCanceledException;
@@ -150,7 +174,7 @@ public partial class PromiseList
                 numBytes += (int)writer.WriteUtf8String(text);
             }
 
-            return ValueTask.FromResult(numBytes);
+            return numBytes;
         }
 
         // Write <CRLF> "--!" <CRLF>

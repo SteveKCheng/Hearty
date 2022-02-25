@@ -7,6 +7,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -170,6 +171,16 @@ namespace Hearty.Client
                 var ordinalString = section.Headers![HeartyHttpHeaders.Ordinal];
                 if (ordinalString.Count != 1)
                     throw new InvalidDataException("The 'Ordinal' header is expected in an item in the multi-part message but is not found. ");
+
+                // Is an exception
+                if (string.Equals(ordinalString[0], "Trailer"))
+                {
+                    // Assume application/vnd.hearty.exception+json
+                    var payload = await JsonSerializer.DeserializeAsync<ExceptionPayload>(section.Body, options: null, cancellationToken)
+                                                      .ConfigureAwait(false);
+                    throw payload!.ToException();
+                }
+
                 if (!int.TryParse(ordinalString[0], out int ordinal))
                     throw new InvalidDataException("The 'Ordinal' header is in an item in the multi-part message is invalid. ");
 
