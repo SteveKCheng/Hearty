@@ -1,5 +1,5 @@
 ﻿using System;
-using Hearty.Work;
+using Hearty.Common;
 
 namespace Hearty.Server.Program
 {

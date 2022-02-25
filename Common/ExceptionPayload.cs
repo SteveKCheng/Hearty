@@ -113,8 +113,7 @@ namespace Hearty.Common
             if (Cancelling)
                 return new OperationCanceledException();
 
-            // FIXME Should use RemoteWorkException
-            return new Exception(Description);
+            return new RemoteWorkException(this);
         }
     }
 }

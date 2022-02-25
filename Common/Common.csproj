@@ -16,6 +16,7 @@
     <Compile Include="ExceptionPayload.cs" />
     <Compile Include="HeartyHttpHeaders.cs" />
     <Compile Include="PromiseId.cs" />
+    <Compile Include="RemoteWorkException.cs" />
     <Compile Include="RestApiUtilities.cs" />
   </ItemGroup>
 

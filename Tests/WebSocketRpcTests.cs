@@ -1,18 +1,15 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Net.WebSockets;
 using Hearty.WebSockets;
 using System.IO.Pipes;
-using System.Security.Cryptography;
 using MessagePack;
 using System.Threading;
 using Xunit;
 using Hearty.Utilities;
 using System.IO;
 using Hearty.Work;
+using Hearty.Common;
 
 namespace Hearty.Tests
 {

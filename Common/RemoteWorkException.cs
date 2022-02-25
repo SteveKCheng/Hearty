@@ -1,7 +1,6 @@
 ﻿using System;
-using Hearty.Common;
 
-namespace Hearty.Work
+namespace Hearty.Common
 {
     /// <summary>
     /// An exception from a remote procedure call to a worker host.
