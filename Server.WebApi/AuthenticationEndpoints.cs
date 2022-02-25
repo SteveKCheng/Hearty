@@ -229,6 +229,13 @@ public static class AuthenticationEndpoints
             // Also: the .NET names are URLs which makes the resulting
             // JSON Web Token payload bloated, if not mapped to the shorter
             // names everybody else uses.
+            //
+            // See also: “ASP.NET Core and JSON Web Tokens - where are my claims?”
+            // https://mderriey.com/2019/06/23/where-are-my-jwt-claims/.
+            //
+            // Of particular note: ClaimTypes.NameIdentifier from .NET maps to
+            // JwtRegisteredClaimNames.NameId!  The mapping can be found in:
+            // https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet/blob/b5b7ed8fb8ce513469b51b87c5f76314783b74e3/src/System.IdentityModel.Tokens.Jwt/ClaimTypeMapping.cs
             JwtSecurityToken tokenData = tokenHandler.CreateJwtSecurityToken(
                                 issuer,
                                 audience,
