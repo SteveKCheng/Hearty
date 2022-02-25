@@ -345,7 +345,7 @@ public static class AuthenticationEndpoints
     /// identity that the cookie should be issued for.
     /// </returns>
     public static IEndpointConventionBuilder
-        MapAuthCookieRetrieval(this IEndpointRouteBuilder endpoints, 
+        MapAuthCookieRetrieval(this IEndpointRouteBuilder endpoints,
                                string? path = null,
                                string? authenticationScheme = null)
     {
@@ -371,6 +371,17 @@ public static class AuthenticationEndpoints
         });
     }
 
+    private static bool IsAbsoluteSiteUrl(string siteUrl)
+    {
+        if (Uri.IsWellFormedUriString(siteUrl, UriKind.Absolute))
+            return true;
+
+        if (Uri.IsWellFormedUriString(siteUrl, UriKind.Relative))
+            return false;
+
+        throw new ArgumentException("Supplied URL is neither absolute nor relative. ", nameof(siteUrl));
+    }
+
     /// <summary>
     /// Configure the web server host to accept JSON Web Tokens served by itself.
     /// </summary>
@@ -386,6 +397,8 @@ public static class AuthenticationEndpoints
     /// <param name="siteUrl">
     /// URL of the site to identify the self-generated tokens with.
     /// If null, the URL is automatically determined from the web host.
+    /// If the URL is relative, it will be appended to the URL from
+    /// the web host.
     /// </param>
     /// <param name="authenticationScheme">
     /// The name ASP.NET Core to register the new authentication scheme as.
@@ -415,7 +428,11 @@ public static class AuthenticationEndpoints
         else
             signingKey = CreateSecurityKeyFromString(passphrase);
 
-        if (siteUrl is null)
+        string? relativeUrl = (siteUrl is not null) && !IsAbsoluteSiteUrl(siteUrl)
+                                ? siteUrl
+                                : null;
+
+        if (siteUrl is null || relativeUrl is not null)
         {
             // Need dependency injection to get IServer to determine server
             // address if the caller did not specify it. 
@@ -442,6 +459,12 @@ public static class AuthenticationEndpoints
                                               ?.Addresses
                                               .FirstOrDefault()
                                               ?? "http://localhost/";
+
+                    if (relativeUrl is not null)
+                    {
+                        bool needSlash = !actualSiteUrl.EndsWith('/') && !relativeUrl.StartsWith('/');
+                        actualSiteUrl = actualSiteUrl + (needSlash ? "/" : string.Empty) + relativeUrl;
+                    }
 
                     SetJwtBearerOptions(options, signingKey, actualSiteUrl);
                 });
