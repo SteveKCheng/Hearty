@@ -1,11 +1,29 @@
 GET https://localhost:5001/server/jobs/v1/id/00000000/1
+Accept: multipart/parallel
 
 ###
-POST https://localhost:5001/server/jobs/v1/id/00000000/52?action=cancel
+POST https://localhost:5001/server/jobs/v1/id/00000000/1?action=cancel
 
 ###
-POST https://localhost:5001/server/jobs/v1/queue/multi
+# @name jwt
+GET https://localhost:5001/server/auth/token
+Accept: application/jwt
+Authorization: Basic steve:steve
+
+###
+GET https://localhost:5001/server/auth/token
+Accept: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoic3RldmUiLCJuYmYiOjE2NDU2NDcxMzksImV4cCI6MTY3NzE4MzEzOSwiaXNzIjoiaHR0cHM6Ly9sb2NhbGhvc3Q6NTAwMS8iLCJhdWQiOiJodHRwczovL2xvY2FsaG9zdDo1MDAxLyJ9.4OfWYu7E2xGEx1P18wJUC3lz_DQNzd2Kik_dJ-jVZCA
+
+###
+GET https://localhost:5001/server/auth/cookie
+Accept: application/json
+Authorization: Basic steve:steve
+
+###
+POST https://localhost:5001/server/jobs/v1/queue/multi2
 Content-Type: application/json
+Authorization: Bearer {{jwt.response.body.token}}
 
 [
   {
