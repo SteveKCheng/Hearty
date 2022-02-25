@@ -4,7 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using static System.FormattableString;
 using System.Text;
 
-namespace JobBank
+namespace Hearty
 {
     /// <summary>
     /// A long-lived identifier for a promise that can refer
@@ -73,7 +73,7 @@ namespace JobBank
 
         /// <summary>
         /// Display the promise ID in the canonical format defined
-        /// by the Job Bank framework.
+        /// by the Hearty framework.
         /// </summary>
         /// <remarks>
         /// The service ID is displayed as fixed-length hexadecimal,

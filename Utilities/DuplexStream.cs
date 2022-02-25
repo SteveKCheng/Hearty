@@ -4,7 +4,7 @@ using System.IO.Pipelines;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Utilities
+namespace Hearty.Utilities
 {
     /// <summary>
     /// Joins one reading stream and one writing stream to form

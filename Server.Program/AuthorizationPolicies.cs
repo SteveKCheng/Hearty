@@ -1,6 +1,6 @@
 ﻿using idunno.Authentication.Basic;
 
-namespace JobBank.Server.Program
+namespace Hearty.Server.Program
 {
     internal static class AuthorizationPolicies
     {

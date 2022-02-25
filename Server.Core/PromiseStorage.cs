@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Threading.Tasks;
 
-namespace JobBank.Server
+namespace Hearty.Server
 {
     /// <summary>
-    /// Abstracts out the storage of promises in Job Bank.
+    /// Abstracts out the storage of promises in Hearty.
     /// </summary>
     /// <remarks>
     /// <para>

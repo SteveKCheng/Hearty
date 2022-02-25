@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 
-namespace JobBank.Server
+namespace Hearty.Server
 {
     /// <summary>
     /// Abstract interface to pass on or store

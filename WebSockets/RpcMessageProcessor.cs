@@ -4,7 +4,7 @@ using System.Buffers;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.WebSockets
+namespace Hearty.WebSockets
 {
     /// <summary>
     /// Accepts incoming non-reply messages for processing

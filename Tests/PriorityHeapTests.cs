@@ -1,4 +1,4 @@
-﻿using JobBank.Utilities;
+﻿using Hearty.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace JobBank.Tests
+namespace Hearty.Tests
 {
     public class PriorityHeapTests
     {

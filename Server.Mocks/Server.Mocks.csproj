@@ -3,13 +3,13 @@
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <RootNamespace>JobBank.Server.Mocks</RootNamespace>
-    <AssemblyName>JobBank.Server.Mocks</AssemblyName>
+    <RootNamespace>Hearty.Server.Mocks</RootNamespace>
+    <AssemblyName>Hearty.Server.Mocks</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
     <Authors>Steve Cheng</Authors>
     <Company>​​</Company>
-    <Description>Mocks of pluggable features for testing a JobBank server</Description>
+    <Description>Mocks of pluggable features for testing a Hearty server</Description>
   </PropertyGroup>
 
   <ItemGroup>

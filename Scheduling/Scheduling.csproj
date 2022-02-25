@@ -3,8 +3,8 @@
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <RootNamespace>JobBank.Scheduling</RootNamespace>
-    <AssemblyName>JobBank.Scheduling</AssemblyName>
+    <RootNamespace>Hearty.Scheduling</RootNamespace>
+    <AssemblyName>Hearty.Scheduling</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
     <Authors>Steve Cheng</Authors>

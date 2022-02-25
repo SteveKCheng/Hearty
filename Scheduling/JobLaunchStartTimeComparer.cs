@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace JobBank.Scheduling
+namespace Hearty.Scheduling
 {
     /// <summary>
     /// Orders instances of <see cref="IRunningJob" />

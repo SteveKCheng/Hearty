@@ -5,7 +5,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace JobBank.Server
+namespace Hearty.Server
 {
     /// <summary>
     /// A formal owner of a queue in the job queuing system.

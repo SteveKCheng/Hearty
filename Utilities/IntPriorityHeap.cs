@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 
-namespace JobBank.Utilities
+namespace Hearty.Utilities
 {
     /// <summary>
     /// A priority queue specialized for integer keys.

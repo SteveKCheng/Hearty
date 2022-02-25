@@ -2,7 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Scheduling
+namespace Hearty.Scheduling
 {
     /// <summary>
     /// Represents an abstract worker that can execute (queued) jobs.

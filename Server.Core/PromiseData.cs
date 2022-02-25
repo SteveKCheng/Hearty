@@ -8,7 +8,7 @@ using System.IO.Pipelines;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Server
+namespace Hearty.Server
 {
     /// <summary>
     /// Provides (remote) clients with various ways to consume inputs/outputs from a (shared) promise.

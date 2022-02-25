@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
-namespace JobBank.Scheduling
+namespace Hearty.Scheduling
 {
     /// <summary>
     /// Generic algorithms for scheduling jobs.

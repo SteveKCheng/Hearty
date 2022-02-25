@@ -6,7 +6,7 @@ using System.IO.Pipelines;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Server
+namespace Hearty.Server
 {
     /// <summary>
     /// The output of a "macro job" which expands to an

@@ -5,15 +5,15 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using JobBank.Scheduling;
-using JobBank.Utilities;
-using JobBank.Work;
+using Hearty.Scheduling;
+using Hearty.Utilities;
+using Hearty.Work;
 
-namespace JobBank.Server.WebApi
+namespace Hearty.Server.WebApi
 {
     /// <summary>
     /// Defines endpoints in an ASP.NET Core application to accept
-    /// connections from remote workers in the Job Bank framework.
+    /// connections from remote workers in the Hearty framework.
     /// </summary>
     /// <remarks>
     /// <para>

@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace JobBank.Client
+namespace Hearty.Client
 {
     internal static class EnumerableExtensions
     {

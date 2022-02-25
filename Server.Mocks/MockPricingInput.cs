@@ -4,7 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace JobBank.Server.Mocks
+namespace Hearty.Server.Mocks
 {
     /// <summary>
     /// Input data for the mock pricing jobs implemented by

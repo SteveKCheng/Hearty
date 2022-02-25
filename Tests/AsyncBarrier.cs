@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Tests
+namespace Hearty.Tests
 {
     /// <summary>
     /// Asynchronous version of <see cref="Barrier" /> with a simplistic

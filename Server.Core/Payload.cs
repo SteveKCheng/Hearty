@@ -1,4 +1,4 @@
-﻿using JobBank.Utilities;
+﻿using Hearty.Utilities;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -7,7 +7,7 @@ using System.IO.Pipelines;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Server
+namespace Hearty.Server
 {
     /// <summary>
     /// A payload, stored in memory that can be uploaded for a new job,

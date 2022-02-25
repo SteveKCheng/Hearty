@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
-using JobBank.Utilities;
+using Hearty.Utilities;
 
-namespace JobBank.Scheduling
+namespace Hearty.Scheduling
 {
     /// <summary>
     /// Credit-based scheduling from a set of <see cref="SchedulingUnit" />.

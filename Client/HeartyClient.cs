@@ -1,4 +1,4 @@
-﻿using JobBank.Common;
+﻿using Hearty.Common;
 using Microsoft.AspNetCore.WebUtilities;
 using System;
 using System.Collections.Generic;
@@ -10,22 +10,22 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Client
+namespace Hearty.Client
 {
     /// <summary>
     /// A strongly-typed interface for clients 
-    /// to interact with the Job Bank server.
+    /// to interact with the Hearty server.
     /// </summary>
-    public class JobBankClient : IDisposable
+    public class HeartyClient : IDisposable
     {
         private readonly HttpClient _httpClient;
         private bool _leaveOpen;
 
         /// <summary>
-        /// Wrap a strongly-typed interface for Job Bank over 
+        /// Wrap a strongly-typed interface for Hearty over 
         /// a standard HTTP client.
         /// </summary>
-        public JobBankClient(HttpClient httpClient, bool leaveOpen = false)
+        public HeartyClient(HttpClient httpClient, bool leaveOpen = false)
         {
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
             _leaveOpen = leaveOpen;
@@ -167,7 +167,7 @@ namespace JobBank.Client
             while ((section = await reader.ReadNextSectionAsync(cancellationToken)
                                           .ConfigureAwait(false)) is not null)
             {
-                var ordinalString = section.Headers![JobBankHttpHeaders.Ordinal];
+                var ordinalString = section.Headers![HeartyHttpHeaders.Ordinal];
                 if (ordinalString.Count != 1)
                     throw new InvalidDataException("The 'Ordinal' header is expected in an item in the multi-part message but is not found. ");
                 if (!int.TryParse(ordinalString[0], out int ordinal))

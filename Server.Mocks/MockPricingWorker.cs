@@ -1,4 +1,4 @@
-﻿using JobBank.Work;
+﻿using Hearty.Work;
 using System;
 using System.Buffers;
 using System.IO;
@@ -9,7 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
-namespace JobBank.Server.Mocks
+namespace Hearty.Server.Mocks
 {
     /// <summary>
     /// Implementation of a mock pricing service that can be used

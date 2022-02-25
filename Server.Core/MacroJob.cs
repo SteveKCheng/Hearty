@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-using JobBank.Scheduling;
-using JobBank.Utilities;
+using Hearty.Scheduling;
+using Hearty.Utilities;
 
-namespace JobBank.Server;
+namespace Hearty.Server;
 
 using JobMessage = ILaunchableJob<PromisedWork, PromiseData>;
 using MacroJobExpansion = IAsyncEnumerable<(PromiseRetriever, PromisedWork)>;

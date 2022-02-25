@@ -7,7 +7,7 @@
 using System.Diagnostics;
 using System.Text;
 
-namespace JobBank.Server;
+namespace Hearty.Server;
 
 internal static class HttpTokenParsingRules
 {

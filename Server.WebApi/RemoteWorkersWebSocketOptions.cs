@@ -1,8 +1,8 @@
-﻿using JobBank.Work;
+﻿using Hearty.Work;
 using Microsoft.AspNetCore.Http;
 using System;
 
-namespace JobBank.Server.WebApi
+namespace Hearty.Server.WebApi
 {
     /// <summary>
     /// Options for the remote workers' endpoint speaking a WebSocket protocol.

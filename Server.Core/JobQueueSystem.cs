@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using JobBank.Scheduling;
+using Hearty.Scheduling;
 
-namespace JobBank.Server;
+namespace Hearty.Server;
 
 using JobMessage = ILaunchableJob<PromisedWork, PromiseData>;
 

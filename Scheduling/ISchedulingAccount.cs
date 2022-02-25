@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace JobBank.Scheduling
+namespace Hearty.Scheduling
 {
     /// <summary>
     /// Adjusts the "account balance" and tracks statistics as

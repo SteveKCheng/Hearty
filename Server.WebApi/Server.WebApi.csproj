@@ -5,13 +5,13 @@
     <OutputType>Library</OutputType>
     <NoDefaultLaunchSettingsFile>true</NoDefaultLaunchSettingsFile>
     <Nullable>enable</Nullable>
-    <RootNamespace>JobBank.Server.WebApi</RootNamespace>
-    <AssemblyName>JobBank.Server.WebApi</AssemblyName>
+    <RootNamespace>Hearty.Server.WebApi</RootNamespace>
+    <AssemblyName>Hearty.Server.WebApi</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
     <Authors>Steve Cheng</Authors>
     <Company>​​</Company>
-    <Description>Implementation of Web-based APIs for JobBank through ASP.NET Core</Description>
+    <Description>Implementation of Web-based APIs for Hearty through ASP.NET Core</Description>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
   </PropertyGroup>
 

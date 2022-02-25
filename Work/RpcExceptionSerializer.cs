@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Buffers;
 using MessagePack;
-using JobBank.WebSockets;
-using JobBank.Common;
+using Hearty.WebSockets;
+using Hearty.Common;
 
-namespace JobBank.Work
+namespace Hearty.Work
 {
     /// <summary>
     /// Serializes exceptions for RPC using the payload type <see cref="ExceptionPayload" />.

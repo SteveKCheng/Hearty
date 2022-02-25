@@ -1,9 +1,9 @@
 ﻿using System;
 using Microsoft.Extensions.Primitives;
 using Xunit;
-using JobBank.Server;
+using Hearty.Server;
 
-namespace JobBank.Tests
+namespace Hearty.Tests
 {
     public class ContentNegotiationTests
     {

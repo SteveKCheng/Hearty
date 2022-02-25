@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MessagePack;
 
-namespace JobBank.Work
+namespace Hearty.Work
 {
     /// <summary>
     /// Interface to execute jobs, suitable to expose as 

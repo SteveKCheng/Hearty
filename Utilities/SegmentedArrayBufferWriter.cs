@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Buffers;
 
-namespace JobBank.Utilities
+namespace Hearty.Utilities
 {
     /// <summary>
     /// Manages a linked list of managed arrays to sequentially store data of 

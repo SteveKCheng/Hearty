@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace JobBank.Scheduling
+namespace Hearty.Scheduling
 {
     /// <summary>
     /// Interface to report the status of a (remote) worker.

@@ -2,7 +2,7 @@
 using System.IO.Pipelines;
 using System.Threading;
 
-namespace JobBank.Server.WebApi
+namespace Hearty.Server.WebApi
 {
     /// <summary>
     /// Progress updates on a background job for a promise.
@@ -97,7 +97,7 @@ namespace JobBank.Server.WebApi
         /// This pipe must be completed by the promise producer 
         /// before it returns.  Thus, promises cannot be created
         /// from on partially received data; the protocols used
-        /// for the Web APIs from Job Bank impose this restriction.
+        /// for the Web APIs from Hearty impose this restriction.
         /// </remarks>
         public PipeReader PipeReader { get; init; }
 

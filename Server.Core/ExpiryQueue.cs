@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using GoldSaucer.BTree;
 using System.Threading;
 using System.Numerics;
-using JobBank.Utilities;
+using Hearty.Utilities;
 
-namespace JobBank.Server
+namespace Hearty.Server
 {
     /// <summary>
     /// Allows queuing up objects to be processed at a later time,

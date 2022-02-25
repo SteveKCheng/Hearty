@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace JobBank.Scheduling
+namespace Hearty.Scheduling
 {
     /// <summary>
     /// Describes a flow that is being activated or de-activating

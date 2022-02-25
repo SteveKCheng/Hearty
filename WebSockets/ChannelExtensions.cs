@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
-namespace JobBank.WebSockets
+namespace Hearty.WebSockets
 {
     /// <summary>
     /// Extension methods on <see cref="Channel" /> and related classes.

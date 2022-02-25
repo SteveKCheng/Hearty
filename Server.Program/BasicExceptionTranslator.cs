@@ -1,7 +1,7 @@
 ﻿using System;
-using JobBank.Work;
+using Hearty.Work;
 
-namespace JobBank.Server.Program
+namespace Hearty.Server.Program
 {
     public static class BasicExceptionTranslator
     {

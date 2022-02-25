@@ -8,14 +8,14 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using JobBank.Utilities;
+using Hearty.Utilities;
 using System.Buffers;
 using System.IO;
 using System.Threading;
 using Microsoft.Extensions.Logging;
-using JobBank.Server.Mocks;
-using JobBank.Server.WebApi;
-using JobBank.Scheduling;
+using Hearty.Server.Mocks;
+using Hearty.Server.WebApi;
+using Hearty.Scheduling;
 using Microsoft.AspNetCore.Http;
 using System.Text.Json;
 using System.Collections.Generic;
@@ -26,7 +26,7 @@ using idunno.Authentication.Basic;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.Cookies;
 
-namespace JobBank.Server.Program
+namespace Hearty.Server.Program
 {
     public class Startup
     {

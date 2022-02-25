@@ -2,7 +2,7 @@
 using System.Collections.Concurrent;
 using System.Threading;
 
-namespace JobBank.Utilities
+namespace Hearty.Utilities
 {
     /// <summary>
     /// Provides instances of <see cref="CancellationTokenSource" />

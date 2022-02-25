@@ -1,11 +1,11 @@
-﻿using JobBank.WebSockets;
+﻿using Hearty.WebSockets;
 using MessagePack;
 using System;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Work
+namespace Hearty.Work
 {
     /// <summary>
     /// Makes job submission functions available to a remote client.
@@ -93,7 +93,7 @@ namespace JobBank.Work
         /// <summary>
         /// Register the new worker host and begin accepting work
         /// over a newly established RPC connection using the
-        /// JobBank protocol over WebSockets.
+        /// Hearty protocol over WebSockets.
         /// </summary>
         /// <param name="settings">
         /// Settings that the new worker is registered with in the
@@ -139,7 +139,7 @@ namespace JobBank.Work
         /// The string used to distinguish the sub-protocol over
         /// WebSockets used for worker registration and job submission.
         /// </summary>
-        public static readonly string WebSocketsSubProtocol = "JobBank.Work";
+        public static readonly string WebSocketsSubProtocol = "Hearty.Work";
 
         /// <summary>
         /// Conventional path for the WebSockets endpoint.
@@ -148,7 +148,7 @@ namespace JobBank.Work
 
         /// <summary>
         /// Register the new worker host and begin accepting work
-        /// by connecting to a JobBank server over WebSockets.
+        /// by connecting to a Hearty server over WebSockets.
         /// </summary>
         /// <param name="impl">
         /// This object is invoked to executes work requests 
@@ -159,7 +159,7 @@ namespace JobBank.Work
         /// job server.
         /// </param>
         /// <param name="server">
-        /// WebSocket URL to the JobBank server.
+        /// WebSocket URL to the Hearty server.
         /// </param>
         /// <param name="webSocketOptionsSetter">
         /// If null, this action is invoked to customize the WebSocket
@@ -208,7 +208,7 @@ namespace JobBank.Work
 
         /// <summary>
         /// Register the new worker host and begin accepting work
-        /// by connecting to a JobBank server over WebSockets.
+        /// by connecting to a Hearty server over WebSockets.
         /// </summary>
         /// <param name="impl">
         /// This object is invoked to executes work requests 
@@ -219,7 +219,7 @@ namespace JobBank.Work
         /// job server.
         /// </param>
         /// <param name="server">
-        /// WebSocket URL to the JobBank server.
+        /// WebSocket URL to the Hearty server.
         /// </param>
         /// <param name="webSocketOptionsSetter">
         /// If null, this action is invoked to customize the WebSocket

@@ -1,11 +1,11 @@
-﻿using JobBank.Utilities;
+﻿using Hearty.Utilities;
 using System;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Sources;
 
-namespace JobBank.Scheduling
+namespace Hearty.Scheduling
 {
     /// <summary>
     /// Implementation of <see cref="IValueTaskSource{T}" /> that can be reset,

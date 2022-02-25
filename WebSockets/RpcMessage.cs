@@ -2,7 +2,7 @@
 using System.Buffers;
 using System.IO;
 
-namespace JobBank.WebSockets
+namespace Hearty.WebSockets
 {
     /// <summary>
     /// Represents a pending message in <see cref="WebSocketRpc"/>'s internal

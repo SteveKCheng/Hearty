@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using System.Threading.Tasks.Sources;
 using MessagePack;
 
-namespace JobBank.WebSockets
+namespace Hearty.WebSockets
 {
     /// <summary>
     /// Holds the request data before it gets sent over WebSockets,

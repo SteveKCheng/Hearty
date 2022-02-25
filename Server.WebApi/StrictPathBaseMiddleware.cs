@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Hosting.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace JobBank.Server.WebApi
+namespace Hearty.Server.WebApi
 {
     /// <summary>
     /// ASP.NET Core middleware that expects a path base (prefix) 

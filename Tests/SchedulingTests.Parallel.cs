@@ -1,14 +1,14 @@
 using System;
 using Xunit;
 
-using JobBank.Scheduling;
+using Hearty.Scheduling;
 using System.Threading.Channels;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading;
 using System.Diagnostics;
 
-namespace JobBank.Tests
+namespace Hearty.Tests
 {
     /// <summary>
     /// A job item to consider in simulations of job scheduling.

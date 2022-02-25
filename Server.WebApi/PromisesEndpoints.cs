@@ -1,4 +1,4 @@
-﻿using JobBank.Common;
+﻿using Hearty.Common;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -9,10 +9,10 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Server.WebApi
+namespace Hearty.Server.WebApi
 {
     /// <summary>
-    /// Exposes promises from a Job Bank server to HTTP clients. 
+    /// Exposes promises from a Hearty server to HTTP clients. 
     /// </summary>
     /// <remarks>
     /// As the HTTP endpoints need to expose arbitrary payloads efficiently,
@@ -26,7 +26,7 @@ namespace JobBank.Server.WebApi
         /// of a certain type to be posted at a specific HTTP endpoint. 
         /// </summary>
         /// <param name="endpoints">Builds all the HTTP endpoints used by the application. </param>
-        /// <param name="routeKey">Sub-path occurring after the URL prefix for Job Bank that 
+        /// <param name="routeKey">Sub-path occurring after the URL prefix for Hearty that 
         /// is specific to job executor being registered.
         /// </param>
         /// <param name="executor">Processes the requests for promises
@@ -200,10 +200,10 @@ namespace JobBank.Server.WebApi
             var httpRequest = httpContext.Request;
 
             var queueName = ParseQueueName(httpRequest.Query["queue"])
-                            ?? ParseQueueName(httpRequest.Headers[JobBankHttpHeaders.JobQueueName])
+                            ?? ParseQueueName(httpRequest.Headers[HeartyHttpHeaders.JobQueueName])
                             ?? "default";
             var priority = ParseQueuePriority(httpRequest.Query["priority"])
-                            ?? ParseQueuePriority(httpRequest.Headers[JobBankHttpHeaders.JobPriority])
+                            ?? ParseQueuePriority(httpRequest.Headers[HeartyHttpHeaders.JobPriority])
                             ?? 5;
 
             IJobQueueOwner? queueOwner = null;
@@ -263,7 +263,7 @@ namespace JobBank.Server.WebApi
             }
 
             httpResponse.StatusCode = StatusCodes.Status303SeeOther;
-            httpResponse.Headers.Add(JobBankHttpHeaders.PromiseId, promiseId.ToString());
+            httpResponse.Headers.Add(HeartyHttpHeaders.PromiseId, promiseId.ToString());
 
             httpResponse.Headers.Location = 
                 httpRequest.PathBase.Add($"/jobs/v1/id/{promiseId}").ToString();

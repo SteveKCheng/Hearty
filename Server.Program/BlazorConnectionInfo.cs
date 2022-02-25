@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 
-namespace JobBank.Server.Program
+namespace Hearty.Server.Program
 {
     /// <summary>
     /// Information established on a client's connection to Blazor

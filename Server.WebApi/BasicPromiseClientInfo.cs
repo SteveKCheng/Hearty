@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 #pragma warning disable CS1591
 
-namespace JobBank.Server.WebApi
+namespace Hearty.Server.WebApi
 {
     /// <summary>
     /// A basic implementation of <see cref="IPromiseClientInfo" />.

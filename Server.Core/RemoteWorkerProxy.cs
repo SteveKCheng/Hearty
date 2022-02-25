@@ -1,11 +1,11 @@
-﻿using JobBank.Scheduling;
-using JobBank.WebSockets;
-using JobBank.Work;
+﻿using Hearty.Scheduling;
+using Hearty.WebSockets;
+using Hearty.Work;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Server
+namespace Hearty.Server
 {
     /// <summary>
     /// Submits promise-backed jobs to a remote worker

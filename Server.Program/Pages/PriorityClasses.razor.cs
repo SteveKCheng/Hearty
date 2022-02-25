@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace JobBank.Server.Program.Pages
+namespace Hearty.Server.Program.Pages
 {
     public partial class PriorityClasses : IDisposable
     {

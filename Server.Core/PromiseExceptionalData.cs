@@ -1,5 +1,5 @@
-﻿using JobBank.Common;
-using JobBank.Utilities;
+﻿using Hearty.Common;
+using Hearty.Utilities;
 using MessagePack;
 using System;
 using System.Buffers;
@@ -12,7 +12,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Server
+namespace Hearty.Server
 {
     /// <summary>
     /// Represents an exception (from job execution) as the

@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading;
-using JobBank.Scheduling;
+using Hearty.Scheduling;
 
-namespace JobBank.Server;
+namespace Hearty.Server;
 
 /// <summary>
 /// Queue for job messages submitted by one client, to take

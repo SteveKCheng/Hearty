@@ -4,17 +4,17 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Net.WebSockets;
-using JobBank.WebSockets;
+using Hearty.WebSockets;
 using System.IO.Pipes;
 using System.Security.Cryptography;
 using MessagePack;
 using System.Threading;
 using Xunit;
-using JobBank.Utilities;
+using Hearty.Utilities;
 using System.IO;
-using JobBank.Work;
+using Hearty.Work;
 
-namespace JobBank.Tests
+namespace Hearty.Tests
 {
     public class WebSocketRpcTests
     {

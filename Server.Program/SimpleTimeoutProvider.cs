@@ -1,7 +1,7 @@
 ﻿using System;
-using JobBank.Scheduling;
+using Hearty.Scheduling;
 
-namespace JobBank.Server.Program
+namespace Hearty.Server.Program
 {
     internal sealed class SimpleTimeoutProvider : TimeoutProvider, IDisposable
     {

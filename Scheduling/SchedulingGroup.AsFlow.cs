@@ -2,7 +2,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 
-namespace JobBank.Scheduling
+namespace Hearty.Scheduling
 {
     public partial class SchedulingGroup<T>
     {

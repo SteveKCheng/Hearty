@@ -2,7 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.WebSockets
+namespace Hearty.WebSockets
 {
     /// <summary>
     /// Arguments for the <see cref="RpcConnection.OnClose" /> event.

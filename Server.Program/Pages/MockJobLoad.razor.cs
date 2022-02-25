@@ -1,4 +1,4 @@
-﻿using JobBank.Server.Mocks;
+﻿using Hearty.Server.Mocks;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Server.Program.Pages
+namespace Hearty.Server.Program.Pages
 {
     public partial class MockJobLoad
     {

@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace JobBank.WebSockets
+namespace Hearty.WebSockets
 {
     internal sealed class CancellationMessage : RpcMessage
     {

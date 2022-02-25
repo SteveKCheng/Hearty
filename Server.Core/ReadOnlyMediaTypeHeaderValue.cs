@@ -8,7 +8,7 @@ using System;
 using System.Text;
 using Microsoft.Extensions.Primitives;
 
-namespace JobBank.Server;
+namespace Hearty.Server;
 
 /// <summary>
 /// A media type value.

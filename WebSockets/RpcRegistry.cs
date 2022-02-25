@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MessagePack;
 
-namespace JobBank.WebSockets
+namespace Hearty.WebSockets
 {
     /// <summary>
     /// An asynchronous function that can be invoked by the RPC

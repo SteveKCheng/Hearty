@@ -3,13 +3,13 @@
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <RootNamespace>JobBank.Server</RootNamespace>
-    <AssemblyName>JobBank.Server</AssemblyName>
+    <RootNamespace>Hearty.Server</RootNamespace>
+    <AssemblyName>Hearty.Server</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
     <Authors>Steve Cheng</Authors>
     <Company>​​</Company>
-    <Description>Library of core functionality implemented by a JobBank server</Description>
+    <Description>Library of core functionality implemented by a Hearty server</Description>
   </PropertyGroup>
   
   <ItemGroup>

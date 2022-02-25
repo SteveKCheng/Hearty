@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace JobBank.Scheduling
+namespace Hearty.Scheduling
 {
     /// <summary>
     /// Represents an object that acts as a scheduling flow

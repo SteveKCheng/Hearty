@@ -2,7 +2,7 @@
 using System;
 using System.Buffers;
 
-namespace JobBank.WebSockets
+namespace Hearty.WebSockets
 {
     internal sealed class ExceptionMessage : RpcMessage
     {

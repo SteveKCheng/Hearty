@@ -2,7 +2,7 @@
 using System;
 using System.Buffers;
 
-namespace JobBank.WebSockets
+namespace Hearty.WebSockets
 {
     /// <summary>
     /// Holds a reply before it gets sent over WebSockets.

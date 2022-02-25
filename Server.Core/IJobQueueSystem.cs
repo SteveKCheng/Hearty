@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace JobBank.Server;
+namespace Hearty.Server;
 
 /// <summary>
 /// A unique identifier for a job queue 

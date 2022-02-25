@@ -2,7 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 
-namespace JobBank.Server
+namespace Hearty.Server
 {
     /// <summary>
     /// Stores a list of items, optimizing for small

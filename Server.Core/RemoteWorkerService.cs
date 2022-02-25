@@ -2,11 +2,11 @@
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
-using JobBank.Scheduling;
-using JobBank.WebSockets;
-using JobBank.Work;
+using Hearty.Scheduling;
+using Hearty.WebSockets;
+using Hearty.Work;
 
-namespace JobBank.Server
+namespace Hearty.Server
 {
     /// <summary>
     /// Implements a WebSocket endpoint that remote ("slave") hosts 

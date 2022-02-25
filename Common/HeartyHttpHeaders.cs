@@ -4,17 +4,17 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace JobBank.Common
+namespace Hearty.Common
 {
     /// <summary>
-    /// Custom HTTP header keys used by the Job Bank ReST API.
+    /// Custom HTTP header keys used by the Hearty ReST API.
     /// </summary>
     /// <remarks>
     /// These header keys are in mixed case for readability.
     /// ASP.NET Core automatically takes the lowercase when
     /// putting them in HTTP/2+ headers.
     /// </remarks>
-    public static class JobBankHttpHeaders
+    public static class HeartyHttpHeaders
     {
         /// <summary>
         /// Header that reports the promise ID in the response.

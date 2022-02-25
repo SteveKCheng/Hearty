@@ -1,14 +1,14 @@
 ﻿using System;
 using Xunit;
 
-using JobBank.Scheduling;
-using JobBank.Utilities;
+using Hearty.Scheduling;
+using Hearty.Utilities;
 using System.Threading.Channels;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Linq;
 
-namespace JobBank.Tests
+namespace Hearty.Tests
 {
     public partial class SchedulingTests
     {

@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace JobBank.Utilities
+namespace Hearty.Utilities
 {
     /// <summary>
     /// Enables access to a structure embedded in a larger class.

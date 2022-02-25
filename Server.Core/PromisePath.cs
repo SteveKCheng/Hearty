@@ -2,7 +2,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 
-namespace JobBank.Server
+namespace Hearty.Server
 {
     /// <summary>
     /// A filesystem-like path to a promise.

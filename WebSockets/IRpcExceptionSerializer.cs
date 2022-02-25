@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Buffers;
 
-namespace JobBank.WebSockets
+namespace Hearty.WebSockets
 {
     /// <summary>
     /// Allows customizing how .NET exceptions are serialized by the RPC system.

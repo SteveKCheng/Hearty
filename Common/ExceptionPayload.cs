@@ -2,7 +2,7 @@
 using System.Text.Json.Serialization;
 using MessagePack;
 
-namespace JobBank.Common
+namespace Hearty.Common
 {
     /// <summary>
     /// Partial representation of an exception object in a safely serializable form.
@@ -10,7 +10,7 @@ namespace JobBank.Common
     /// <remarks>
     /// <para>
     /// This data type is modelled after .NET exceptions.  But in so far
-    /// as Job Bank can be implemented by non-.NET code, accommodations
+    /// as Hearty can be implemented by non-.NET code, accommodations
     /// are made for other languages and run-time environments.
     /// </para>
     /// <para>

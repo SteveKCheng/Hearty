@@ -2,7 +2,7 @@
 using System.Runtime.Intrinsics.X86;
 using System.Threading;
 
-namespace JobBank.Scheduling
+namespace Hearty.Scheduling
 {
     /// <summary>
     /// A piece of published data protected by a "sequence lock".

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using Microsoft.Extensions.Primitives;
 
-namespace JobBank.Server
+namespace Hearty.Server
 {
     public readonly partial struct ContentFormatInfo
     {

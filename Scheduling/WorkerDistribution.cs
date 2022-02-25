@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
-namespace JobBank.Scheduling
+namespace Hearty.Scheduling
 {
     /// <summary>
     /// Pushes out job vacancies (opportunities to execute jobs)
@@ -17,7 +17,7 @@ namespace JobBank.Scheduling
     /// <para>
     /// A worker in this context usually refers to one node
     /// in a cluster of computers which can accept jobs to
-    /// execute from a central "Job Bank" server.
+    /// execute from a central "Hearty" server.
     /// </para>
     /// <para>
     /// The most basic way to assign workers to jobs is round-robin:

@@ -1,10 +1,10 @@
-﻿using JobBank.Scheduling;
-using JobBank.Work;
+﻿using Hearty.Scheduling;
+using Hearty.Work;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Server
+namespace Hearty.Server
 {
     /// <summary>
     /// Adapts <see cref="IJobSubmission" /> to get called locally

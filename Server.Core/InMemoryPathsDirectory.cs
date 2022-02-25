@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 
-namespace JobBank.Server
+namespace Hearty.Server
 {
     /// <summary>
     /// Stores all the paths for promises in managed memory.

@@ -6,16 +6,16 @@ using Xunit;
 using System.Text;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using JobBank.Server.Program;
-using JobBank.Server.Mocks;
-using JobBank.Client;
+using Hearty.Server.Program;
+using Hearty.Server.Mocks;
+using Hearty.Client;
 using Microsoft.Extensions.Configuration;
 using System.Text.Json;
 using System.IO;
 using System.Threading;
 using System.Linq;
 
-namespace JobBank.Server.Tests
+namespace Hearty.Server.Tests
 {
     public class PromiseApiTests : IDisposable
     {
@@ -53,7 +53,7 @@ namespace JobBank.Server.Tests
         {
             var itemList = new List<(MockPricingInput Input, PromiseId PromiseId)>();
 
-            using var client = new JobBankClient(CreateClient());
+            using var client = new HeartyClient(CreateClient());
             var inputs = MockPricingInput.GenerateRandomSamples(DateTime.Today, 41, 5);
 
             foreach (var input in inputs)
@@ -82,7 +82,7 @@ namespace JobBank.Server.Tests
         [Fact]
         public async Task RunJobList()
         {
-            using var client = new JobBankClient(CreateClient());
+            using var client = new HeartyClient(CreateClient());
             var inputs = MockPricingInput.GenerateRandomSamples(DateTime.Today, 41, 50)
                                          .ToList();
 

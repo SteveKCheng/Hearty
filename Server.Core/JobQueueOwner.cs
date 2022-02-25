@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Security.Claims;
 
-namespace JobBank.Server;
+namespace Hearty.Server;
 
 /// <summary>
 /// A simple realization of <see cref="IJobQueueOwner" />

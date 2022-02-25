@@ -1,10 +1,10 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <RootNamespace>JobBank.Server.Tests</RootNamespace>
-    <AssemblyName>JobBank.Server.Tests</AssemblyName>
+    <RootNamespace>Hearty.Server.Tests</RootNamespace>
+    <AssemblyName>Hearty.Server.Tests</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
     <IsPackable>false</IsPackable>

@@ -1,7 +1,7 @@
 ﻿using System;
-using JobBank.Common;
+using Hearty.Common;
 
-namespace JobBank.Work
+namespace Hearty.Work
 {
     /// <summary>
     /// An exception from a remote procedure call to a worker host.

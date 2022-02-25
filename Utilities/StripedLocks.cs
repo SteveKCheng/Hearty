@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Numerics;
 
-namespace JobBank.Utilities
+namespace Hearty.Utilities
 {
     /// <summary>
     /// Array of objects provided for locking.

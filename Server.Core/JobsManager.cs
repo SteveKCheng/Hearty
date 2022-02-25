@@ -4,10 +4,10 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using JobBank.Scheduling;
+using Hearty.Scheduling;
 using Microsoft.Extensions.Logging;
 
-namespace JobBank.Server
+namespace Hearty.Server
 {
     using JobMessage = ILaunchableJob<PromisedWork, PromiseData>;
     using MacroJobExpansion = IAsyncEnumerable<(PromiseRetriever, PromisedWork)>;

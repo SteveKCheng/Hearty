@@ -20,14 +20,14 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
-namespace JobBank.Server;
+namespace Hearty.Server;
 
 /// <summary>
 /// Sets up endpoints for programmatic retrieval of credentials.
 /// </summary>
 /// <remarks>
-/// These endpoints have nothing to do with the functionality of Job Bank,
-/// but they are useful building blocks for a Job Bank server host.
+/// These endpoints have nothing to do with the functionality of Hearty,
+/// but they are useful building blocks for a Hearty server host.
 /// </remarks>
 public static class AuthenticationEndpoints
 {

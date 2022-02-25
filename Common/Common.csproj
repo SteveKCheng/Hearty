@@ -3,18 +3,18 @@
   <PropertyGroup>
     <TargetFrameworks>net6.0;net5.0</TargetFrameworks>
     <Nullable>enable</Nullable>
-    <RootNamespace>JobBank.Common</RootNamespace>
-    <AssemblyName>JobBank.Common</AssemblyName>
+    <RootNamespace>Hearty.Common</RootNamespace>
+    <AssemblyName>Hearty.Common</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
     <Authors>Steve Cheng</Authors>
     <Company>​​</Company>
-    <Description>Library of code common to clients and servers in JobBank</Description>
+    <Description>Library of code common to clients and servers in Hearty</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="ExceptionPayload.cs" />
-    <Compile Include="JobBankHttpHeaders.cs" />
+    <Compile Include="HeartyHttpHeaders.cs" />
     <Compile Include="PromiseId.cs" />
     <Compile Include="RestApiUtilities.cs" />
   </ItemGroup>

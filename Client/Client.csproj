@@ -3,18 +3,18 @@
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <RootNamespace>JobBank.Client</RootNamespace>
-    <AssemblyName>JobBank.Client</AssemblyName>
+    <RootNamespace>Hearty.Client</RootNamespace>
+    <AssemblyName>Hearty.Client</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
     <Authors>Steve Cheng</Authors>
     <Company>​​</Company>
-    <Description>Strongly-typed client interface for JobBank's ReST-based protocol</Description>
+    <Description>Strongly-typed client interface for Hearty's ReST-based protocol</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="EnumerableExtensions.cs" />
-    <Compile Include="JobBankClient.cs" />
+    <Compile Include="HeartyClient.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -2,7 +2,7 @@
 using System.Threading.Tasks;
 using MessagePack;
 
-namespace JobBank.Work
+namespace Hearty.Work
 {
     /// <summary>
     /// Interface to register a worker host to a job distribution

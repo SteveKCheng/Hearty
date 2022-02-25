@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace JobBank.Server.Mocks
+namespace Hearty.Server.Mocks
 {
     /// <summary>
     /// Mathematical functions used to implement mock pricing.

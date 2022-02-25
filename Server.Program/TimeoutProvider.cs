@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using JobBank.Scheduling;
+using Hearty.Scheduling;
 
-namespace JobBank.Server.Program
+namespace Hearty.Server.Program
 {
     /// <summary>
     /// Triggers actions after short, relative timeouts in a scalable way.

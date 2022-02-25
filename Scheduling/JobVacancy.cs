@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace JobBank.Scheduling
+namespace Hearty.Scheduling
 {
     /// <summary>
     /// Represents a claim to resources to execute a job in abstract

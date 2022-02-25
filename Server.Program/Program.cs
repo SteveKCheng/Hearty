@@ -7,7 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace JobBank.Server.Program
+namespace Hearty.Server.Program
 {
     public class Program
     {

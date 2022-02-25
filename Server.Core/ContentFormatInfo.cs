@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace JobBank.Server;
+namespace Hearty.Server;
 
 /// <summary>
 /// Describes the format of data available from a server

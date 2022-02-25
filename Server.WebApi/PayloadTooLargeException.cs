@@ -2,7 +2,7 @@
 
 #pragma warning disable CS1591
 
-namespace JobBank.Server.WebApi
+namespace Hearty.Server.WebApi
 {
     public class PayloadTooLargeException : Exception
     {

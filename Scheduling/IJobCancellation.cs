@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading;
 
-namespace JobBank.Scheduling
+namespace Hearty.Scheduling
 {
     /// <summary>
     /// Interface to cancel a job on behalf of a client.

@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Scheduling
+namespace Hearty.Scheduling
 {
     /// <summary>
     /// An abstract worker within <see cref="WorkerDistribution{TInput, TOutput}" />.
@@ -67,7 +67,7 @@ namespace JobBank.Scheduling
         /// ID assigned sequentially to each job execution.
         /// </summary>
         /// <remarks>
-        /// In Job Bank's current default implementation, 
+        /// In Hearty's current default implementation, 
         /// this variable is never concurrently incremented
         /// because <see cref="TryTakeItem" /> is not invoked
         /// concurrently.  But, for future-proofing, we assume

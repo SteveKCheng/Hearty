@@ -1,10 +1,10 @@
-﻿using JobBank.Utilities;
+﻿using Hearty.Utilities;
 using System;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Scheduling
+namespace Hearty.Scheduling
 {
     /// <summary>
     /// Represents some result that should get produced in the future.
@@ -35,7 +35,7 @@ namespace JobBank.Scheduling
     /// allows for multiple producers and a single consumer (MPSC).
     /// </para>
     /// <para>
-    /// In the general framework of Job Bank, when a client requests for 
+    /// In the general framework of Hearty, when a client requests for 
     /// a promise, and finds it has not completed, then it schedules
     /// a job ("future") to complete it.  There is usually this 
     /// correspondence between a producer and a consumer, but it is important

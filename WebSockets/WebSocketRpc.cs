@@ -6,9 +6,9 @@ using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using JobBank.Utilities;
+using Hearty.Utilities;
 
-namespace JobBank.WebSockets
+namespace Hearty.WebSockets
 {
     /// <summary>
     /// Enables both sides of a WebSocket connection to make remote procedure calls.

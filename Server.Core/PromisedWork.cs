@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace JobBank.Server
+namespace Hearty.Server
 {
     /// <summary>
     /// Describes the work to generate the output for a promise.

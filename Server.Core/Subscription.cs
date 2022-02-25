@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace JobBank.Server
+namespace Hearty.Server
 {
     /// <summary>
     /// Represents a subscription from a client to a promise.
@@ -11,7 +11,7 @@ namespace JobBank.Server
     /// <remarks>
     /// <para>
     /// When retrieving results asynchronously from a promise,
-    /// the Job Bank framework requires an active subscription.
+    /// the Hearty framework requires an active subscription.
     /// The act of subscription records information about the client 
     /// (consumer) to facilitate monitoring and administration.
     /// </para>

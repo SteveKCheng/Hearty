@@ -1,10 +1,10 @@
-﻿using JobBank.Work;
+﻿using Hearty.Work;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Server.Mocks
+namespace Hearty.Server.Mocks
 {
     /// <summary>
     /// Generates worker hosts running locally that connect 
@@ -21,7 +21,7 @@ namespace JobBank.Server.Mocks
 
         /// <summary>
         /// Create fake worker hosts connecting to a WebSocket endpoint
-        /// for job distribution from a Job Bank server.
+        /// for job distribution from a Hearty server.
         /// </summary>
         /// <param name="host">The host name or IP address of the WebSocket
         /// endpoint. </param>

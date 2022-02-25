@@ -1,11 +1,11 @@
-﻿using JobBank.Common;
+﻿using Hearty.Common;
 using System;
 using System.IO.Pipelines;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace JobBank.Server;
+namespace Hearty.Server;
 
 public partial class PromiseList
 {
@@ -198,12 +198,12 @@ public partial class PromiseList
             //
             //   writer.WriteUtf8String("Content-Transfer-Encoding: Binary\r\n");
 
-            writer.WriteUtf8String(JobBankHttpHeaders.Ordinal);
+            writer.WriteUtf8String(HeartyHttpHeaders.Ordinal);
             writer.WriteUtf8String(": ");
             writer.WriteDecimalInteger(ordinal);
             writer.WriteCrLf();
 
-            writer.WriteUtf8String(JobBankHttpHeaders.PromiseId);
+            writer.WriteUtf8String(HeartyHttpHeaders.PromiseId);
             writer.WriteUtf8String(": ");
             writer.WriteAsciiPromiseId(promiseId);
             writer.WriteCrLf();
