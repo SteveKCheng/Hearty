@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
-using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -14,7 +13,6 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -106,18 +104,6 @@ public static class AuthenticationEndpoints
         JwtJson = 4,
     }
 
-    private static IReadOnlyList<Claim> CreateClaims(HttpContext httpContext)
-    {
-        var user = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        var claims = new Claim[]
-        {
-            new(ClaimTypes.NameIdentifier, string.IsNullOrWhiteSpace(user) ? "anonymous" : user)
-        };
-
-        return claims;
-    }
-
     /// <summary>
     /// Add an endpoint to get a bearer token for authenticating
     /// other API endpoints.
@@ -136,11 +122,19 @@ public static class AuthenticationEndpoints
     /// <see cref="JwtBearerDefaults.AuthenticationScheme" />.
     /// </param>
     /// <remarks>
+    /// <para>
     /// The token is in the format of a JSON Web Token in its compact
     /// serialization, but it may be considered an implementation
     /// detail.  The token is an opaque string to clients.
     /// The JSON Web Token is self-issued so nothing else than this
     /// server needs to parse it.
+    /// </para>
+    /// <para>
+    /// The JSON Web Token captures the claims present in 
+    /// <see cref="HttpContext.User" />, so that should be set as
+    /// desired, through another authentication scheme or middleware
+    /// in ASP.NET Core that executes before this endpoint is routed to.
+    /// </para>
     /// </remarks>
     /// <returns>Builder specific to the new job executor's endpoint that may be
     /// used to customize its handling by the ASP.NET Core framework.
@@ -188,7 +182,9 @@ public static class AuthenticationEndpoints
         }
 
         // Use the same token handler registered in jwtOptions 
-        // if it is of the right type.
+        // if it is of the right type, to avoid inconsistencies
+        // in how we generate the token versus how authentication
+        // in ASP.NET Core would validate it.
         static JwtSecurityTokenHandler? ExtractJwtSecurityTokenHandler(IList<ISecurityTokenValidator> validators)
         {
             foreach (var validator in validators)
@@ -229,8 +225,6 @@ public static class AuthenticationEndpoints
                 httpResponse.Headers.Vary = "Accept";
                 return;
             }
-
-            var claims = CreateClaims(httpContext);
 
             var now = DateTime.UtcNow;
 
@@ -338,6 +332,12 @@ public static class AuthenticationEndpoints
     /// desired options.  If null, defaults to 
     /// <see cref="CookieAuthenticationDefaults.AuthenticationScheme" />.
     /// </param>
+    /// <para>
+    /// The authentication cookie captures the claims present in 
+    /// <see cref="HttpContext.User" />, so that should be set as
+    /// desired, through another authentication scheme or middleware
+    /// in ASP.NET Core that executes before this endpoint is routed to.
+    /// </para>
     /// <returns>Builder specific to the new job executor's endpoint that may be
     /// used to customize its handling by the ASP.NET Core framework.
     /// In particular, this endpoint may be set to require authorization,
@@ -366,15 +366,8 @@ public static class AuthenticationEndpoints
             if (isHead)
                 return;
 
-            var claims = CreateClaims(httpContext);
-
-            var claimsIdentity = new ClaimsIdentity(claims, 
-                                                    authenticationScheme);
-
-            var principal = new ClaimsPrincipal(claimsIdentity);
-
             await httpContext.SignInAsync(authenticationScheme,
-                                          principal).ConfigureAwait(false);
+                                          httpContext.User).ConfigureAwait(false);
         });
     }
 
