@@ -7,15 +7,17 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using static System.FormattableString;
 
 namespace Hearty.Client
 {
     /// <summary>
     /// A strongly-typed interface for clients 
-    /// to interact with the Hearty server.
+    /// to interact with the Hearty server via its HTTP ReST protocol.
     /// </summary>
     public class HeartyClient : IDisposable
     {
@@ -48,13 +50,28 @@ namespace Hearty.Client
 
             response.EnsureSuccessStatusCode();
         }
-        
+
         /// <summary>
-        /// Post a job for the server to queue up and run.
+        /// Post a job for the Hearty server to queue up and launch.
         /// </summary>
+        /// <param name="routeKey">
+        /// The route on the Hearty server to post the job to.
+        /// The choices and meanings for this string depends on the
+        /// application-level customization of the Hearty server.
+        /// </param>
+        /// <param name="content">
+        /// The input data for the job.  The interpretation of the
+        /// data depends on <paramref name="routeKey" /> and the
+        /// application-level customization of the Hearty server.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be triggered to cancel the operation of posting
+        /// the job. Note, however, if cancellation races with
+        /// successful posting of the job, the job is not cancelled.
+        /// </param>
         /// <returns>
         /// ID of the remote promise which is used by the server
-        /// to uniquely identify the job request.
+        /// to uniquely identify the job.
         /// </returns>
         public async Task<PromiseId> PostJobAsync(string routeKey, 
                                                   HttpContent content,
@@ -67,11 +84,11 @@ namespace Hearty.Client
             EnsureSuccessStatusCodeEx(response);
 
             string? promiseIdStr;
-            if (!response.Headers.TryGetValues("x-promise-id", out var values) ||
+            if (!response.Headers.TryGetValues(HeartyHttpHeaders.PromiseId, out var values) ||
                 (promiseIdStr = values.SingleOrDefaultNoException()) is null)
             {
                 throw new InvalidDataException(
-                    "The server did not report a promise ID for the job positing as expected. ");
+                    "The server did not report a promise ID for the job posting as expected. ");
             }
 
             if (!PromiseId.TryParse(promiseIdStr.Trim(), out var promiseId))
@@ -115,7 +132,7 @@ namespace Hearty.Client
             var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Accept.ParseAdd(contentType);
 
-            var response = await _httpClient.SendAsync(request)
+            var response = await _httpClient.SendAsync(request, cancellation)
                                             .ConfigureAwait(false);
 
             response.EnsureSuccessStatusCode();
@@ -124,13 +141,43 @@ namespace Hearty.Client
             if (!VerifyContentType(content.Headers.ContentType, contentType))
                 throw new InvalidDataException("The Content-Type returned in the response is unexpected. ");
 
-            return await content.ReadAsStreamAsync().ConfigureAwait(false);
+            return await content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Download a stream of items from a promise/job stored
+        /// on the Hearty server.
+        /// </summary>
+        /// <typeparam name="T">
+        /// The type of object the payload will be de-serialized to.
+        /// </typeparam>
+        /// <param name="promiseId">
+        /// The ID of the promise or job on the Hearty server
+        /// whose content is a stream of items.
+        /// </param>
+        /// <param name="contentType"></param>
+        /// <param name="processor">
+        /// De-serializes the payload of each item into the desired
+        /// object of type <typeparamref name="T" />.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be triggered to cancel the entire downloading
+        /// operation.
+        /// </param>
+        /// <returns>
+        /// Asynchronous task returning the stream of items, once
+        /// the streaming connection to the server for the desired
+        /// promite has been established.  The stream itself is 
+        /// asynchronous, as it will be incrementally downloading
+        /// items.  The server may be also be producing
+        /// the items concurrently, so that it also cannot make
+        /// them available immediately.  The stream may be enumerated
+        /// only once as it is not buffered.
+        /// </returns>
         public async Task<IAsyncEnumerable<KeyValuePair<int, T>>> 
             GetItemStreamAsync<T>(PromiseId promiseId,
                                   string contentType,
-                                  PayloadProcessor<T> processor,
+                                  PayloadReader<T> processor,
                                   CancellationToken cancellationToken = default)
         {
             var url = $"jobs/v1/id/{promiseId}";
@@ -161,7 +208,7 @@ namespace Hearty.Client
 
         private static async IAsyncEnumerable<KeyValuePair<int, T>> MakeItemsAsyncEnumerable<T>(
             MultipartReader reader, 
-            PayloadProcessor<T> processor,
+            PayloadReader<T> processor,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             MultipartSection? section;
@@ -203,6 +250,105 @@ namespace Hearty.Client
             return true;
         }
 
+        private static string? GetJobQueueQueryString(string? queue = null,
+                                                      int? priority = null)
+        {
+            if (queue is null && priority is null)
+                return null;
+
+            var result = string.Empty;
+            if (queue is not null)
+                result = "queue=" + Uri.EscapeDataString(queue);
+            if (priority is not null)
+                result = (result.Length > 0 ? "&" : string.Empty) + Invariant($"priority={priority}");
+
+            return result;
+        }
+
+        #region Job cancellation
+
+        /// <summary>
+        /// Request a job on the Hearty server 
+        /// be cancelled on behalf of this client.
+        /// </summary>
+        /// <remarks>
+        /// If the job is currently being shared by other clients,
+        /// it is not interrupted unless all other clients 
+        /// also relinquish their interest in their job, 
+        /// by cancellation.
+        /// </remarks>
+        /// <param name="promiseId">The ID of the job to cancel. </param>
+        /// <param name="queue">The queue that the job has been
+        /// pushed into, for the current client.  This argument
+        /// is used to identify a specific instance of the job
+        /// if the client has pushed it onto multiple queues.
+        /// </param>
+        /// <param name="priority">
+        /// The priority of that existing job.  This argument
+        /// is used to identify a specific instance of the job
+        /// if the client has pushed it for multiple priorities.
+        /// </param>
+        /// <returns>
+        /// Asynchronous task that completes when the server
+        /// acknowledges the request to cancel the job.
+        /// </returns>
+        public async Task CancelJobAsync(PromiseId promiseId, 
+                                         string? queue = null, 
+                                         int? priority = null)
+        {
+            var uri = new UriBuilder
+            {
+                Path = "jobs/v1/id/{promiseId}",
+                Query = GetJobQueueQueryString(queue, priority)
+            }.Uri;
+
+            var request = new HttpRequestMessage(HttpMethod.Delete, uri);
+            AddAuthorizationHeader(request);
+
+            var response = await _httpClient.SendAsync(request)
+                                            .ConfigureAwait(false);
+
+            response.EnsureSuccessStatusCode();
+        }
+
+        /// <summary>
+        /// Stop a job on the Hearty server for all clients, 
+        /// causing it to return a "cancelled" result.
+        /// </summary>
+        /// <remarks>
+        /// This operation typically requires administrator-level
+        /// authorization on the Hearty server.  As stopping a job
+        /// is implemented cooperatively, even after this method
+        /// returns asynchronously, the job may not have actually
+        /// stopped yet.
+        /// </remarks>
+        /// <param name="promiseId">The ID of the job to kill. </param>
+        /// <returns>
+        /// Asynchronous task that completes when the server
+        /// acknowledges the request to stop the job.
+        /// </returns>
+        public async Task KillJobAsync(PromiseId promiseId)
+        {
+            var uri = $"jobs/v1/admin/id/{promiseId}";
+
+            var request = new HttpRequestMessage(HttpMethod.Delete, uri);
+            AddAuthorizationHeader(request);
+
+            var response = await _httpClient.SendAsync(request)
+                                            .ConfigureAwait(false);
+
+            response.EnsureSuccessStatusCode();
+        }
+
+        #endregion
+
+        #region Authentication
+
+        /// <summary>
+        /// Encode the payload for "basic authentication" in HTTP:
+        /// the base64 encoding of user name and password
+        /// separated by a colon.
+        /// </summary>
         private static string EncodeBasicAuthentication(string user, string password)
         {
             int len = user.Length + password.Length;
@@ -218,12 +364,49 @@ namespace Hearty.Client
             return Convert.ToBase64String(buffer[0..n]);
         }
 
-        public async Task SignInAsync()
+        /// <summary>
+        /// Add the authorization header for the bearer token,
+        /// which must have been set, to a HTTP request message.
+        /// </summary>
+        private void AddAuthorizationHeader(HttpRequestMessage httpRequest)
         {
+            var headerValue = _bearerTokenHeaderValue ??
+                    throw new InvalidOperationException(
+                        "This client must sign in to the Hearty server " +
+                        "first or be supplied a bearer token. ");
+            httpRequest.Headers.TryAddWithoutValidation("Authorization", headerValue);
+        }
+
+        /// <summary>
+        /// Sign in to a Hearty server with credentials supplied through
+        /// HTTP Basic authentication.
+        /// </summary>
+        /// <remarks>
+        /// This method of authentication is not preferred in so far as
+        /// the credentials will become visible to the Hearty server. 
+        /// It is recommended instead that you initially authenticate 
+        /// with OAuth interactively through your Web browser, and 
+        /// retrieve a bearer token that you can pass in to all
+        /// subsequent requests.
+        /// </remarks>
+        /// <returns>
+        /// Asynchronous task that would return without any result
+        /// if this client has successfully signed in.  The bearer
+        /// token will be saved into <see cref="BearerToken" />.
+        /// </returns>
+        public async Task SignInAsync(string user, string password)
+        {
+            if (user is null)
+                throw new ArgumentNullException(nameof(user));
+
+            if (password is null)
+                throw new ArgumentNullException(nameof(password));
+
             var url = "auth/token";
 
             var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", EncodeBasicAuthentication("admin", "admin"));
+            request.Headers.Authorization = new AuthenticationHeaderValue(
+                                                "Basic", EncodeBasicAuthentication(user, password));
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/jwt"));
             var response = await _httpClient.SendAsync(request)
                                             .ConfigureAwait(false);
@@ -232,10 +415,39 @@ namespace Hearty.Client
                                                 .ConfigureAwait(false);
         }
 
-        public string? BearerToken { get; set; }
-    }
+        /// <summary>
+        /// Opaque data in text format for "Bearer Token" authentication
+        /// to the Hearty server.
+        /// </summary>
+        public string? BearerToken
+        {
+            get
+            {
+                var headerValue = _bearerTokenHeaderValue;
+                if (headerValue is null)
+                    return null;
 
-    public delegate ValueTask<T> PayloadProcessor<T>(string? contentType,
-                                                     Stream stream,
-                                                     CancellationToken cancellationToken);
+                return headerValue[BearerAuthorizationPrefix.Length..];
+            }
+            set
+            {
+                _bearerTokenHeaderValue = BearerAuthorizationPrefix + value;
+            }
+        }
+
+        /// <summary>
+        /// The bearer token set in <see cref="BearerToken" />,
+        /// prefixed by <see cref="BearerAuthorizationPrefix" />.
+        /// </summary>
+        private string? _bearerTokenHeaderValue;
+
+        /// <summary>
+        /// The scheme as a string, followed by a space, 
+        /// used in the value of the HTTP Authorization to signify
+        /// Bearer Authentication.
+        /// </summary>
+        private const string BearerAuthorizationPrefix = "Bearer ";
+
+        #endregion
+    }
 }

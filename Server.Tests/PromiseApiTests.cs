@@ -129,7 +129,7 @@ namespace Hearty.Server.Tests
         public async Task BearerTokenRetrieval()
         {
             using var client = new HeartyClient(CreateClient());
-            await client.SignInAsync();
+            await client.SignInAsync("admin", "admin");
             Assert.NotNull(client.BearerToken);
         }
 
