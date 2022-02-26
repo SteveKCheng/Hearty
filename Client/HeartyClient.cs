@@ -12,6 +12,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using static System.FormattableString;
+using HeaderNames = Microsoft.Net.Http.Headers.HeaderNames;
 
 namespace Hearty.Client
 {
@@ -138,7 +139,7 @@ namespace Hearty.Client
             response.EnsureSuccessStatusCode();
 
             var content = response.Content;
-            if (!VerifyContentType(content.Headers.ContentType, contentType))
+            if (!VerifyContentType(content, contentType))
                 throw new InvalidDataException("The Content-Type returned in the response is unexpected. ");
 
             return await content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);
@@ -192,14 +193,9 @@ namespace Hearty.Client
 
             response.EnsureSuccessStatusCode();
             var content = response.Content;
-            var responseContentType = content.Headers.ContentType;
 
-            if (!VerifyContentType(responseContentType, "multipart/parallel"))
-                throw new InvalidDataException("The Content-Type returned in the response is unexpected. ");
-
-            var boundary = responseContentType!.Parameters.SingleOrDefault(
-                            param => string.Equals(param.Name, "boundary", StringComparison.OrdinalIgnoreCase))
-                            ?.Value ?? throw new InvalidDataException("Multi-part message is missing its boundary parameter. ");
+            var boundary = RestApiUtilities.GetMultipartBoundary(
+                            content.Headers.TryGetSingleValue(HeaderNames.ContentType));
 
             var multipartReader = new MultipartReader(boundary, 
                                                       content.ReadAsStream(cancellationToken));
@@ -237,17 +233,24 @@ namespace Hearty.Client
             }
         }
 
-        private static bool VerifyContentType(MediaTypeHeaderValue? actual, string expected)
+        private static bool VerifyContentType(ParsedContentType parsedActual, string expected)
         {
-            if (actual != null)
-            {
-                if (!string.Equals(actual.MediaType,
-                                   expected,
-                                   StringComparison.OrdinalIgnoreCase))
-                    return false;
-            }
+            var parsedExpected = new ParsedContentType(expected);
+            return parsedActual.IsSubsetOf(parsedExpected);
+        }
 
-            return true;
+        private static bool VerifyContentType(string? actual, string expected)
+        {
+            if (actual is null)
+                return true;
+
+            return VerifyContentType(new ParsedContentType(actual), expected);
+        }
+
+        private static bool VerifyContentType(HttpContent content, string expected)
+        {
+            var actual = content.Headers.TryGetSingleValue(HeaderNames.ContentType);
+            return VerifyContentType(actual, expected);
         }
 
         private static string? GetJobQueueQueryString(string? queue = null,
@@ -374,7 +377,8 @@ namespace Hearty.Client
                     throw new InvalidOperationException(
                         "This client must sign in to the Hearty server " +
                         "first or be supplied a bearer token. ");
-            httpRequest.Headers.TryAddWithoutValidation("Authorization", headerValue);
+            httpRequest.Headers.TryAddWithoutValidation(HeaderNames.Authorization, 
+                                                        headerValue);
         }
 
         /// <summary>

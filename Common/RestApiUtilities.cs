@@ -1,8 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Xml;
 
 namespace Hearty.Common
@@ -30,6 +30,61 @@ namespace Hearty.Common
         public static string FormatTimeSpan(TimeSpan value)
         {
             return $"P{value.Days}DT{value.Hours}H{value.Minutes}M{value.Seconds}.{value.Milliseconds:D3}S";
+        }
+
+        /// <summary>
+        /// Read a named HTTP header, assuming it can only have
+        /// zero or one value.
+        /// </summary>
+        /// <param name="headers">
+        /// The collection of HTTP headers, typically in a response
+        /// from <see cref="HttpClient" />.
+        /// </param>
+        /// <param name="name">
+        /// The name of the HTTP header.
+        /// </param>
+        /// <returns>
+        /// The single value for the HTTP header, if it exists.
+        /// </returns>
+        public static string? TryGetSingleValue(this HttpHeaders headers, string name)
+        {
+            if (!headers.TryGetValues(name, out var values))
+                return null;
+
+            var value = (values is string[] array) ? array[0]
+                                                   : values.First();
+
+            return value;
+        }
+
+        /// <summary>
+        /// Check that a content type is "multipart/parallel",
+        /// and extract its boundary parameter.
+        /// </summary>
+        /// <param name="contentType">
+        /// Value of the Content-Type header in a HTTP server's response.
+        /// </param>
+        /// <returns>
+        /// The boundary string that separates the segments in
+        /// the multi-part payload.
+        /// </returns>
+        /// <exception cref="InvalidDataException">
+        /// The content type is not what is expected.
+        /// </exception>
+        public static string GetMultipartBoundary(string? contentType)
+        {
+            if (contentType is not null)
+            {
+                var parsed = new ParsedContentType(contentType);
+                if (parsed.IsSubsetOf(new ParsedContentType("multipart/parallel")))
+                {
+                    var b = parsed.GetParameter("boundary");
+                    if (b.HasValue)
+                        return b.Value;
+                }
+            }
+
+            throw new InvalidDataException("The Content-Type header returned in the response is unexpected. ");
         }
     }
 }
