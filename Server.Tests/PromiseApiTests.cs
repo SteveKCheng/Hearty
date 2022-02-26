@@ -14,6 +14,7 @@ using System.Text.Json;
 using System.IO;
 using System.Threading;
 using System.Linq;
+using Hearty.Common;
 
 namespace Hearty.Server.Tests
 {
@@ -109,10 +110,12 @@ namespace Hearty.Server.Tests
         }
 
         private static ValueTask<MockPricingOutput> 
-            DeserializeMockPricingOutput(string? contentType, 
+            DeserializeMockPricingOutput(ParsedContentType contentType, 
                                          Stream stream, 
                                          CancellationToken cancellationToken)
         {
+            Assert.True(contentType.IsSubsetOf(new ParsedContentType("application/json")));
+
             return JsonSerializer.DeserializeAsync<MockPricingOutput>(stream, cancellationToken: cancellationToken);
 
             /*

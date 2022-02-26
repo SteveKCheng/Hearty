@@ -2,6 +2,7 @@
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Hearty.Common;
 
 namespace Hearty.Client
 {
@@ -29,7 +30,7 @@ namespace Hearty.Client
     /// Asynchronous task that completes with the object de-serialized 
     /// from the payload, or an exception if de-serialization fails.
     /// </returns>
-    public delegate ValueTask<T> PayloadReader<T>(string? contentType,
+    public delegate ValueTask<T> PayloadReader<T>(ParsedContentType contentType,
                                                   Stream stream,
                                                   CancellationToken cancellationToken);
 }

@@ -1,5 +1,9 @@
 ﻿using System;
+using System.IO;
+using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
+using System.Threading.Tasks;
 using MessagePack;
 
 namespace Hearty.Common
@@ -115,5 +119,40 @@ namespace Hearty.Common
 
             return new RemoteWorkException(this);
         }
+
+        /// <summary>
+        /// Load an instance of <see cref="ExceptionPayload" /> from a stream,
+        /// if its reported content type matches.
+        /// </summary>
+        /// <param name="contentType">
+        /// The IANA media type that the payload has been labelled with.
+        /// </param>
+        /// <param name="stream">
+        /// The stream containing the payload.  It only needs to be readable,
+        /// and not necessarily seekable.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be triggered to cancel the reading from the stream.
+        /// </param>
+        /// <returns>
+        /// Asynchronous task that completes with null if <paramref name="contentType" />
+        /// does not match <see cref="JsonMediaType" />.  Otherwise, the task
+        /// completes with the result of de-serialization, 
+        /// assuming that is successful.
+        /// </returns>
+        public static ValueTask<ExceptionPayload?> TryReadAsync(ParsedContentType contentType, 
+                                                                Stream stream,
+                                                                CancellationToken cancellationToken)
+        {
+            if (!contentType.IsSubsetOf(new ParsedContentType(JsonMediaType)))
+                return ValueTask.FromResult<ExceptionPayload?>(null);
+
+            return JsonSerializer.DeserializeAsync<ExceptionPayload>(stream, options: null, cancellationToken)!;
+        }
+
+        /// <summary>
+        /// IANA media type for the JSON serialization of <see cref="ExceptionPayload" />.
+        /// </summary>
+        public static readonly string JsonMediaType = "application/vnd.hearty.exception+json";
     }
 }

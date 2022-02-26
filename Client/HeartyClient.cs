@@ -215,19 +215,31 @@ namespace Hearty.Client
                 if (ordinalString.Count != 1)
                     throw new InvalidDataException("The 'Ordinal' header is expected in an item in the multi-part message but is not found. ");
 
+                var contentType = new ParsedContentType(
+                                    section.ContentType 
+                                    ?? throw new InvalidDataException(
+                                        "The 'Content-Type' header is missing for an item " +
+                                        "in the multi-part message. "));
+
                 // Is an exception
                 if (string.Equals(ordinalString[0], "Trailer"))
                 {
-                    // Assume application/vnd.hearty.exception+json
-                    var payload = await JsonSerializer.DeserializeAsync<ExceptionPayload>(section.Body, options: null, cancellationToken)
-                                                      .ConfigureAwait(false);
-                    throw payload!.ToException();
+                    var payload = await ExceptionPayload.TryReadAsync(contentType, section.Body, cancellationToken)
+                                                        .ConfigureAwait(false);
+                    if (payload is null)
+                    {
+                        throw new InvalidDataException(
+                            "The format of a trailer object from the Hearty server " +
+                            "is expected to be ExceptionPayload, but is not. ");
+                    }
+
+                    throw payload.ToException();
                 }
 
                 if (!int.TryParse(ordinalString[0], out int ordinal))
                     throw new InvalidDataException("The 'Ordinal' header is in an item in the multi-part message is invalid. ");
 
-                T item = await processor.Invoke(section.ContentType, section.Body, cancellationToken)
+                T item = await processor.Invoke(contentType, section.Body, cancellationToken)
                                         .ConfigureAwait(false);
                 yield return KeyValuePair.Create(ordinal, item);
             }
