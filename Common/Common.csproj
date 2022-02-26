@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFrameworks>net6.0;net5.0</TargetFrameworks>
     <Nullable>enable</Nullable>
+    <LangVersion>10</LangVersion>
     <RootNamespace>Hearty.Common</RootNamespace>
     <AssemblyName>Hearty.Common</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
@@ -15,6 +16,8 @@
   <ItemGroup>
     <Compile Include="ExceptionPayload.cs" />
     <Compile Include="HeartyHttpHeaders.cs" />
+    <Compile Include="HttpTokenParsingRules.cs" />
+    <Compile Include="ParsedContentType.cs" />
     <Compile Include="PromiseId.cs" />
     <Compile Include="RemoteWorkException.cs" />
     <Compile Include="RestApiUtilities.cs" />
@@ -22,6 +25,7 @@
 
   <ItemGroup>
     <PackageReference Include="MessagePack.Annotations" Version="2.3.85" />
+    <PackageReference Include="Microsoft.Extensions.Primitives" Version="6.0.0" />
   </ItemGroup>
 
 </Project>

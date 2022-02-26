@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Microsoft.Extensions.Primitives;
+using Hearty.Common;
 
 namespace Hearty.Server
 {
@@ -18,7 +19,7 @@ namespace Hearty.Server
         /// It is parsed from the "q" parameter, following the syntax
         /// of RFC 7231, §5.3.1.
         /// </returns>
-        private static int? TryParseQuality(in ReadOnlyMediaTypeHeaderValue spec)
+        private static int? TryParseQuality(in ParsedContentType spec)
         {
             // qvalue := ( "0" [ "." *3DIGIT ] )
             //        OR ( "1" [ "." *3"0" ] )
@@ -83,8 +84,8 @@ namespace Hearty.Server
         /// This multiplied value is in the range from 0 to 1 million;
         /// higher values indicate more preferable formats.
         /// </returns>
-        private static int ScoreFormat(in ReadOnlyMediaTypeHeaderValue response, 
-                                       in ReadOnlyMediaTypeHeaderValue request,
+        private static int ScoreFormat(in ParsedContentType response, 
+                                       in ParsedContentType request,
                                        ContentPreference responsePreference)
         {
             if (!response.IsSubsetOf(request))
@@ -180,7 +181,7 @@ namespace Hearty.Server
                 while ((request = TryReadNextElement(ref line)).Length > 0)
                 {
                     hasRequest = true;
-                    var parsedRequest = new ReadOnlyMediaTypeHeaderValue(request);
+                    var parsedRequest = new ParsedContentType(request);
 
                     // Loop over available responses to compute a response
                     // candidate matching the current request pattern with
@@ -190,7 +191,7 @@ namespace Hearty.Server
                     for (int i = 0; i < responsesCount; ++i)
                     {
                         var response = responses[i];
-                        var parsedResponse = new ReadOnlyMediaTypeHeaderValue(response.MediaType);
+                        var parsedResponse = new ParsedContentType(response.MediaType);
 
                         int score = ScoreFormat(parsedResponse, parsedRequest,
                                                 response.Preference);

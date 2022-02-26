@@ -1,5 +1,5 @@
-﻿// Copied from Microsoft.AspNetCore.Routing where the following
-// types are internal.
+﻿// Copied from Microsoft.AspNetCore.Routing.ReadOnlyMediaTypeHeaderValue
+// which is an internal type in the Microsoft library.
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -8,38 +8,42 @@ using System;
 using System.Text;
 using Microsoft.Extensions.Primitives;
 
-namespace Hearty.Server;
+namespace Hearty.Common;
 
 /// <summary>
-/// A media type value.
+/// Decomposition of the string for an IANA media type, with optional parameters.
 /// </summary>
-internal readonly struct ReadOnlyMediaTypeHeaderValue
+/// <remarks>
+/// Most properties are parsed on demand without string allocations.
+/// There are also methods to help implement content negotiation.
+/// </remarks>
+public readonly struct ParsedContentType
 {
     /// <summary>
-    /// Initializes a <see cref="ReadOnlyMediaTypeHeaderValue"/> instance.
+    /// Initializes a <see cref="ParsedContentType"/> instance.
     /// </summary>
     /// <param name="mediaType">The <see cref="string"/> with the media type.</param>
-    public ReadOnlyMediaTypeHeaderValue(string mediaType)
+    public ParsedContentType(string mediaType)
         : this(mediaType, 0, mediaType.Length)
     {
     }
 
     /// <summary>
-    /// Initializes a <see cref="ReadOnlyMediaTypeHeaderValue"/> instance.
+    /// Initializes a <see cref="ParsedContentType"/> instance.
     /// </summary>
     /// <param name="mediaType">The <see cref="StringSegment"/> with the media type.</param>
-    public ReadOnlyMediaTypeHeaderValue(StringSegment mediaType)
+    public ParsedContentType(StringSegment mediaType)
         : this(mediaType.Buffer ?? string.Empty, mediaType.Offset, mediaType.Length)
     {
     }
 
     /// <summary>
-    /// Initializes a <see cref="MediaTypeParameterParser"/> instance.
+    /// Initializes a <see cref="ParsedContentType"/> instance.
     /// </summary>
     /// <param name="mediaType">The <see cref="string"/> with the media type.</param>
     /// <param name="offset">The offset in the <paramref name="mediaType"/> where the parsing starts.</param>
     /// <param name="length">The length of the media type to parse if provided.</param>
-    public ReadOnlyMediaTypeHeaderValue(string mediaType, int offset, int? length)
+    public ParsedContentType(string mediaType, int offset, int? length)
     {
         ParameterParser = default(MediaTypeParameterParser);
 
@@ -162,7 +166,7 @@ internal readonly struct ReadOnlyMediaTypeHeaderValue
     }
 
     /// <summary>
-    /// Gets the type of the <see cref="ReadOnlyMediaTypeHeaderValue"/>.
+    /// Gets the type of the <see cref="ParsedContentType"/>.
     /// </summary>
     /// <example>
     /// For the media type <c>"application/json"</c>, this property gives the value <c>"application"</c>.
@@ -170,12 +174,12 @@ internal readonly struct ReadOnlyMediaTypeHeaderValue
     public StringSegment Type { get; }
 
     /// <summary>
-    /// Gets whether this <see cref="ReadOnlyMediaTypeHeaderValue"/> matches all types.
+    /// Gets whether this <see cref="ParsedContentType"/> matches all types.
     /// </summary>
     public bool MatchesAllTypes => Type.Equals("*", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Gets the subtype of the <see cref="ReadOnlyMediaTypeHeaderValue"/>.
+    /// Gets the subtype of the <see cref="ParsedContentType"/>.
     /// </summary>
     /// <example>
     /// For the media type <c>"application/vnd.example+json"</c>, this property gives the value
@@ -184,7 +188,7 @@ internal readonly struct ReadOnlyMediaTypeHeaderValue
     public StringSegment SubType { get; }
 
     /// <summary>
-    /// Gets the subtype of the <see cref="ReadOnlyMediaTypeHeaderValue"/>, excluding any structured syntax suffix.
+    /// Gets the subtype of the <see cref="ParsedContentType"/>, excluding any structured syntax suffix.
     /// </summary>
     /// <example>
     /// For the media type <c>"application/vnd.example+json"</c>, this property gives the value
@@ -193,7 +197,7 @@ internal readonly struct ReadOnlyMediaTypeHeaderValue
     public StringSegment SubTypeWithoutSuffix { get; }
 
     /// <summary>
-    /// Gets the structured syntax suffix of the <see cref="ReadOnlyMediaTypeHeaderValue"/> if it has one.
+    /// Gets the structured syntax suffix of the <see cref="ParsedContentType"/> if it has one.
     /// </summary>
     /// <example>
     /// For the media type <c>"application/vnd.example+json"</c>, this property gives the value
@@ -202,7 +206,7 @@ internal readonly struct ReadOnlyMediaTypeHeaderValue
     public StringSegment SubTypeSuffix { get; }
 
     /// <summary>
-    /// Gets whether this <see cref="ReadOnlyMediaTypeHeaderValue"/> matches all subtypes.
+    /// Gets whether this <see cref="ParsedContentType"/> matches all subtypes.
     /// </summary>
     /// <example>
     /// For the media type <c>"application/*"</c>, this property is <c>true</c>.
@@ -213,7 +217,7 @@ internal readonly struct ReadOnlyMediaTypeHeaderValue
     public bool MatchesAllSubTypes => SubType.Equals("*", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Gets whether this <see cref="ReadOnlyMediaTypeHeaderValue"/> matches all subtypes, ignoring any structured syntax suffix.
+    /// Gets whether this <see cref="ParsedContentType"/> matches all subtypes, ignoring any structured syntax suffix.
     /// </summary>
     /// <example>
     /// For the media type <c>"application/*+json"</c>, this property is <c>true</c>.
@@ -224,20 +228,20 @@ internal readonly struct ReadOnlyMediaTypeHeaderValue
     public bool MatchesAllSubTypesWithoutSuffix => SubTypeWithoutSuffix.Equals("*", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Gets the <see cref="System.Text.Encoding"/> of the <see cref="ReadOnlyMediaTypeHeaderValue"/> if it has one.
+    /// Gets the <see cref="System.Text.Encoding"/> of the <see cref="ParsedContentType"/> if it has one.
     /// </summary>
     public Encoding? Encoding => GetEncodingFromCharset(GetParameter("charset"));
 
     /// <summary>
-    /// Gets the charset parameter of the <see cref="ReadOnlyMediaTypeHeaderValue"/> if it has one.
+    /// Gets the charset parameter of the <see cref="ParsedContentType"/> if it has one.
     /// </summary>
     public StringSegment Charset => GetParameter("charset");
 
     /// <summary>
-    /// Determines whether the current <see cref="ReadOnlyMediaTypeHeaderValue"/> contains a wildcard.
+    /// Determines whether the current <see cref="ParsedContentType"/> contains a wildcard.
     /// </summary>
     /// <returns>
-    /// <c>true</c> if this <see cref="ReadOnlyMediaTypeHeaderValue"/> contains a wildcard; otherwise <c>false</c>.
+    /// <c>true</c> if this <see cref="ParsedContentType"/> contains a wildcard; otherwise <c>false</c>.
     /// </returns>
     public bool HasWildcard
     {
@@ -249,17 +253,17 @@ internal readonly struct ReadOnlyMediaTypeHeaderValue
         }
     }
 
-    public MediaTypeParameterParser ParameterParser { get; }
+    private MediaTypeParameterParser ParameterParser { get; }
 
     /// <summary>
-    /// Determines whether the current <see cref="ReadOnlyMediaTypeHeaderValue"/> is a subset of the <paramref name="set"/>
-    /// <see cref="ReadOnlyMediaTypeHeaderValue"/>.
+    /// Determines whether the current <see cref="ParsedContentType"/> is a subset of the <paramref name="set"/>
+    /// <see cref="ParsedContentType"/>.
     /// </summary>
-    /// <param name="set">The set <see cref="ReadOnlyMediaTypeHeaderValue"/>.</param>
+    /// <param name="set">The set <see cref="ParsedContentType"/>.</param>
     /// <returns>
-    /// <c>true</c> if this <see cref="ReadOnlyMediaTypeHeaderValue"/> is a subset of <paramref name="set"/>; otherwise <c>false</c>.
+    /// <c>true</c> if this <see cref="ParsedContentType"/> is a subset of <paramref name="set"/>; otherwise <c>false</c>.
     /// </returns>
-    public bool IsSubsetOf(ReadOnlyMediaTypeHeaderValue set)
+    public bool IsSubsetOf(ParsedContentType set)
     {
         return MatchesType(set) &&
             MatchesSubtype(set) &&
@@ -343,7 +347,7 @@ internal readonly struct ReadOnlyMediaTypeHeaderValue
     /// <returns>The encoding.</returns>
     public static Encoding? GetEncoding(StringSegment mediaType)
     {
-        var parsedMediaType = new ReadOnlyMediaTypeHeaderValue(mediaType);
+        var parsedMediaType = new ParsedContentType(mediaType);
         return parsedMediaType.Encoding;
     }
 
@@ -369,13 +373,13 @@ internal readonly struct ReadOnlyMediaTypeHeaderValue
         }
     }
 
-    private bool MatchesType(ReadOnlyMediaTypeHeaderValue set)
+    private bool MatchesType(ParsedContentType set)
     {
         return set.MatchesAllTypes ||
             set.Type.Equals(Type, StringComparison.OrdinalIgnoreCase);
     }
 
-    private bool MatchesSubtype(ReadOnlyMediaTypeHeaderValue set)
+    private bool MatchesSubtype(ParsedContentType set)
     {
         if (set.MatchesAllSubTypes)
         {
@@ -404,20 +408,20 @@ internal readonly struct ReadOnlyMediaTypeHeaderValue
         }
     }
 
-    private bool MatchesSubtypeWithoutSuffix(ReadOnlyMediaTypeHeaderValue set)
+    private bool MatchesSubtypeWithoutSuffix(ParsedContentType set)
     {
         return set.MatchesAllSubTypesWithoutSuffix ||
             set.SubTypeWithoutSuffix.Equals(SubTypeWithoutSuffix, StringComparison.OrdinalIgnoreCase);
     }
 
-    private bool MatchesSubtypeSuffix(ReadOnlyMediaTypeHeaderValue set)
+    private bool MatchesSubtypeSuffix(ParsedContentType set)
     {
         // We don't have support for wildcards on suffixes alone (e.g., "application/entity+*")
         // because there's no clear use case for it.
         return set.SubTypeSuffix.Equals(SubTypeSuffix, StringComparison.OrdinalIgnoreCase);
     }
 
-    private bool MatchesEitherSubtypeOrSuffix(ReadOnlyMediaTypeHeaderValue set)
+    private bool MatchesEitherSubtypeOrSuffix(ParsedContentType set)
     {
         return set.SubType.Equals(SubType, StringComparison.OrdinalIgnoreCase) ||
             set.SubType.Equals(SubTypeSuffix, StringComparison.OrdinalIgnoreCase);
@@ -455,7 +459,7 @@ internal readonly struct ReadOnlyMediaTypeHeaderValue
         return parameterFound;
     }
 
-    public struct MediaTypeParameterParser
+    private struct MediaTypeParameterParser
     {
         private readonly string _mediaTypeBuffer;
         private readonly int? _length;
@@ -592,7 +596,7 @@ internal readonly struct ReadOnlyMediaTypeHeaderValue
         }
     }
 
-    public readonly struct MediaTypeParameter : IEquatable<MediaTypeParameter>
+    private readonly struct MediaTypeParameter : IEquatable<MediaTypeParameter>
     {
         public MediaTypeParameter(StringSegment name, StringSegment value)
         {

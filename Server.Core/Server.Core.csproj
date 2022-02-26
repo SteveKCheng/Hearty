@@ -18,7 +18,6 @@
     <Compile Include="ContentFormatInfo.cs" />
     <Compile Include="ContentFormatInfo.Negotiation.cs" />
     <Compile Include="ExpiryQueue.cs" />
-    <Compile Include="HttpTokenParsingRules.cs" />
     <Compile Include="IJobQueueOwner.cs" />
     <Compile Include="IJobQueueSystem.cs" />
     <Compile Include="IncrementalAsyncList.cs" />
@@ -44,7 +43,6 @@
     <Compile Include="PromiseList.OutputImpl.cs" />
     <Compile Include="PromisePath.cs" />
     <Compile Include="PromiseStorage.cs" />
-    <Compile Include="ReadOnlyMediaTypeHeaderValue.cs" />
     <Compile Include="RemoteWorkerProxy.cs" />
     <Compile Include="RemoteWorkerService.cs" />
     <Compile Include="SubscribedResult.cs" />
