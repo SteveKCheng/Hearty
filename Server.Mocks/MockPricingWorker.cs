@@ -77,6 +77,23 @@ namespace Hearty.Server.Mocks
             };
         }
 
+        private readonly Random _random = new(79);
+
+        private double GenerateRandomLogNormal(double mean, 
+                                               double logStdDev, 
+                                               double floor = 0.0,
+                                               double cap = double.PositiveInfinity)
+        {
+            double z;
+            lock (_random)
+                z = _random.NextDouble();
+
+            double x = Math.Exp(-0.5 * (logStdDev * logStdDev) 
+                                + logStdDev * MathFunctions.InverseGaussianCdf(z));
+
+            return Math.Max(Math.Min(mean * x, cap), floor);
+        }
+
         /// <summary>
         /// Accepts and answers a request for mock pricing, after an artificial delay.
         /// </summary>
@@ -102,18 +119,30 @@ namespace Hearty.Server.Mocks
 
             try
             {
-                // Simulate working for some period of time
-                if (request.EstimatedWait < 0 || request.EstimatedWait > 60 * 60 * 1000)
-                    throw new ArgumentOutOfRangeException(
-                        "InitialWait parameter of the job request is out of range. ",
-                        (Exception?)null);
-                await Task.Delay(request.EstimatedWait, cancellationToken)
-                          .ConfigureAwait(false);
-
                 var pricingInput = DeserializePricingInput(request);
 
                 if (!pricingInput.Validate(out _))
                     throw new InvalidDataException("The pricing input is invalid. ");
+
+                // Simulate working for some period of time.
+                int meanWaitTime = pricingInput.MeanWaitTime;
+                if (meanWaitTime < 0 || meanWaitTime > 60 * 60 * 1000)
+                {
+                    throw new ArgumentOutOfRangeException(
+                                paramName: nameof(MockPricingInput.MeanWaitTime),
+                                message: "InitialWait parameter of the job request is out of range. ");
+                }
+
+                // The time taken is randomized on a log-normal distribution,
+                // if greater than a certain threshold.
+                int waitTime = (meanWaitTime > 100)
+                                ? (int)Math.Ceiling(GenerateRandomLogNormal((double)meanWaitTime, 
+                                                                            0.75, 
+                                                                            cap: 1.5 * meanWaitTime))
+                                : meanWaitTime;
+
+                await Task.Delay(waitTime, cancellationToken)
+                          .ConfigureAwait(false);
 
                 var pricingOutput = pricingInput.Calculate();
 

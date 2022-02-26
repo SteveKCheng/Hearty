@@ -230,6 +230,7 @@ namespace Hearty.Server.Program
                 endpoints.MapPostJob("pricing", async input =>
                 {
                     using var stream = input.PipeReader.AsStream();
+
                     var requestData = await ReadStreamIntoMemorySafelyAsync(stream,
                                                                             input.ContentLength,
                                                                             16 * 1024 * 1024,
@@ -242,7 +243,7 @@ namespace Hearty.Server.Program
 
                     jobsManager.PushJobAndOwnCancellation(input.JobQueueKeyRequired,
                         static w => w.Promise ?? throw new ArgumentNullException(),
-                        new PromisedWork(request) { InitialWait = 100000, Promise = promise });
+                        new PromisedWork(request) { InitialWait = 1000, Promise = promise });
 
                     return promise.Id;
                 });
@@ -293,13 +294,13 @@ namespace Hearty.Server.Program
 
             var microJobs = items.Select((MockPricingInput item) =>
             {
-                var g = new Random(79);
                 var b = new ArrayBufferWriter<byte>();
                 JsonSerializer.Serialize(new Utf8JsonWriter(b), item);
+                
                 var d = new Payload("application/json", b.WrittenMemory);
                 var p = input.Storage.CreatePromise(d);
                 PromiseRetriever r = static w => w.Promise!;
-                return (r, new PromisedWork(d) { InitialWait = g.Next(200, 7000), Promise = p });
+                return (r, new PromisedWork(d) { InitialWait = item.MeanWaitTime, Promise = p });
             });
 
             jobScheduling.PushMacroJobAndOwnCancellation(

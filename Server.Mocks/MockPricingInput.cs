@@ -98,6 +98,14 @@ namespace Hearty.Server.Mocks
         public double? Units { get; init; }
 
         /// <summary>
+        /// Mean time to wait, in milliseconds, before <see cref="MockPricingWorker" />
+        /// provides the result for this request, to mock a time-consuming
+        /// calculation.
+        /// </summary>
+        [JsonPropertyName("w")]
+        public int MeanWaitTime { get; init; }
+
+        /// <summary>
         /// Generate an instance with randomized member values
         /// from prescribed probability distributions, for testing.
         /// </summary>
