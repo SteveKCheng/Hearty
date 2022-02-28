@@ -304,13 +304,13 @@ namespace Hearty.Server
         }
 
         /// <inheritdoc />
-        public override ValueTask WriteToPipeAsync(int format, PipeWriter writer, long position, CancellationToken cancellationToken)
+        public override ValueTask WriteToPipeAsync(PipeWriter writer, PromiseWriteRequest request, CancellationToken cancellationToken)
         {
-            if (position != 0)
+            if (request.Start != 0)
                 throw new NotSupportedException();
 
             var t = GenerateIntoPipeAsync(writer,
-                                          GetOutputImpl(format),
+                                          GetOutputImpl(request.Format),
                                           toComplete: false, 
                                           cancellationToken);
             return new ValueTask(t);

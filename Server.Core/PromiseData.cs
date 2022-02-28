@@ -73,17 +73,11 @@ namespace Hearty.Server
         /// exactly this way.
         /// </para>
         /// </remarks>
-        /// <param name="format">
-        /// The desired format of the data to write.  Must be 
-        /// in the range of 0 to <see cref="CountFormats" />
-        /// minus one.
-        /// </param>
         /// <param name="writer">
         /// The pipe to write the data into.
         /// </param>
-        /// <param name="position">
-        /// The position, measured in number of bytes 
-        /// from the beginning, to start writing the payload from.
+        /// <param name="request">
+        /// Specifies what to write into the pipe.
         /// </param>
         /// <param name="cancellationToken">
         /// Can be used to interrupt the writing into the pipe.
@@ -99,10 +93,47 @@ namespace Hearty.Server
         /// reading end, the asynchronous task may complete normally.
         /// </returns>
         public abstract ValueTask
-            WriteToPipeAsync(int format,
-                             PipeWriter writer,
-                             long position, 
+            WriteToPipeAsync(PipeWriter writer,
+                             PromiseWriteRequest request,
                              CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Upload the stream of bytes for the payload into a pipe, asynchronously.
+        /// </summary>
+        /// <remarks>
+        /// This method is a less general version of 
+        /// <see cref="WriteToPipeAsync(PipeWriter, PromiseWriteRequest, CancellationToken)" />
+        /// which does not allow control over the range of data written or the
+        /// format of the individual items.
+        /// </remarks>
+        /// <param name="writer">
+        /// The pipe to write the data into.
+        /// </param>
+        /// <param name="format">
+        /// The desired format of the data to present in
+        /// the stream.  Must be in the range of 0 to 
+        /// <see cref="CountFormats" /> minus one.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be used to interrupt the writing into the pipe.
+        /// </param>
+        /// <returns>
+        /// Asynchronous task that completes when the desired content
+        /// has been written to the pipe, though not necessarily flushed.
+        /// This method shall not complete the writing end of the pipe
+        /// to let the caller to arrange for more bytes to send to
+        /// the same pipe.  If an exception occurs it should be propagated
+        /// out of this method as any other asynchronous function, and not
+        /// captured as pipe completion.  If the pipe is closed from its
+        /// reading end, the asynchronous task may complete normally.
+        /// </returns>
+        public ValueTask
+            WriteToPipeAsync(PipeWriter writer,
+                             int format,
+                             CancellationToken cancellationToken)
+            => WriteToPipeAsync(writer,
+                                new PromiseWriteRequest { Format = format },
+                                cancellationToken);
 
         /// <summary>
         /// Prepare to read the byte stream for the payload.
@@ -197,11 +228,11 @@ namespace Hearty.Server
         /// Format specifications from <see cref="PromiseData" /> encapsulated
         /// into a read-only list.
         /// </summary>
-        public readonly struct ContentFormatInfoList : IReadOnlyList<ContentFormatInfo>
+        private readonly struct ContentFormatInfoList : IReadOnlyList<ContentFormatInfo>
         {
             private readonly PromiseData _parent;
 
-            internal ContentFormatInfoList(PromiseData parent) => _parent = parent;
+            public ContentFormatInfoList(PromiseData parent) => _parent = parent;
 
             /// <summary>
             /// Returns the value from <see cref="PromiseData.GetFormatInfo(int)" />.
@@ -310,5 +341,51 @@ namespace Hearty.Server
         /// false if its data is partial.
         /// </summary>
         public virtual bool IsComplete => true;
+    }
+
+    /// <summary>
+    /// Input parameters for <see cref="PromiseData.WriteToPipeAsync" />
+    /// </summary>
+    public readonly struct PromiseWriteRequest
+    {
+        /// <summary>
+        /// The desired format of the data to write.  
+        /// </summary>
+        /// <remarks>
+        /// This value must be in the range of 0 to 
+        /// <see cref="PromiseData.CountFormats" /> minus one.
+        /// For promises that are containers of other promises,
+        /// this format refers to that of the container.
+        /// To map from a content type specified as a string
+        /// to a value for this member, call
+        /// <see cref="PromiseData.NegotiateFormat(StringValues)" />.
+        /// </remarks>
+        public int Format { get; init; }
+
+        /// <summary>
+        /// The desired starting position in the data.
+        /// </summary>
+        public long Start { get; init; }
+
+        /// <summary>
+        /// The desired ending position in the data.
+        /// </summary>
+        public long End { get; init; } = -1;
+
+        /// <summary>
+        /// The desired format of the data of the individual
+        /// items of the container.
+        /// </summary>
+        /// <remarks>
+        /// Unfortunately the format cannot be negotiated
+        /// up front and resolved to an integer
+        /// (like <see cref="Format" />) because the individual
+        /// promises may be incrementally generated and are 
+        /// not immediately available.  Thus, the implementation
+        /// of the (streaming) container must perform content
+        /// negotiation itself, and if it fails, report
+        /// that error within the payload of the container.
+        /// </remarks>
+        public string? InnerFormat { get; init; }
     }
 }

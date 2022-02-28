@@ -147,8 +147,8 @@ namespace Hearty.Server.WebApi
                 httpResponse.ContentLength = output.ContentLength;
 
                 var writer = httpResponse.BodyWriter;
-                await output.WriteToPipeAsync(format: 0,
-                                              writer, position: 0,
+                await output.WriteToPipeAsync(writer: writer,
+                                              format: 0,
                                               cancellationToken: CancellationToken.None);
                 await writer.CompleteAsync();
             }
@@ -519,9 +519,8 @@ namespace Hearty.Server.WebApi
             httpResponse.ContentType = output.GetFormatInfo(format).MediaType;
             httpResponse.ContentLength = output.GetContentLength(format);
 
-            await output.WriteToPipeAsync(format,
-                                          httpResponse.BodyWriter,
-                                          0,
+            await output.WriteToPipeAsync(httpResponse.BodyWriter,
+                                          format,
                                           cancellationToken)
                         .ConfigureAwait(false);
             await httpResponse.BodyWriter.CompleteAsync();

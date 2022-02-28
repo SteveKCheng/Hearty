@@ -243,7 +243,7 @@ public partial class PromiseList
                 writer.WriteDecimalInteger(length);
                 writer.WriteCrLf();
                 writer.WriteCrLf();
-                await output.WriteToPipeAsync(0, writer, 0, cancellationToken)
+                await output.WriteToPipeAsync(writer, format: 0, cancellationToken)
                             .ConfigureAwait(false);
             }
             else

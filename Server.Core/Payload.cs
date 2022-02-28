@@ -60,9 +60,9 @@ namespace Hearty.Server
         }
 
         /// <inheritdoc />
-        public override ValueTask WriteToPipeAsync(int format, PipeWriter writer, long position, CancellationToken cancellationToken)
+        public override ValueTask WriteToPipeAsync(PipeWriter writer, PromiseWriteRequest request, CancellationToken cancellationToken)
         {
-            return writer.WriteAsync(Body.Slice(position), cancellationToken);
+            return writer.WriteAsync(Body.Slice(request.Start), cancellationToken);
         }
 
         /// <inheritdoc />
