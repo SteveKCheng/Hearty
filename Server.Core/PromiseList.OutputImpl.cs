@@ -4,6 +4,7 @@ using System.IO.Pipelines;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Primitives;
 
 namespace Hearty.Server;
 
@@ -27,21 +28,24 @@ public partial class PromiseList
         /// <param name="ordinal">
         /// The index of the promise in the original input ordering.
         /// </param>
+        /// <param name="contentTypes">
+        /// IANA media types desired by the client for an inner item.
+        /// </param>
         /// <param name="promiseId">
         /// Promise ID of the next item.
-        /// </param>
-        /// <param name="cancellationToken">
-        /// Can be used to interrupt writing.
         /// </param>
         /// <returns>
         /// The number of unflushed bytes written by this method,
         /// or -1 if it flushes.
         /// </returns>
+        /// <param name="cancellationToken">
+        /// Can be used to interrupt writing.
+        /// </param>
         public abstract ValueTask<int> WriteItemAsync(PromiseList self,
                                                       PipeWriter writer,
                                                       int ordinal,
-                                                      PromiseId promiseId,
-                                                      CancellationToken cancellationToken);
+                                                      StringValues contentTypes,
+                                                      PromiseId promiseId, CancellationToken cancellationToken);
 
         /// <summary>
         /// Write the prologue after all the items have been written.
@@ -52,21 +56,24 @@ public partial class PromiseList
         /// <param name="writer">
         /// Where the output goes.
         /// </param>
+        /// <param name="contentTypes">
+        /// IANA media types desired by the client for an inner item.
+        /// </param>
         /// <param name="exception">
         /// The exception, if any, that the promise list has been
         /// completed with.
-        /// </param>
-        /// <param name="cancellationToken">
-        /// Can be used to interrupt writing.
         /// </param>
         /// <returns>
         /// The number of unflushed bytes written by this method,
         /// or -1 if it flushes.
         /// </returns>
+        /// <param name="cancellationToken">
+        /// Can be used to interrupt writing.
+        /// </param>
         public abstract ValueTask<int> WriteEndAsync(PromiseList self,
                                                      PipeWriter writer,
-                                                     Exception? exception,
-                                                     CancellationToken cancellationToken);
+                                                     StringValues contentTypes,
+                                                     Exception? exception, CancellationToken cancellationToken);
     }
 
     /// <summary>
@@ -78,8 +85,8 @@ public partial class PromiseList
 
         public override ValueTask<int> WriteEndAsync(PromiseList self,
                                                      PipeWriter writer,
-                                                     Exception? exception,
-                                                     CancellationToken cancellationToken)
+                                                     StringValues contentTypes,
+                                                     Exception? exception, CancellationToken cancellationToken)
         {
             int numBytes = 0;
 
@@ -96,8 +103,8 @@ public partial class PromiseList
         public override ValueTask<int> WriteItemAsync(PromiseList self,
                                                       PipeWriter writer,
                                                       int ordinal,
-                                                      PromiseId promiseId,
-                                                      CancellationToken cancellationToken)
+                                                      StringValues innerFormat,
+                                                      PromiseId promiseId, CancellationToken cancellationToken)
         {
             var buffer = writer.GetMemory(PromiseId.MaxChars + 2);
 
@@ -138,8 +145,8 @@ public partial class PromiseList
 
         public override async ValueTask<int> WriteEndAsync(PromiseList self,
                                                            PipeWriter writer,
-                                                           Exception? exception,
-                                                           CancellationToken cancellationToken)
+                                                           StringValues contentTypes,
+                                                           Exception? exception, CancellationToken cancellationToken)
         {
             int numBytes = 0;
             if (exception is not null)
@@ -151,10 +158,15 @@ public partial class PromiseList
                 writer.WriteCrLf();
 
                 var output = new PromiseExceptionalData(exception);
-                var payload = output.GetPayload(format: 0);
+
+                var format = output.NegotiateFormat(contentTypes);
+                format = (format >= 0) ? format : 0;
+                var formatInfo = output.GetFormatInfo(format);
+
+                var payload = output.GetPayload(format);
 
                 writer.WriteUtf8String("Content-Type: ");
-                writer.WriteUtf8String(output.ContentType);
+                writer.WriteUtf8String(formatInfo.MediaType);
                 writer.WriteCrLf();
 
                 writer.WriteUtf8String("Content-Length: ");
@@ -201,7 +213,8 @@ public partial class PromiseList
         public override async ValueTask<int> WriteItemAsync(PromiseList self,
                                                             PipeWriter writer,
                                                             int ordinal,
-                                                            PromiseId promiseId,
+                                                            StringValues contentTypes,
+                                                            PromiseId promiseId, 
                                                             CancellationToken cancellationToken)
         {
             WriteBoundary(writer, isEnd: false);
@@ -232,23 +245,27 @@ public partial class PromiseList
             writer.WriteAsciiPromiseId(promiseId);
             writer.WriteCrLf();
 
+            var format = output.NegotiateFormat(contentTypes);
+            format = (format >= 0) ? format : 0;
+            var formatInfo = output.GetFormatInfo(format);
+
             writer.WriteUtf8String("Content-Type: ");
-            writer.WriteUtf8String(output.ContentType);
+            writer.WriteUtf8String(formatInfo.MediaType);
             writer.WriteCrLf();
 
             writer.WriteUtf8String("Content-Length: ");
 
-            if (output.ContentLength is long length)
+            if (output.GetContentLength(format) is long length)
             {
                 writer.WriteDecimalInteger(length);
                 writer.WriteCrLf();
                 writer.WriteCrLf();
-                await output.WriteToPipeAsync(writer, format: 0, cancellationToken)
+                await output.WriteToPipeAsync(writer, format, cancellationToken)
                             .ConfigureAwait(false);
             }
             else
             {
-                var payload = await output.GetPayloadAsync(0, cancellationToken)
+                var payload = await output.GetPayloadAsync(format, cancellationToken)
                                           .ConfigureAwait(false);
                 writer.WriteDecimalInteger(payload.Length);
                 writer.WriteCrLf();

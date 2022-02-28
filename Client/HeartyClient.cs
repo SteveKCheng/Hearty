@@ -185,6 +185,7 @@ namespace Hearty.Client
 
             var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("multipart/parallel"));
+            request.Headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, contentType);
 
             var response = await _httpClient.SendAsync(request, 
                                                        HttpCompletionOption.ResponseHeadersRead, 

@@ -368,7 +368,8 @@ namespace Hearty.Server.WebApi
             {
                 PromiseId = promiseId,
                 Timeout = timeout,
-                AcceptedContentTypes = httpRequest.Headers.Accept
+                AcceptedContentTypes = httpRequest.Headers.Accept,
+                AcceptedInnerContentTypes = httpRequest.Headers[HeartyHttpHeaders.AcceptItem]
             };
 
             return RespondToGetPromiseAsync(services, httpResponse, 
@@ -418,6 +419,8 @@ namespace Hearty.Server.WebApi
             public TimeSpan Timeout { get; init; }
 
             public StringValues AcceptedContentTypes { get; init; }
+
+            public StringValues AcceptedInnerContentTypes { get; init; }
         }
 
         private static Task GetPromiseByPathAsync(Services services,
@@ -515,14 +518,29 @@ namespace Hearty.Server.WebApi
                 return;
             }
 
+            var formatInfo = output.GetFormatInfo(format);
+
             httpResponse.StatusCode = StatusCodes.Status200OK;
-            httpResponse.ContentType = output.GetFormatInfo(format).MediaType;
+            httpResponse.ContentType = formatInfo.MediaType;
             httpResponse.ContentLength = output.GetContentLength(format);
 
+            var writeRequest = new PromiseWriteRequest
+            {
+                Format = format,
+                InnerFormat = formatInfo.IsContainer 
+                                ? parameters.AcceptedInnerContentTypes
+                                : StringValues.Empty
+            };
+
+            httpResponse.Headers.Vary =
+                formatInfo.IsContainer ? "Accept, Accept-Item"
+                                       : "Accept";
+
             await output.WriteToPipeAsync(httpResponse.BodyWriter,
-                                          format,
+                                          writeRequest,
                                           cancellationToken)
                         .ConfigureAwait(false);
+
             await httpResponse.BodyWriter.CompleteAsync();
         }
     }

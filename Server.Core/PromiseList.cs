@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Primitives;
+using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
@@ -292,6 +293,7 @@ namespace Hearty.Server
             var pipe = new Pipe();
             _ = GenerateIntoPipeAsync(pipe.Writer, 
                                       GetOutputImpl(format),
+                                      contentTypes: StringValues.Empty,
                                       toComplete: true, 
                                       cancellationToken);
             return ValueTask.FromResult(pipe.Reader.AsStream());
@@ -304,13 +306,16 @@ namespace Hearty.Server
         }
 
         /// <inheritdoc />
-        public override ValueTask WriteToPipeAsync(PipeWriter writer, PromiseWriteRequest request, CancellationToken cancellationToken)
+        public override ValueTask WriteToPipeAsync(PipeWriter writer, 
+                                                   PromiseWriteRequest request, 
+                                                   CancellationToken cancellationToken)
         {
             if (request.Start != 0)
                 throw new NotSupportedException();
 
             var t = GenerateIntoPipeAsync(writer,
                                           GetOutputImpl(request.Format),
+                                          request.InnerFormat,
                                           toComplete: false, 
                                           cancellationToken);
             return new ValueTask(t);
@@ -323,6 +328,9 @@ namespace Hearty.Server
         /// <param name="impl">The virtual methods to write
         /// items in a particular format.
         /// </param>
+        /// <param name="contentTypes">
+        /// Media types desired by the client for an inner item.
+        /// </param>
         /// <param name="toComplete">
         /// If true, this method completes the pipe, possibly 
         /// with an exception, when all items are written.  
@@ -333,6 +341,7 @@ namespace Hearty.Server
         /// </param>
         private async Task GenerateIntoPipeAsync(PipeWriter writer, 
                                                  OutputImpl impl,
+                                                 StringValues contentTypes,
                                                  bool toComplete, 
                                                  CancellationToken cancellationToken)
         {
@@ -381,8 +390,12 @@ namespace Hearty.Server
 
                     if (!isValid)
                     {
+                        // For now, do not pass contentTypes to
+                        // WriteEndAsync because HeartyClient assumes
+                        // exceptions are always serialized as JSON.
                         await impl.WriteEndAsync(this,
                                                  writer,
+                                                 StringValues.Empty,
                                                  _promiseIds.Exception,
                                                  cancellationToken)
                                   .ConfigureAwait(false);
@@ -394,6 +407,7 @@ namespace Hearty.Server
                     numBytes = await impl.WriteItemAsync(this,
                                                          writer,
                                                          ordinal,
+                                                         contentTypes, 
                                                          promiseId,
                                                          cancellationToken)
                                          .ConfigureAwait(false);

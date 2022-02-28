@@ -386,6 +386,6 @@ namespace Hearty.Server
         /// negotiation itself, and if it fails, report
         /// that error within the payload of the container.
         /// </remarks>
-        public string? InnerFormat { get; init; }
+        public StringValues InnerFormat { get; init; }
     }
 }

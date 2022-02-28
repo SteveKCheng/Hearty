@@ -22,6 +22,12 @@ namespace Hearty.Common
         public static readonly string PromiseId = "X-Promise-Id";
 
         /// <summary>
+        /// Content type desired by the client for the items 
+        /// in a data stream that is a container.
+        /// </summary>
+        public static readonly string AcceptItem = "Accept-Item";
+
+        /// <summary>
         /// Header within an item in a multi-part body
         /// that reports the index of the item in its original
         /// ordering.
