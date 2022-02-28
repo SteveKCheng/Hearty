@@ -3,12 +3,10 @@ using Microsoft.AspNetCore.WebUtilities;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using static System.FormattableString;
@@ -84,9 +82,17 @@ namespace Hearty.Client
                                             .ConfigureAwait(false);
             EnsureSuccessStatusCodeEx(response);
 
-            string? promiseIdStr;
-            if (!response.Headers.TryGetValues(HeartyHttpHeaders.PromiseId, out var values) ||
-                (promiseIdStr = values.SingleOrDefaultNoException()) is null)
+            return GetPromiseId(response.Headers);
+        }
+
+        /// <summary>
+        /// Extract the ID of the promise/job reported in the server's HTTP response.
+        /// </summary>
+        private static PromiseId GetPromiseId(HttpHeaders headers)
+        {
+            var promiseIdStr = headers.TryGetSingleValue(HeartyHttpHeaders.PromiseId);
+
+            if (promiseIdStr is null)
             {
                 throw new InvalidDataException(
                     "The server did not report a promise ID for the job posting as expected. ");
