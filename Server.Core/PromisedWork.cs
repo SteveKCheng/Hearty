@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 
 namespace Hearty.Server
 {
@@ -46,6 +47,30 @@ namespace Hearty.Server
         /// do not need further de-serialization.
         /// </remarks>
         public object? Hint { get; init; }
+
+        /*
+        /// <summary>
+        /// Provides the serialized form of the input to send
+        /// to a remote host.
+        /// </summary>
+        public Func<object?, PromiseData> InputSerializer { get; init; }
+        */
+
+        /// <summary>
+        /// Transforms the output from the job reported from a remote
+        /// worker host into <see cref="PromiseData" />.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The first argument is the IANA media type of the payload.
+        /// The second argument is the payload as a sequence of buffers.
+        /// </para>
+        /// <para>
+        /// The default is <see cref="Payload.JobOutputSerializer" />.
+        /// </para>
+        /// </remarks>
+        public Func<string, ReadOnlySequence<byte>, PromiseData>
+            OutputDeserializer { get; init; } 
 
         /// <summary>
         /// A condensed string representation, expected to be
@@ -99,6 +124,7 @@ namespace Hearty.Server
             Path = default;
             Promise = default;
             InitialWait = default;
+            OutputDeserializer = Payload.JobOutputSerializer;
         }
 
         /// <summary>
@@ -115,7 +141,8 @@ namespace Hearty.Server
                 Hint = this.Hint,
                 Path = this.Path,
                 Promise = promise,
-                InitialWait = this.InitialWait
+                InitialWait = this.InitialWait,
+                OutputDeserializer = this.OutputDeserializer
             };
     }
 }

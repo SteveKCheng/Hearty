@@ -86,5 +86,13 @@ namespace Hearty.Server
 
         /// <inheritdoc />
         public override long? GetContentLength(int format) => Body.Length;
+
+        /// <summary>
+        /// Transformer for the output from a remotely-run job into 
+        /// a newly created instance of this class.
+        /// </summary>
+        public static Func<string, ReadOnlySequence<byte>, PromiseData>
+            JobOutputSerializer { get; } 
+            = (contentType, body) => new Payload(contentType, body);
     }
 }

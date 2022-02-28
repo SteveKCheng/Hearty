@@ -87,7 +87,8 @@ namespace Hearty.Server
                                        .ConfigureAwait(false)
             }, cancellationToken).ConfigureAwait(false);
 
-            var output = new Payload(reply.ContentType, reply.Data);
+            var output = runningJob.Input.OutputDeserializer.Invoke(reply.ContentType, 
+                                                                    reply.Data);
             return output;
         }
 
