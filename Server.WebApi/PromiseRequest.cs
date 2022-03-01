@@ -102,10 +102,31 @@ namespace Hearty.Server.WebApi
         public PipeReader PipeReader { get; init; }
 
         /// <summary>
-        /// For cancelling the job when requested by users, or on some
-        /// otherwise non-recoverable error.
+        /// Cancellation token for the request itself.
         /// </summary>
         public CancellationToken CancellationToken { get; init; }
+
+        /// <summary>
+        /// Whether the main job should be launched in the background
+        /// without requiring its promise to be awaited.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// If true, the job should be launched without
+        /// <see cref="CancellationToken" />, but registered
+        /// with the queue allowing the job to be remotely cancelled.
+        /// See <see cref="JobsManager" />.  The client is expected
+        /// to retrieve the results of the promise later using
+        /// the returned <see cref="PromiseId" /> of the job.
+        /// </para>
+        /// <para>
+        /// If false, <see cref="CancellationToken" /> should be
+        /// observed for cancellation of the job, when requested by 
+        /// the user, or on some otherwise non-recoverable error.
+        /// The promise for the job is expected to be awaited.
+        /// </para>
+        /// </remarks>
+        public bool FireAndForget { get; init; }
 
         /// <summary>
         /// Routing key for the endpoint that received this request

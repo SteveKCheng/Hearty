@@ -263,6 +263,7 @@ namespace Hearty.Server.WebApi
                     ContentType = httpRequest.ContentType,
                     ContentLength = httpRequest.ContentLength,
                     PipeReader = httpRequest.BodyReader,
+                    FireAndForget = !redirectLocally,
                     CancellationToken = cancellationToken
                 };
 

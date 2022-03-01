@@ -484,7 +484,7 @@ namespace Hearty.Server
         public Promise PushJob(JobQueueKey queueKey,
                                PromiseRetriever promiseRetriever,
                                in PromisedWork work,
-                               bool registerClient = true,
+                               bool registerClient,
                                CancellationToken cancellationToken = default)
         {
             var queue = _jobQueues.GetOrAddJobQueue(queueKey);
@@ -738,7 +738,7 @@ namespace Hearty.Server
                                     PromisedWork work,
                                     PromiseListBuilderFactory builderFactory,
                                     MacroJobExpansion expansion,
-                                    bool registerClient = true,
+                                    bool registerClient,
                                     CancellationToken cancellationToken = default)
         {
             var queue = _jobQueues.GetOrAddJobQueue(queueKey);

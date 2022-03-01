@@ -44,7 +44,8 @@ namespace Hearty.Server.Program.Pages
                 var queueKey = new JobQueueKey(GetClient(client), priority, string.Empty);
                 _jobsManager.PushJob(queueKey,
                                      static w => w.Promise ?? throw new ArgumentNullException(),
-                                     work);
+                                     work,
+                                     registerClient: true);
             }
         }
 

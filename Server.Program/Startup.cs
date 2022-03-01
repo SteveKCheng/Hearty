@@ -242,7 +242,9 @@ namespace Hearty.Server.Program
                             InitialWait = 1000, 
                             Promise = promise,
                             OutputDeserializer = JsonPayloadTranscoding.JobOutputDeserializer
-                        });
+                        },
+                        input.FireAndForget,
+                        input.CancellationToken);
 
                     return promise.Id;
                 });
@@ -311,7 +313,9 @@ namespace Hearty.Server.Program
                 static w => w.Promise! ?? throw new ArgumentNullException(), 
                 new PromisedWork(request) { Promise = promise }, 
                 _ => new PromiseList(input.Storage),
-                AsAsyncEnumerable(microJobs));
+                AsAsyncEnumerable(microJobs),
+                input.FireAndForget,
+                input.CancellationToken);
 
             return promise.Id;
         }
