@@ -219,6 +219,19 @@ namespace Hearty.Server.WebApi
                     : null;
         }
 
+        private static bool? ParseBoolQueryParameter(IQueryCollection query, string key)
+        {
+            query.TryGetValue(key, out var values);
+
+            for (int i = values.Count; i > 0; --i)
+            {
+                if (bool.TryParse(values[i - 1], out bool result))
+                    return result;
+            }
+
+            return null;
+        }
+
         /// <summary>
         /// Invokes a job executor to process a job posted by an HTTP client.
         /// </summary>
@@ -231,9 +244,13 @@ namespace Hearty.Server.WebApi
             var httpResponse = httpContext.Response;
             var cancellationToken = httpContext.RequestAborted;
             PromiseId promiseId;
+            bool redirectLocally;
 
             try
             {
+                redirectLocally = ParseBoolQueryParameter(httpRequest.Query, "result")
+                                    ?? false;
+
                 JobQueueKey? queueKey = await GetJobQueueKey(services, httpContext)
                                                 .ConfigureAwait(false);
 
@@ -262,11 +279,34 @@ namespace Hearty.Server.WebApi
                 return;
             }
 
-            httpResponse.StatusCode = StatusCodes.Status303SeeOther;
-            httpResponse.Headers.Add(HeartyHttpHeaders.PromiseId, promiseId.ToString());
+            if (redirectLocally)
+            {
+                var timeout = ParseTimeout(httpRequest.Query);
 
-            httpResponse.Headers.Location = 
-                httpRequest.PathBase.Add($"/jobs/v1/id/{promiseId}").ToString();
+                var parameters = new QueryParameters
+                {
+                    PromiseId = promiseId,
+                    Timeout = timeout,
+                    AcceptedContentTypes = httpRequest.Headers.Accept,
+                    AcceptedInnerContentTypes = httpRequest.Headers[HeartyHttpHeaders.AcceptItem],
+                    IsPost = true
+                };
+
+                IPromiseClientInfo clientInfo = new BasicPromiseClientInfo();
+
+                await RespondToGetPromiseAsync(services, httpResponse,
+                                               parameters,
+                                               clientInfo, cancellationToken)
+                                .ConfigureAwait(false);
+            }
+            else
+            {
+                httpResponse.StatusCode = StatusCodes.Status303SeeOther;
+                httpResponse.Headers.Add(HeartyHttpHeaders.PromiseId, promiseId.ToString());
+
+                httpResponse.Headers.Location =
+                    httpRequest.PathBase.Add($"/jobs/v1/id/{promiseId}").ToString();
+            }
         }
 
         /// <summary>
@@ -421,6 +461,8 @@ namespace Hearty.Server.WebApi
             public StringValues AcceptedContentTypes { get; init; }
 
             public StringValues AcceptedInnerContentTypes { get; init; }
+
+            public bool IsPost { get; init; }
         }
 
         private static Task GetPromiseByPathAsync(Services services,
@@ -499,6 +541,12 @@ namespace Hearty.Server.WebApi
                 return;
             }
 
+            if (parameters.IsPost)
+            {
+                httpResponse.Headers[HeartyHttpHeaders.PromiseId] 
+                    = parameters.PromiseId.ToString();
+            }
+
             if (parameters.Timeout == TimeSpan.Zero && !promise.IsCompleted)
             {
                 httpResponse.StatusCode = StatusCodes.Status204NoContent;
@@ -532,9 +580,12 @@ namespace Hearty.Server.WebApi
                                 : StringValues.Empty
             };
 
-            httpResponse.Headers.Vary =
-                formatInfo.IsContainer ? "Accept, Accept-Item"
-                                       : "Accept";
+            if (!parameters.IsPost)
+            {
+                httpResponse.Headers.Vary =
+                    formatInfo.IsContainer ? "Accept, Accept-Item"
+                                           : "Accept";
+            }
 
             await output.WriteToPipeAsync(httpResponse.BodyWriter,
                                           writeRequest,
