@@ -73,22 +73,25 @@ namespace Hearty.Server
                                    CancellationToken cancellationToken)
                 where TImpl : IJobSubmission
         {
-            var contentType = runningJob.Input.Data.ContentType;
+            var input = await runningJob.Input
+                                        .InputSerializer(runningJob.Input.Data)
+                                        .ConfigureAwait(false);      
 
             var reply = await impl.RunJobAsync(new JobRequestMessage
             {
                 Route = runningJob.Input.Route,
-                ContentType = contentType,
+                ContentType = input.ContentType,
                 EstimatedWait = runningJob.EstimatedWait,
                 ExecutionId = executionId,
-                Data = await runningJob.Input
-                                       .Data
-                                       .GetPayloadAsync(format: 0, cancellationToken)
-                                       .ConfigureAwait(false)
+                Data = input.Body,
             }, cancellationToken).ConfigureAwait(false);
 
-            var output = runningJob.Input.OutputDeserializer.Invoke(reply.ContentType, 
-                                                                    reply.Data);
+            var output = await runningJob.Input
+                                         .OutputDeserializer
+                                         .Invoke(runningJob.Input.Data,
+                                                 new(reply.ContentType,
+                                                     reply.Data))
+                                         .ConfigureAwait(false);
             return output;
         }
 

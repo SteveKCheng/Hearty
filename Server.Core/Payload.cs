@@ -91,8 +91,29 @@ namespace Hearty.Server
         /// Transformer for the output from a remotely-run job into 
         /// a newly created instance of this class.
         /// </summary>
-        public static Func<string, ReadOnlySequence<byte>, PromiseData>
-            JobOutputSerializer { get; } 
-            = (contentType, body) => new Payload(contentType, body);
+        public static Func<object, SimplePayload, ValueTask<PromiseData>>
+            JobOutputDeserializer { get; } = DeserializeJobOutput;
+
+        /// <summary>
+        /// Transformer from <see cref="PromiseData" /> 
+        /// to the input for a job to be remotely run.
+        /// </summary>
+        public static Func<object, ValueTask<SimplePayload>>
+            JobInputSerializer { get; } = SerializeJobInput;
+
+        private static ValueTask<PromiseData> DeserializeJobOutput(object _, SimplePayload p)
+        {
+            PromiseData d = new Payload(p.ContentType, p.Body);
+            return ValueTask.FromResult(d);
+        }
+
+        private static async ValueTask<SimplePayload> SerializeJobInput(object state)
+        {
+            var promiseData = (PromiseData)state;
+            var contentType = promiseData.ContentType;
+            var body = await promiseData.GetPayloadAsync(format: 0, default)
+                                        .ConfigureAwait(false);
+            return new(contentType, body);
+        }
     }
 }

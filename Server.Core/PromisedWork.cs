@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Buffers;
+using System.Threading.Tasks;
 
 namespace Hearty.Server
 {
@@ -35,8 +36,8 @@ namespace Hearty.Server
         public string? Route { get; init; }
 
         /// <summary>
-        /// Alternative representation of the input to the 
-        /// processing function.
+        /// A representation of the input (request) 
+        /// to the processing function.
         /// </summary>
         /// <remarks>
         /// The job request should be adequately described by 
@@ -46,15 +47,21 @@ namespace Hearty.Server
         /// same process then the input can be direct objects that 
         /// do not need further de-serialization.
         /// </remarks>
-        public object? Hint { get; init; }
+        public object Data { get; }
 
-        /*
         /// <summary>
         /// Provides the serialized form of the input to send
         /// to a remote host.
         /// </summary>
-        public Func<object?, PromiseData> InputSerializer { get; init; }
-        */
+        /// <para>
+        /// The argument passed in is <see cref="Data" />.
+        /// </para>
+        /// <para>
+        /// This function is asynchronous to allow for <see cref="SimplePayload" />
+        /// to represent some kind of reference which can be asynchronously
+        /// resolved.  Typical implementations will be synchronous.
+        /// </para>
+        public Func<object, ValueTask<SimplePayload>> InputSerializer { get; }
 
         /// <summary>
         /// Transforms the output from the job reported from a remote
@@ -62,15 +69,21 @@ namespace Hearty.Server
         /// </summary>
         /// <remarks>
         /// <para>
-        /// The first argument is the IANA media type of the payload.
-        /// The second argument is the payload as a sequence of buffers.
+        /// The first argument is <see cref="Data" />.
+        /// The second argument is the output from the job
+        /// received from the remote host.
         /// </para>
         /// <para>
-        /// The default is <see cref="Payload.JobOutputSerializer" />.
+        /// The default is <see cref="Payload.JobOutputDeserializer" />.
+        /// </para>
+        /// <para>
+        /// This function is asynchronous to allow for <see cref="SimplePayload" />
+        /// to represent some kind of reference which can be asynchronously
+        /// resolved.  Typical implementations will be synchronous.
         /// </para>
         /// </remarks>
-        public Func<string, ReadOnlySequence<byte>, PromiseData>
-            OutputDeserializer { get; init; } 
+        public Func<object, SimplePayload, ValueTask<PromiseData>>
+            OutputDeserializer { get; init; }
 
         /// <summary>
         /// A condensed string representation, expected to be
@@ -89,42 +102,51 @@ namespace Hearty.Server
         public Promise? Promise { get; init; }
 
         /// <summary>
-        /// A generic and serializable representation of the 
-        /// inputs to the job.
-        /// </summary>
-        /// <remarks>
-        /// This object may not necessarily be 
-        /// <see cref="Promise.RequestOutput" />, if the promise
-        /// is designed to not faithfully preserve its inputs
-        /// (for storage efficiency).
-        /// </remarks>
-        public PromiseData Data { get; }
-
-        /// <summary>
         /// The initial estimate of the amount of time the job
         /// would take, in milliseconds.
         /// </summary>
         public int InitialWait { get; init; }
 
         /// <summary>
-        /// Encapsulate certain input data to submit as work 
+        /// Encapsulate promise input data to submit as work 
         /// for a promise.
         /// </summary>
-        /// <param name="data">Sets <see cref="Data" />.
+        /// <param name="data">The object set as <see cref="Data" />, which will
+        /// be serialized via <see cref="PromiseData.GetPayloadAsync" />
+        /// when the job executes remotely.
         /// </param>
         /// <remarks>
         /// Only <see cref="Data" /> is a required property;
         /// all other properties of the work are optional.
         /// </remarks>
         public PromisedWork(PromiseData data)
+            : this(data, Payload.JobInputSerializer)
+        {
+        }
+
+        /// <summary>
+        /// Encapsulate certain input data to submit as work 
+        /// for a promise.
+        /// </summary>
+        /// <param name="data">The object set as <see cref="Data" />, which will
+        /// be serialized via <paramref name="inputSerializer" />.
+        /// </param>
+        /// <param name="inputSerializer">
+        /// Serializes the input data when the job executes remotely.
+        /// </param>
+        /// <remarks>
+        /// Only <see cref="Data" /> is a required property;
+        /// all other properties of the work are optional.
+        /// </remarks>
+        public PromisedWork(object data, Func<object, ValueTask<SimplePayload>> inputSerializer)
         {
             Data = data;
             Route = default;
-            Hint = default;
             Path = default;
             Promise = default;
             InitialWait = default;
-            OutputDeserializer = Payload.JobOutputSerializer;
+            InputSerializer = inputSerializer;
+            OutputDeserializer = Payload.JobOutputDeserializer;
         }
 
         /// <summary>
@@ -135,14 +157,31 @@ namespace Hearty.Server
         /// New value for the <see cref="Promise" /> property.
         /// </param>
         public PromisedWork ReplacePromise(Promise? promise)
-            => new(this.Data)
+            => new(this.Data, this.InputSerializer)
             {
                 Route = this.Route,
-                Hint = this.Hint,
                 Path = this.Path,
                 Promise = promise,
                 InitialWait = this.InitialWait,
                 OutputDeserializer = this.OutputDeserializer
             };
     }
+
+    /// <summary>
+    /// Simple representation of an in-memory bytes payload with a labelled type.
+    /// </summary>
+    /// <remarks>
+    /// This structure is semantically the equivalent of the 
+    /// <see cref="Payload" /> class but does not inherit from 
+    /// <see cref="PromiseData" />.  In the context of executing
+    /// jobs the <see cref="PromiseData" /> abstraction is not
+    /// necessary.
+    /// </remarks>
+    /// <param name="ContentType">
+    /// The IANA media type to label the payload as.
+    /// </param>
+    /// <param name="Body">
+    /// The payload as a sequence of bytes.
+    /// </param>
+    public record struct SimplePayload(string ContentType, ReadOnlySequence<byte> Body);
 }
