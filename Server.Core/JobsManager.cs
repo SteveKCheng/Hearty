@@ -474,66 +474,28 @@ namespace Hearty.Server
         /// will effectively be ignored if the promise already
         /// has a job associated with it.
         /// </param>
+        /// <param name="registerClient">
+        /// If true, the client is registered for remote cancellation,
+        /// and <paramref name="cancellationToken" /> is ignored.
+        /// </param>
         /// <param name="cancellationToken">
         /// Used by the caller to request cancellation of the job.
         /// </param>
         public Promise PushJob(JobQueueKey queueKey,
                                PromiseRetriever promiseRetriever,
                                in PromisedWork work,
-                               CancellationToken cancellationToken)
+                               bool registerClient = true,
+                               CancellationToken cancellationToken = default)
         {
             var queue = _jobQueues.GetOrAddJobQueue(queueKey);
 
+            if (registerClient)
+                cancellationToken = queue.CancellationToken;
+
             var message = RegisterJobMessage(
                             queue.SchedulingAccount, promiseRetriever, work,
-                            registerClient: false,
+                            registerClient,
                             cancellationToken,
-                            out var promise);
-
-            if (message is not null)
-                queue.Enqueue(message);
-
-            return promise;
-        }
-
-        /// <summary>
-        /// Create and push a job to complete a promise,
-        /// and also create and track a cancellation token for it.
-        /// </summary>
-        /// <remarks>
-        /// This method is designed for clients that do not or
-        /// cannot hold on to the <see cref="CancellationTokenSource" />
-        /// needed to cancel a job, e.g. if the request is coming
-        /// from a ReST API endpoint that may not necessarily retain
-        /// any connection state.  The job can be cancelled instead
-        /// via <see cref="TryCancelJobForClient" />.
-        /// </remarks>
-        /// <param name="queueKey">
-        /// Selects the queue to push the job into.
-        /// </param>
-        /// <param name="promiseRetriever">
-        /// Callback to the user's code to obtain the promise which 
-        /// should receive the results from the job.  The desired 
-        /// <see cref="Promise" /> object cannot be passed down directly, 
-        /// because in the rare case that an existing job raced to cancel, 
-        /// the promise object needs to be refreshed in a retry loop.
-        /// </param>
-        /// <param name="work">
-        /// Describes the work to do in the scheduled job, 
-        /// to produce the output for the promise.  This argument
-        /// will effectively be ignored if the promise already
-        /// has a job associated with it.
-        /// </param>
-        public Promise PushJobAndOwnCancellation(JobQueueKey queueKey,
-                                                 PromiseRetriever promiseRetriever,
-                                                 in PromisedWork work)
-        {
-            var queue = _jobQueues.GetOrAddJobQueue(queueKey);
-
-            var message = RegisterJobMessage(
-                            queue.SchedulingAccount, promiseRetriever, work,
-                            registerClient: true,
-                            queue.CancellationToken,
                             out var promise);
 
             if (message is not null)
@@ -763,6 +725,10 @@ namespace Hearty.Server
         /// Expands the macro job into the micro jobs once 
         /// it has been de-queued and ready to run.
         /// </param>
+        /// <param name="registerClient">
+        /// If true, the client is registered for remote cancellation,
+        /// and <paramref name="cancellationToken" /> is ignored.
+        /// </param>
         /// <param name="cancellationToken">
         /// Used by the caller to request cancellation of the macro job
         /// and any micro jobs created from it.
@@ -772,84 +738,27 @@ namespace Hearty.Server
                                     PromisedWork work,
                                     PromiseListBuilderFactory builderFactory,
                                     MacroJobExpansion expansion,
-                                    CancellationToken cancellationToken)
+                                    bool registerClient = true,
+                                    CancellationToken cancellationToken = default)
         {
             var queue = _jobQueues.GetOrAddJobQueue(queueKey);
+
+            if (registerClient)
+                cancellationToken = queue.CancellationToken;
 
             var message = RegisterMacroJob(queue,
                                            promiseRetriever, work,
                                            builderFactory, expansion,
-                                           queue.CancellationToken,
+                                           cancellationToken,
                                            out var promise);
 
-            if (message is not null)
-            {
-                try
-                {
-                    queue.Enqueue(message);
-                }
-                catch (Exception e)
-                {
-                    message.DisposeWithException(e);
-                    throw;
-                }
-            }
-
-            return promise;
-        }
-
-        /// <summary>
-        /// Create a push a "macro job" into a job queue which
-        /// dynamically expands into many "micro jobs",
-        /// and create and track a cancellation token for it. 
-        /// </summary>
-        /// <param name="queueKey">
-        /// Selects the queue to push the jobs into.
-        /// </param>
-        /// <param name="promiseRetriever">
-        /// Callback to the user's code to obtain the promise which 
-        /// should receive the results from the job.  The desired 
-        /// <see cref="Promise" /> object cannot be passed down directly, 
-        /// because in the rare case that an existing job raced to cancel, 
-        /// the promise object needs to be refreshed in a retry loop.
-        /// </param>
-        /// <param name="work">
-        /// Describes the work to do in the scheduled job.
-        /// Unlike for micro jobs, the work described in this argument
-        /// is not "executed" directly; it only exists here so that
-        /// it can be forwarded to <paramref name="promiseRetriever" />.
-        /// </param>
-        /// <param name="builderFactory">Provides the implementation
-        /// of <see cref="IPromiseListBuilder" /> for gathering the
-        /// promises generated from <paramref name="expansion" />,
-        /// and storing them into <paramref name="promise" />.
-        /// </param>
-        /// <param name="expansion">
-        /// Expands the macro job into the micro jobs once 
-        /// it has been de-queued and ready to run.
-        /// </param>
-        public Promise PushMacroJobAndOwnCancellation(JobQueueKey queueKey,
-                                                      PromiseRetriever promiseRetriever,
-                                                      PromisedWork work,
-                                                      PromiseListBuilderFactory builderFactory,
-                                                      MacroJobExpansion expansion)
-        {
-            var queue = _jobQueues.GetOrAddJobQueue(queueKey);
-
-            var clientToken = queue.CancellationToken;
-
-            var message = RegisterMacroJob(queue,
-                                           promiseRetriever, work,
-                                           builderFactory, expansion,
-                                           clientToken,
-                                           out var promise);
             if (message is not null)
             {
                 Exception? exception = null;
 
                 try
                 {
-                    if (message.TryTrackClientRequest())
+                    if (!registerClient || message.TryTrackClientRequest())
                     {
                         queue.Enqueue(message);
                         message = null;

@@ -236,7 +236,7 @@ namespace Hearty.Server.Program
 
                     var promise = input.Storage.CreatePromise(request);
 
-                    jobsManager.PushJobAndOwnCancellation(input.JobQueueKeyRequired,
+                    jobsManager.PushJob(input.JobQueueKeyRequired,
                         static w => w.Promise ?? throw new ArgumentNullException(),
                         new PromisedWork(request) { 
                             InitialWait = 1000, 
@@ -306,7 +306,7 @@ namespace Hearty.Server.Program
                 });
             });
 
-            jobScheduling.PushMacroJobAndOwnCancellation(
+            jobScheduling.PushMacroJob(
                 input.JobQueueKeyRequired,
                 static w => w.Promise! ?? throw new ArgumentNullException(), 
                 new PromisedWork(request) { Promise = promise }, 
