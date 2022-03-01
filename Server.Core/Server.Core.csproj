@@ -47,6 +47,7 @@
     <Compile Include="RemoteWorkerService.cs" />
     <Compile Include="SubscribedResult.cs" />
     <Compile Include="Subscription.cs" />
+    <Compile Include="TranscodingPayload.cs" />
   </ItemGroup>
 
   <ItemGroup>

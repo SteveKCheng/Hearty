@@ -1,9 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,11 +18,8 @@ using Microsoft.AspNetCore.Http;
 using System.Text.Json;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
 using idunno.Authentication.Basic;
 using System.Security.Claims;
-using Microsoft.AspNetCore.Authentication.Cookies;
 
 namespace Hearty.Server.Program
 {
@@ -243,7 +238,11 @@ namespace Hearty.Server.Program
 
                     jobsManager.PushJobAndOwnCancellation(input.JobQueueKeyRequired,
                         static w => w.Promise ?? throw new ArgumentNullException(),
-                        new PromisedWork(request) { InitialWait = 1000, Promise = promise });
+                        new PromisedWork(request) { 
+                            InitialWait = 1000, 
+                            Promise = promise,
+                            OutputDeserializer = JsonPayloadTranscoding.JobOutputDeserializer
+                        });
 
                     return promise.Id;
                 });
@@ -300,7 +299,11 @@ namespace Hearty.Server.Program
                 var d = new Payload("application/json", b.WrittenMemory);
                 var p = input.Storage.CreatePromise(d);
                 PromiseRetriever r = static w => w.Promise!;
-                return (r, new PromisedWork(d) { InitialWait = item.MeanWaitTime, Promise = p });
+                return (r, new PromisedWork(d) { 
+                    InitialWait = item.MeanWaitTime, 
+                    Promise = p,
+                    OutputDeserializer = JsonPayloadTranscoding.JobOutputDeserializer
+                });
             });
 
             jobScheduling.PushMacroJobAndOwnCancellation(
