@@ -86,6 +86,72 @@ namespace Hearty.Client
         }
 
         /// <summary>
+        /// Queue up a job for the Hearty server, and returning results
+        /// when it completes.
+        /// </summary>
+        /// <param name="route">
+        /// The route on the Hearty server to post the job to.
+        /// The choices and meanings for this string depends on the
+        /// application-level customization of the Hearty server.
+        /// </param>
+        /// <param name="contentType">
+        /// The desired IANA media types of the job results.
+        /// </param>
+        /// <param name="reader">
+        /// De-serializes the response stream into the desired
+        /// object of type <typeparamref name="T" />.
+        /// </param>
+        /// <param name="input">
+        /// The input data for the job.  The interpretation of the
+        /// data depends on <paramref name="route" /> and the
+        /// application-level customization of the Hearty server.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be triggered to cancel the operation of posting
+        /// the job. Note, however, if cancellation races with
+        /// successful posting of the job, the job is not cancelled.
+        /// </param>
+        /// <returns>
+        /// ID of the remote promise which is used by the server
+        /// to uniquely identify the job.
+        /// </returns>
+        /// <typeparam name="T">
+        /// The type of object the result should be expressed as.
+        /// </typeparam>
+        public async Task<T> RunJobAsync<T>(string route, 
+                                            string contentType,
+                                            HttpContent input,
+                                            PayloadReader<T> reader,
+                                            CancellationToken cancellationToken = default)
+        {
+            var uri = "jobs/v1/queue/" + route + "?result=true";
+            var message = new HttpRequestMessage(HttpMethod.Post, uri);
+            message.Headers.Accept.ParseAdd(contentType);
+            message.Content = input;
+
+            var response = await _httpClient.SendAsync(message,
+                                                       HttpCompletionOption.ResponseHeadersRead,
+                                                       cancellationToken)
+                                            .ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+
+            var content = response.Content;
+
+            var actualContentType = content.Headers.TryGetSingleValue(HeaderNames.ContentType)
+                ?? throw new InvalidDataException("The Content-Type returned in the response is unexpected. ");
+
+            using var stream = await content.ReadAsStreamAsync(cancellationToken)
+                                            .ConfigureAwait(false);
+
+            T result = await reader.Invoke(new ParsedContentType(actualContentType),
+                                           stream,
+                                           cancellationToken)
+                                   .ConfigureAwait(false);
+
+            return result;
+        }
+
+        /// <summary>
         /// Extract the ID of the promise/job reported in the server's HTTP response.
         /// </summary>
         private static PromiseId GetPromiseId(HttpHeaders headers)
