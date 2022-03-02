@@ -58,7 +58,7 @@ namespace Hearty.Client
         /// The choices and meanings for this string depends on the
         /// application-level customization of the Hearty server.
         /// </param>
-        /// <param name="content">
+        /// <param name="input">
         /// The input data for the job.  The interpretation of the
         /// data depends on <paramref name="routeKey" /> and the
         /// application-level customization of the Hearty server.
@@ -73,11 +73,11 @@ namespace Hearty.Client
         /// to uniquely identify the job.
         /// </returns>
         public async Task<PromiseId> PostJobAsync(string routeKey, 
-                                                  HttpContent content,
+                                                  PayloadWriter input,
                                                   CancellationToken cancellationToken = default)
         {
             var response = await _httpClient.PostAsync("jobs/v1/queue/" + routeKey, 
-                                                       content, 
+                                                       input.CreateHttpContent(), 
                                                        cancellationToken)
                                             .ConfigureAwait(false);
             EnsureSuccessStatusCodeEx(response);
@@ -206,7 +206,7 @@ namespace Hearty.Client
         /// </typeparam>
         public async Task<T> RunJobAsync<T>(string route, 
                                             string contentType,
-                                            HttpContent input,
+                                            PayloadWriter input,
                                             PayloadReader<T> reader,
                                             CancellationToken cancellationToken = default)
         {
@@ -216,7 +216,7 @@ namespace Hearty.Client
             var message = new HttpRequestMessage(HttpMethod.Post, url);
             message.Headers.Accept.ParseAdd(contentType);
             message.Headers.Accept.ParseAdd(ExceptionPayload.JsonMediaType);
-            message.Content = input;
+            message.Content = input.CreateHttpContent();
 
             var response = await _httpClient.SendAsync(message,
                                                        HttpCompletionOption.ResponseHeadersRead,
@@ -308,7 +308,7 @@ namespace Hearty.Client
 
         private const string MultipartParallelMediaType = "multipart/parallel";
 
-        private static void VerifyContentTypeSyntax(string contentType)
+        internal static void VerifyContentTypeSyntax(string contentType)
         {
             if (!new ParsedContentType(contentType).IsValid)
                 throw new FormatException("The content type to accept for the job output is invalid. ");
@@ -418,7 +418,7 @@ namespace Hearty.Client
         public async Task<IAsyncEnumerable<KeyValuePair<int, T>>>
             RunJobStreamAsync<T>(string route,
                                  string contentType,
-                                 HttpContent input,
+                                 PayloadWriter input,
                                  PayloadReader<T> reader,
                                  CancellationToken cancellationToken = default)
         {
@@ -429,7 +429,7 @@ namespace Hearty.Client
                                        wantResult: true);
 
             var request = new HttpRequestMessage(HttpMethod.Post, url);
-            request.Content = input;
+            request.Content = input.CreateHttpContent();
             request.Headers.Accept.ParseAdd(MultipartParallelMediaType);
             request.Headers.Accept.ParseAdd(ExceptionPayload.JsonMediaType);
             request.Headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, contentType);

@@ -59,9 +59,8 @@ namespace Hearty.Server.Tests
 
             foreach (var input in inputs)
             {
-                var content = new ByteArrayContent(input.SerializeToJsonUtf8Bytes());
-                content.Headers.ContentType = new("application/json");
-                var promiseId = await client.PostJobAsync("pricing", content);
+                var promiseId = await client.PostJobAsync("pricing",
+                                 input: new("application/json", input.SerializeToJsonUtf8Bytes()));
                 Assert.NotEqual((ulong)0, promiseId.RawInteger);
 
                 itemList.Add((input, promiseId));
@@ -87,9 +86,9 @@ namespace Hearty.Server.Tests
             var inputs = MockPricingInput.GenerateRandomSamples(DateTime.Today, 41, 50)
                                          .ToList();
 
-            var content = new StreamWriterContent(stream => JsonSerializer.SerializeAsync(stream, inputs));
-
-            var promiseId = await client.PostJobAsync("multi", content);
+            var promiseId = await client.PostJobAsync("multi",
+                                    input: new("application/json",
+                                               stream => JsonSerializer.SerializeAsync(stream, inputs)));
 
             var responses = await client.GetItemStreamAsync(promiseId,
                                                             contentType: "application/json",

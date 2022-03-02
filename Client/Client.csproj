@@ -17,6 +17,7 @@
     <Compile Include="EnumerableExtensions.cs" />
     <Compile Include="HeartyClient.cs" />
     <Compile Include="PayloadReader.cs" />
+    <Compile Include="PayloadWriter.cs" />
     <Compile Include="ValueStringBuilder.cs" />
   </ItemGroup>
 
