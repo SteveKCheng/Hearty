@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Xml;
+using static System.FormattableString;
 
 namespace Hearty.Common
 {
@@ -27,10 +28,20 @@ namespace Hearty.Common
             return false;
         }
 
-        public static string FormatTimeSpan(TimeSpan value)
+        public static string FormatExpiry(TimeSpan value)
         {
-            return $"P{value.Days}DT{value.Hours}H{value.Minutes}M{value.Seconds}.{value.Milliseconds:D3}S";
+            return Invariant($"P{value.Days}DT{value.Hours}H{value.Minutes}M{value.Seconds}.{value.Milliseconds:D3}S");
         }
+
+#if NET6_0_OR_GREATER
+        public static bool TryFormatExpiry(TimeSpan value, Span<char> destination, out int charsWritten)
+        {
+            return destination.TryWrite(
+                        null, 
+                        $"P{value.Days}DT{value.Hours}H{value.Minutes}M{value.Seconds}.{value.Milliseconds:D3}S", 
+                        out charsWritten);
+        }
+#endif
 
         /// <summary>
         /// Read a named HTTP header, assuming it can only have

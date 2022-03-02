@@ -85,6 +85,92 @@ namespace Hearty.Client
             return GetPromiseId(response.Headers);
         }
 
+#if NET6_0_OR_GREATER
+        private readonly struct TimeSpanFormatWrapper : ISpanFormattable
+        {
+            public readonly TimeSpan TimeSpan;
+
+            public TimeSpanFormatWrapper(TimeSpan timeSpan) => TimeSpan = timeSpan;
+
+            public string ToString(string? format, IFormatProvider? formatProvider)
+                => RestApiUtilities.FormatExpiry(TimeSpan);
+
+            public bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format, IFormatProvider? provider)
+                => RestApiUtilities.TryFormatExpiry(TimeSpan, destination, out charsWritten);
+        }
+#endif
+
+        private string CreateRequestUrl(string path,
+                                        PromiseId? promiseId = null,
+                                        string? route = null,
+                                        TimeSpan? timeout = null,
+                                        bool? wantResult = null,
+                                        string? queue = null,
+                                        int priority = -1)
+        {
+            var builder = new ValueStringBuilder(stackalloc char[1024]);
+
+            builder.Append(path);
+
+            if (route is not null)
+                builder.Append(route);
+
+            if (promiseId != null)
+            {
+#if NET6_0_OR_GREATER
+                builder.Append(promiseId.Value);
+#else
+                builder.Append(promiseId.ToString());
+#endif
+            }
+
+            static void AppendQuerySeparator(ref ValueStringBuilder builder, ref int paramCount)
+            {
+                bool isFirst = (paramCount++ == 0);
+                builder.Append(isFirst ? '?' : '&');
+            }
+
+            int paramCount = 0;
+
+            if (timeout is not null)
+            {
+                AppendQuerySeparator(ref builder, ref paramCount);
+                builder.Append("timeout=");
+#if NET6_0_OR_GREATER
+                builder.Append(new TimeSpanFormatWrapper(timeout.Value));
+#else
+                builder.Append(RestApiUtilities.FormatExpiry(timeout.Value));
+#endif
+            }
+
+            if (wantResult is not null)
+            {
+                AppendQuerySeparator(ref builder, ref paramCount);
+                builder.Append("result=");
+                builder.Append(wantResult.Value ? "true" : "false");
+            }
+
+            if (queue is not null)
+            {
+                AppendQuerySeparator(ref builder, ref paramCount);
+                builder.Append("queue=");
+                builder.Append(Uri.EscapeDataString(queue));
+            }
+
+            if (priority >= 0)
+            {
+                AppendQuerySeparator(ref builder, ref paramCount);
+                builder.Append("priority=");
+#if NET6_0_OR_GREATER
+                builder.Append(priority);
+#else
+                builder.Append(priority.ToString(provider: null));
+#endif
+            }
+
+            return builder.ToString();
+        }
+
         /// <summary>
         /// Queue up a job for the Hearty server, and returning results
         /// when it completes.
@@ -124,8 +210,10 @@ namespace Hearty.Client
                                             PayloadReader<T> reader,
                                             CancellationToken cancellationToken = default)
         {
-            var uri = "jobs/v1/queue/" + route + "?result=true";
-            var message = new HttpRequestMessage(HttpMethod.Post, uri);
+            var url = CreateRequestUrl("jobs/v1/queue",
+                                       route: route,
+                                       wantResult: true);
+            var message = new HttpRequestMessage(HttpMethod.Post, url);
             message.Headers.Accept.ParseAdd(contentType);
             message.Content = input;
 
@@ -198,9 +286,8 @@ namespace Hearty.Client
                                                   TimeSpan timeout,
                                                   CancellationToken cancellation = default)
         {
-            var url = $"jobs/v1/id/{promiseId}";
-            if (timeout != TimeSpan.Zero)
-                url += $"?timeout={RestApiUtilities.FormatTimeSpan(timeout)}";
+            var url = CreateRequestUrl("jobs/v1/id/", promiseId,
+                                       timeout: (timeout != TimeSpan.Zero) ? timeout : null);
 
             var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Accept.ParseAdd(contentType);
@@ -253,7 +340,7 @@ namespace Hearty.Client
                                   PayloadReader<T> processor,
                                   CancellationToken cancellationToken = default)
         {
-            var url = $"jobs/v1/id/{promiseId}";
+            var url = CreateRequestUrl("jobs/v1/id/", promiseId);
 
             var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("multipart/parallel"));
@@ -353,7 +440,7 @@ namespace Hearty.Client
             return result;
         }
 
-        #region Job cancellation
+#region Job cancellation
 
         /// <summary>
         /// Request a job on the Hearty server 
@@ -384,13 +471,12 @@ namespace Hearty.Client
                                          string? queue = null, 
                                          int? priority = null)
         {
-            var uri = new UriBuilder
-            {
-                Path = "jobs/v1/id/{promiseId}",
-                Query = GetJobQueueQueryString(queue, priority)
-            }.Uri;
+            var url = CreateRequestUrl("jobs/v1/id/",
+                                       promiseId,
+                                       queue: queue,
+                                       priority: priority ?? -1);
 
-            var request = new HttpRequestMessage(HttpMethod.Delete, uri);
+            var request = new HttpRequestMessage(HttpMethod.Delete, url);
             AddAuthorizationHeader(request);
 
             var response = await _httpClient.SendAsync(request)
@@ -417,9 +503,9 @@ namespace Hearty.Client
         /// </returns>
         public async Task KillJobAsync(PromiseId promiseId)
         {
-            var uri = $"jobs/v1/admin/id/{promiseId}";
+            var url = CreateRequestUrl("jobs/v1/admin/id/", promiseId);
 
-            var request = new HttpRequestMessage(HttpMethod.Delete, uri);
+            var request = new HttpRequestMessage(HttpMethod.Delete, url);
             AddAuthorizationHeader(request);
 
             var response = await _httpClient.SendAsync(request)
@@ -428,9 +514,9 @@ namespace Hearty.Client
             response.EnsureSuccessStatusCode();
         }
 
-        #endregion
+#endregion
 
-        #region Authentication
+#region Authentication
 
         /// <summary>
         /// Encode the payload for "basic authentication" in HTTP:
@@ -491,7 +577,7 @@ namespace Hearty.Client
             if (password is null)
                 throw new ArgumentNullException(nameof(password));
 
-            var url = "auth/token";
+            var url = CreateRequestUrl("auth/token");
 
             var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Authorization = new AuthenticationHeaderValue(
@@ -537,6 +623,6 @@ namespace Hearty.Client
         /// </summary>
         private const string BearerAuthorizationPrefix = "Bearer ";
 
-        #endregion
+#endregion
     }
 }

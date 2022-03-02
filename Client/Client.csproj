@@ -1,8 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net5.0</TargetFramework>
+    <TargetFrameworks>net6.0;net5.0</TargetFrameworks>
     <Nullable>enable</Nullable>
+    <LangVersion>10</LangVersion>
     <RootNamespace>Hearty.Client</RootNamespace>
     <AssemblyName>Hearty.Client</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
@@ -16,6 +17,7 @@
     <Compile Include="EnumerableExtensions.cs" />
     <Compile Include="HeartyClient.cs" />
     <Compile Include="PayloadReader.cs" />
+    <Compile Include="ValueStringBuilder.cs" />
   </ItemGroup>
 
   <ItemGroup>
