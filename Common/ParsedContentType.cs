@@ -88,6 +88,29 @@ public readonly struct ParsedContentType
         ParameterParser = new MediaTypeParameterParser(mediaType, offset + typeLength + subTypeLength, length);
     }
 
+    /// <summary>
+    /// Whether the type and sub-type of the media type could
+    /// be parsed successfully.
+    /// </summary>
+    /// <remarks>
+    /// This property is still true if the parameters are not
+    /// in a valid syntax.  Use <see cref="IsValid" />
+    /// to check the parameters also.
+    /// </remarks>
+    public bool HasValidType =>
+        Type.HasValue && SubTypeWithoutSuffix.HasValue;
+
+    /// <summary>
+    /// Whether all the parameters can be successfully parsed.
+    /// </summary>
+    public bool HasValidParameters => 
+        TryGetLastParameter(string.Empty, out _);
+
+    /// <summary>
+    /// Whether the media type could be successfully parsed.
+    /// </summary>
+    public bool IsValid => HasValidType && HasValidParameters;
+
     // All GetXXXLength methods work in the same way. They expect to be on the right position for
     // the token they are parsing, for example, the beginning of the media type or the delimiter
     // from a previous token, like '/', ';' or '='.

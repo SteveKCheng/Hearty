@@ -215,6 +215,7 @@ namespace Hearty.Client
                                        wantResult: true);
             var message = new HttpRequestMessage(HttpMethod.Post, url);
             message.Headers.Accept.ParseAdd(contentType);
+            message.Headers.Accept.ParseAdd(ExceptionPayload.JsonMediaType);
             message.Content = input;
 
             var response = await _httpClient.SendAsync(message,
@@ -291,6 +292,7 @@ namespace Hearty.Client
 
             var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Accept.ParseAdd(contentType);
+            request.Headers.Accept.ParseAdd(ExceptionPayload.JsonMediaType);
 
             var response = await _httpClient.SendAsync(request, cancellation)
                                             .ConfigureAwait(false);
@@ -302,6 +304,14 @@ namespace Hearty.Client
                 throw new InvalidDataException("The Content-Type returned in the response is unexpected. ");
 
             return await content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);
+        }
+
+        private const string MultipartParallelMediaType = "multipart/parallel";
+
+        private static void VerifyContentTypeSyntax(string contentType)
+        {
+            if (!new ParsedContentType(contentType).IsValid)
+                throw new FormatException("The content type to accept for the job output is invalid. ");
         }
 
         /// <summary>
@@ -340,12 +350,16 @@ namespace Hearty.Client
                                   PayloadReader<T> reader,
                                   CancellationToken cancellationToken = default)
         {
+            VerifyContentTypeSyntax(contentType);
+
             var url = CreateRequestUrl("jobs/v1/id/", promiseId);
 
             var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("multipart/parallel"));
+            request.Headers.Accept.ParseAdd(MultipartParallelMediaType);
+            request.Headers.Accept.ParseAdd(ExceptionPayload.JsonMediaType);
             request.Headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, contentType);
-
+            request.Headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, ExceptionPayload.JsonMediaType);
+                
             var response = await _httpClient.SendAsync(request, 
                                                        HttpCompletionOption.ResponseHeadersRead, 
                                                        cancellationToken)
@@ -408,13 +422,18 @@ namespace Hearty.Client
                                  PayloadReader<T> reader,
                                  CancellationToken cancellationToken = default)
         {
+            VerifyContentTypeSyntax(contentType);
+
             var url = CreateRequestUrl("jobs/v1/queue",
                                        route: route,
                                        wantResult: true);
+
             var request = new HttpRequestMessage(HttpMethod.Post, url);
             request.Content = input;
-            request.Headers.Accept.ParseAdd("multipart/parallel");
+            request.Headers.Accept.ParseAdd(MultipartParallelMediaType);
+            request.Headers.Accept.ParseAdd(ExceptionPayload.JsonMediaType);
             request.Headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, contentType);
+            request.Headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, ExceptionPayload.JsonMediaType);
 
             var response = await _httpClient.SendAsync(request,
                                                        HttpCompletionOption.ResponseHeadersRead,
@@ -493,21 +512,6 @@ namespace Hearty.Client
         {
             var actual = content.Headers.TryGetSingleValue(HeaderNames.ContentType);
             return VerifyContentType(actual, expected);
-        }
-
-        private static string? GetJobQueueQueryString(string? queue = null,
-                                                      int? priority = null)
-        {
-            if (queue is null && priority is null)
-                return null;
-
-            var result = string.Empty;
-            if (queue is not null)
-                result = "queue=" + Uri.EscapeDataString(queue);
-            if (priority is not null)
-                result = (result.Length > 0 ? "&" : string.Empty) + Invariant($"priority={priority}");
-
-            return result;
         }
 
 #region Job cancellation
@@ -652,7 +656,7 @@ namespace Hearty.Client
             var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Authorization = new AuthenticationHeaderValue(
                                                 "Basic", EncodeBasicAuthentication(user, password));
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/jwt"));
+            request.Headers.Accept.ParseAdd("application/jwt");
             var response = await _httpClient.SendAsync(request)
                                             .ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
