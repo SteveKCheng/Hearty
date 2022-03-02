@@ -172,7 +172,7 @@ namespace Hearty.Client
         }
 
         /// <summary>
-        /// Queue up a job for the Hearty server, and returning results
+        /// Queue up a job for the Hearty server, and return results
         /// when it completes.
         /// </summary>
         /// <param name="route">
@@ -198,8 +198,8 @@ namespace Hearty.Client
         /// successful posting of the job, the job is not cancelled.
         /// </param>
         /// <returns>
-        /// ID of the remote promise which is used by the server
-        /// to uniquely identify the job.
+        /// The de-serialized result from the job if it completes
+        /// successfully.
         /// </returns>
         /// <typeparam name="T">
         /// The type of object the result should be expressed as.
@@ -316,7 +316,7 @@ namespace Hearty.Client
         /// whose content is a stream of items.
         /// </param>
         /// <param name="contentType"></param>
-        /// <param name="processor">
+        /// <param name="reader">
         /// De-serializes the payload of each item into the desired
         /// object of type <typeparamref name="T" />.
         /// </param>
@@ -327,7 +327,7 @@ namespace Hearty.Client
         /// <returns>
         /// Asynchronous task returning the stream of items, once
         /// the streaming connection to the server for the desired
-        /// promite has been established.  The stream itself is 
+        /// promise has been established.  The stream itself is 
         /// asynchronous, as it will be incrementally downloading
         /// items.  The server may be also be producing
         /// the items concurrently, so that it also cannot make
@@ -337,7 +337,7 @@ namespace Hearty.Client
         public async Task<IAsyncEnumerable<KeyValuePair<int, T>>> 
             GetItemStreamAsync<T>(PromiseId promiseId,
                                   string contentType,
-                                  PayloadReader<T> processor,
+                                  PayloadReader<T> reader,
                                   CancellationToken cancellationToken = default)
         {
             var url = CreateRequestUrl("jobs/v1/id/", promiseId);
@@ -359,7 +359,77 @@ namespace Hearty.Client
 
             var multipartReader = new MultipartReader(boundary, 
                                                       content.ReadAsStream(cancellationToken));
-            return MakeItemsAsyncEnumerable(multipartReader, processor, cancellationToken);
+            return MakeItemsAsyncEnumerable(multipartReader, reader, cancellationToken);
+        }
+
+        /// <summary>
+        /// Queue up a job for the Hearty server, and return a
+        /// stream of results.
+        /// </summary>
+        /// <param name="route">
+        /// The route on the Hearty server to post the job to.
+        /// The choices and meanings for this string depends on the
+        /// application-level customization of the Hearty server.
+        /// </param>
+        /// <param name="contentType">
+        /// The desired IANA media types of the job results.
+        /// </param>
+        /// <param name="reader">
+        /// De-serializes the response stream into the desired
+        /// object of type <typeparamref name="T" />.
+        /// </param>
+        /// <param name="input">
+        /// The input data for the job.  The interpretation of the
+        /// data depends on <paramref name="route" /> and the
+        /// application-level customization of the Hearty server.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be triggered to cancel the operation of posting
+        /// the job. Note, however, if cancellation races with
+        /// successful posting of the job, the job is not cancelled.
+        /// </param>
+        /// <returns>
+        /// Asynchronous task returning the stream of items, once
+        /// the streaming connection to the server for the desired
+        /// promise has been established.  The stream itself is 
+        /// asynchronous, as it will be incrementally downloading
+        /// items.  The server may be also be producing
+        /// the items concurrently, so that it also cannot make
+        /// them available immediately.  The stream may be enumerated
+        /// only once as it is not buffered.
+        /// </returns>
+        /// <typeparam name="T">
+        /// The type of object the result should be expressed as.
+        /// </typeparam>
+        public async Task<IAsyncEnumerable<KeyValuePair<int, T>>>
+            RunJobStreamAsync<T>(string route,
+                                 string contentType,
+                                 HttpContent input,
+                                 PayloadReader<T> reader,
+                                 CancellationToken cancellationToken = default)
+        {
+            var url = CreateRequestUrl("jobs/v1/queue",
+                                       route: route,
+                                       wantResult: true);
+            var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Content = input;
+            request.Headers.Accept.ParseAdd("multipart/parallel");
+            request.Headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, contentType);
+
+            var response = await _httpClient.SendAsync(request,
+                                                       HttpCompletionOption.ResponseHeadersRead,
+                                                       cancellationToken)
+                                            .ConfigureAwait(false);
+
+            response.EnsureSuccessStatusCode();
+            var content = response.Content;
+
+            var boundary = RestApiUtilities.GetMultipartBoundary(
+                            content.Headers.TryGetSingleValue(HeaderNames.ContentType));
+
+            var multipartReader = new MultipartReader(boundary,
+                                                      content.ReadAsStream(cancellationToken));
+            return MakeItemsAsyncEnumerable(multipartReader, reader, cancellationToken);
         }
 
         private static async IAsyncEnumerable<KeyValuePair<int, T>> MakeItemsAsyncEnumerable<T>(
