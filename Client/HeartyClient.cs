@@ -9,7 +9,6 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using static System.FormattableString;
 using HeaderNames = Microsoft.Net.Http.Headers.HeaderNames;
 
 namespace Hearty.Client
@@ -21,7 +20,7 @@ namespace Hearty.Client
     public class HeartyClient : IDisposable
     {
         private readonly HttpClient _httpClient;
-        private bool _leaveOpen;
+        private readonly bool _leaveOpen;
 
         /// <summary>
         /// Wrap a strongly-typed interface for Hearty over 
@@ -180,9 +179,6 @@ namespace Hearty.Client
         /// The choices and meanings for this string depends on the
         /// application-level customization of the Hearty server.
         /// </param>
-        /// <param name="contentType">
-        /// The desired IANA media types of the job results.
-        /// </param>
         /// <param name="reader">
         /// De-serializes the response stream into the desired
         /// object of type <typeparamref name="T" />.
@@ -205,7 +201,6 @@ namespace Hearty.Client
         /// The type of object the result should be expressed as.
         /// </typeparam>
         public async Task<T> RunJobAsync<T>(string route, 
-                                            string contentType,
                                             PayloadWriter input,
                                             PayloadReader<T> reader,
                                             CancellationToken cancellationToken = default)
@@ -214,8 +209,8 @@ namespace Hearty.Client
                                        route: route,
                                        wantResult: true);
             var message = new HttpRequestMessage(HttpMethod.Post, url);
-            message.Headers.Accept.ParseAdd(contentType);
-            message.Headers.Accept.ParseAdd(ExceptionPayload.JsonMediaType);
+            reader.AddAcceptHeaders(message.Headers);
+            message.Headers.TryAddWithoutValidation(HeaderNames.Accept, ExceptionPayload.JsonMediaType);
             message.Content = input.CreateHttpContent();
 
             var response = await _httpClient.SendAsync(message,
@@ -232,9 +227,9 @@ namespace Hearty.Client
             using var stream = await content.ReadAsStreamAsync(cancellationToken)
                                             .ConfigureAwait(false);
 
-            T result = await reader.Invoke(new ParsedContentType(actualContentType),
-                                           stream,
-                                           cancellationToken)
+            T result = await reader.ReadFromStreamAsync(new ParsedContentType(actualContentType),
+                                                        stream,
+                                                        cancellationToken)
                                    .ConfigureAwait(false);
 
             return result;
@@ -268,8 +263,6 @@ namespace Hearty.Client
         /// <param name="promiseId">The ID of the desired promise on the
         /// server.
         /// </param>
-        /// <param name="contentType">The desired content type of result
-        /// to receive. </param>
         /// <param name="timeout">
         /// Directs this method to stop waiting if the 
         /// the server does not make the result available by this
@@ -291,8 +284,8 @@ namespace Hearty.Client
                                        timeout: (timeout != TimeSpan.Zero) ? timeout : null);
 
             var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Accept.ParseAdd(contentType);
             request.Headers.Accept.ParseAdd(ExceptionPayload.JsonMediaType);
+            request.Headers.Accept.ParseAdd(contentType);
 
             var response = await _httpClient.SendAsync(request, cancellation)
                                             .ConfigureAwait(false);
@@ -325,7 +318,6 @@ namespace Hearty.Client
         /// The ID of the promise or job on the Hearty server
         /// whose content is a stream of items.
         /// </param>
-        /// <param name="contentType"></param>
         /// <param name="reader">
         /// De-serializes the payload of each item into the desired
         /// object of type <typeparamref name="T" />.
@@ -346,19 +338,16 @@ namespace Hearty.Client
         /// </returns>
         public async Task<IAsyncEnumerable<KeyValuePair<int, T>>> 
             GetItemStreamAsync<T>(PromiseId promiseId,
-                                  string contentType,
                                   PayloadReader<T> reader,
                                   CancellationToken cancellationToken = default)
         {
-            VerifyContentTypeSyntax(contentType);
-
             var url = CreateRequestUrl("jobs/v1/id/", promiseId);
 
             var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Accept.ParseAdd(MultipartParallelMediaType);
-            request.Headers.Accept.ParseAdd(ExceptionPayload.JsonMediaType);
-            request.Headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, contentType);
+            request.Headers.TryAddWithoutValidation(HeaderNames.Accept, MultipartParallelMediaType);
+            request.Headers.TryAddWithoutValidation(HeaderNames.Accept, ExceptionPayload.JsonMediaType);
             request.Headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, ExceptionPayload.JsonMediaType);
+            reader.AddAcceptHeaders(request.Headers, HeartyHttpHeaders.AcceptItem);
                 
             var response = await _httpClient.SendAsync(request, 
                                                        HttpCompletionOption.ResponseHeadersRead, 
@@ -384,9 +373,6 @@ namespace Hearty.Client
         /// The route on the Hearty server to post the job to.
         /// The choices and meanings for this string depends on the
         /// application-level customization of the Hearty server.
-        /// </param>
-        /// <param name="contentType">
-        /// The desired IANA media types of the job results.
         /// </param>
         /// <param name="reader">
         /// De-serializes the response stream into the desired
@@ -417,23 +403,20 @@ namespace Hearty.Client
         /// </typeparam>
         public async Task<IAsyncEnumerable<KeyValuePair<int, T>>>
             RunJobStreamAsync<T>(string route,
-                                 string contentType,
                                  PayloadWriter input,
                                  PayloadReader<T> reader,
                                  CancellationToken cancellationToken = default)
         {
-            VerifyContentTypeSyntax(contentType);
-
             var url = CreateRequestUrl("jobs/v1/queue",
                                        route: route,
                                        wantResult: true);
 
             var request = new HttpRequestMessage(HttpMethod.Post, url);
             request.Content = input.CreateHttpContent();
-            request.Headers.Accept.ParseAdd(MultipartParallelMediaType);
-            request.Headers.Accept.ParseAdd(ExceptionPayload.JsonMediaType);
-            request.Headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, contentType);
+            request.Headers.TryAddWithoutValidation(HeaderNames.Accept, MultipartParallelMediaType);
+            request.Headers.TryAddWithoutValidation(HeaderNames.Accept, ExceptionPayload.JsonMediaType);
             request.Headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, ExceptionPayload.JsonMediaType);
+            reader.AddAcceptHeaders(request.Headers, HeartyHttpHeaders.AcceptItem);
 
             var response = await _httpClient.SendAsync(request,
                                                        HttpCompletionOption.ResponseHeadersRead,
@@ -488,7 +471,7 @@ namespace Hearty.Client
                 if (!int.TryParse(ordinalString[0], out int ordinal))
                     throw new InvalidDataException("The 'Ordinal' header is in an item in the multi-part message is invalid. ");
 
-                T item = await processor.Invoke(contentType, section.Body, cancellationToken)
+                T item = await processor.ReadFromStreamAsync(contentType, section.Body, cancellationToken)
                                         .ConfigureAwait(false);
                 yield return KeyValuePair.Create(ordinal, item);
             }
@@ -656,7 +639,7 @@ namespace Hearty.Client
             var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Authorization = new AuthenticationHeaderValue(
                                                 "Basic", EncodeBasicAuthentication(user, password));
-            request.Headers.Accept.ParseAdd("application/jwt");
+            request.Headers.TryAddWithoutValidation(HeaderNames.Accept, "application/jwt");
             var response = await _httpClient.SendAsync(request)
                                             .ConfigureAwait(false);
             response.EnsureSuccessStatusCode();

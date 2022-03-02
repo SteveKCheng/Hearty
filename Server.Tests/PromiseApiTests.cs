@@ -79,6 +79,9 @@ namespace Hearty.Server.Tests
             }
         }
 
+        private PayloadReader<MockPricingOutput> PricingOutputReader
+            { get; } = new("application/json", DeserializeMockPricingOutput);
+
         [Fact]
         public async Task RunJobList()
         {
@@ -91,8 +94,7 @@ namespace Hearty.Server.Tests
                                                stream => JsonSerializer.SerializeAsync(stream, inputs)));
 
             var responses = await client.GetItemStreamAsync(promiseId,
-                                                            contentType: "application/json",
-                                                            DeserializeMockPricingOutput,
+                                                            PricingOutputReader,
                                                             default);
 
             var ordinalsSeen = new HashSet<int>();

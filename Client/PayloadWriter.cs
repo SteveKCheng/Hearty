@@ -12,8 +12,16 @@ namespace Hearty.Client;
 /// Encapsulates a payload to upload to a Hearty server.
 /// </summary>
 /// <remarks>
-/// This structure abstracts out the representation of the payload
-/// from the implementation of the underlying protocol.
+/// <para>
+/// This structure abstracts out the representation of a payload
+/// for a Hearty server, from the implementation of the 
+/// underlying protocol.
+/// </para>
+/// <para>
+/// An application may pre-construct instances of this type,
+/// one for each type of input object that it wishes to send
+/// to the Hearty server.
+/// </para>
 /// </remarks>
 public readonly struct PayloadWriter
 {
