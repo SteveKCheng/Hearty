@@ -34,6 +34,7 @@ namespace Hearty.Client
         /// </summary>
         public StringValues ContentTypes { get; }
 
+        private readonly bool _throwOnException;
         private readonly Func<ParsedContentType, Stream, CancellationToken, ValueTask<T>> _streamReader;
 
         internal static void VerifyContentTypesSyntax(StringValues contentTypes)
@@ -56,6 +57,14 @@ namespace Hearty.Client
         /// The function that translates or de-serializes the payload
         /// into instances of <typeparamref name="T" />.
         /// </param>
+        /// <param name="throwOnException">
+        /// When a downloaded payload represents <see cref="ExceptionPayload" />,
+        /// and this argument is true, then that exception 
+        /// gets thrown, without invoking <paramref name="streamReader" />.
+        /// If this argument is false, 
+        /// the payload is passed into <paramref name="streamReader" />
+        /// without filtering for exceptional payloads.
+        /// </param>
         /// <exception cref="ArgumentNullException"></exception>
         /// <remarks>
         /// The first argument to <paramref name="streamReader"/> is the actual
@@ -65,20 +74,46 @@ namespace Hearty.Client
         /// and does not support seeking.
         /// </remarks>
         public PayloadReader(StringValues contentTypes, 
-                             Func<ParsedContentType, Stream, CancellationToken, ValueTask<T>> streamReader)
+                             Func<ParsedContentType, Stream, CancellationToken, ValueTask<T>> streamReader,
+                             bool throwOnException = true)
         {
             VerifyContentTypesSyntax(contentTypes);
             ContentTypes = contentTypes;
             _streamReader = streamReader ?? throw new ArgumentNullException(nameof(streamReader));
+            _throwOnException = throwOnException;
+        }
+
+        private static async ValueTask<T> AwaitExceptionPayload(ValueTask<ExceptionPayload?> exceptionTask)
+        {
+            var exceptionPayload = (await exceptionTask.ConfigureAwait(false))!;
+            throw exceptionPayload.ToException();
         }
 
         internal ValueTask<T> ReadFromStreamAsync(ParsedContentType contentType,
                                                   Stream stream,
                                                   CancellationToken cancellationToken)
-            => _streamReader.Invoke(contentType, stream, cancellationToken);
+        {
+            if (_throwOnException)
+            {
+                var exceptionTask = ExceptionPayload.TryReadAsync(contentType, 
+                                                                  stream, 
+                                                                  cancellationToken);
+                if (!exceptionTask.IsCompleted)
+                    return AwaitExceptionPayload(exceptionTask);
+
+                var exceptionPayload = exceptionTask.GetAwaiter().GetResult();
+                if (exceptionPayload is not null)
+                    throw exceptionPayload.ToException();
+            }
+
+            return _streamReader.Invoke(contentType, stream, cancellationToken);
+        }
 
         internal void AddAcceptHeaders(HttpHeaders httpHeaders, string headerName)
         {
+            if (_throwOnException && ContentTypes.Count > 0)
+                httpHeaders.TryAddWithoutValidation(headerName, ExceptionPayload.JsonMediaType);
+
             foreach (var contentType in ContentTypes)
                 httpHeaders.TryAddWithoutValidation(headerName, contentType);
         }
