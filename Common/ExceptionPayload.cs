@@ -124,6 +124,9 @@ namespace Hearty.Common
         /// Load an instance of <see cref="ExceptionPayload" /> from a stream,
         /// if its reported content type matches.
         /// </summary>
+        /// <param name="promiseId">
+        /// The ID of the promise that originated the payload.
+        /// </param>
         /// <param name="contentType">
         /// The IANA media type that the payload has been labelled with.
         /// </param>
@@ -140,7 +143,8 @@ namespace Hearty.Common
         /// completes with the result of de-serialization, 
         /// assuming that is successful.
         /// </returns>
-        public static ValueTask<ExceptionPayload?> TryReadAsync(ParsedContentType contentType, 
+        public static ValueTask<ExceptionPayload?> TryReadAsync(PromiseId promiseId,
+                                                                ParsedContentType contentType, 
                                                                 Stream stream,
                                                                 CancellationToken cancellationToken)
         {

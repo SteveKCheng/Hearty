@@ -35,7 +35,11 @@ namespace Hearty.Client
         public StringValues ContentTypes { get; }
 
         private readonly bool _throwOnException;
-        private readonly Func<ParsedContentType, Stream, CancellationToken, ValueTask<T>> _streamReader;
+
+        private readonly Func<PromiseId,
+                              ParsedContentType, 
+                              Stream, 
+                              CancellationToken, ValueTask<T>> _streamReader;
 
         internal static void VerifyContentTypesSyntax(StringValues contentTypes)
         {
@@ -67,14 +71,16 @@ namespace Hearty.Client
         /// </param>
         /// <exception cref="ArgumentNullException"></exception>
         /// <remarks>
-        /// The first argument to <paramref name="streamReader"/> is the actual
+        /// The first argument to <paramref name="streamReader"/> is 
+        /// the ID of the promise or job that the payload came from.
+        /// The second argument is the actual
         /// media type for the payload received from the server.
-        /// The second argument is the byte stream for the downloaded
+        /// The third argument is the byte stream for the downloaded
         /// payload.  It should be assumed that the stream is read-only 
         /// and does not support seeking.
         /// </remarks>
         public PayloadReader(StringValues contentTypes, 
-                             Func<ParsedContentType, Stream, CancellationToken, ValueTask<T>> streamReader,
+                             Func<PromiseId, ParsedContentType, Stream, CancellationToken, ValueTask<T>> streamReader,
                              bool throwOnException = true)
         {
             VerifyContentTypesSyntax(contentTypes);
@@ -89,13 +95,15 @@ namespace Hearty.Client
             throw exceptionPayload.ToException();
         }
 
-        internal ValueTask<T> ReadFromStreamAsync(ParsedContentType contentType,
+        internal ValueTask<T> ReadFromStreamAsync(PromiseId promiseId,
+                                                  ParsedContentType contentType,
                                                   Stream stream,
                                                   CancellationToken cancellationToken)
         {
             if (_throwOnException)
             {
-                var exceptionTask = ExceptionPayload.TryReadAsync(contentType, 
+                var exceptionTask = ExceptionPayload.TryReadAsync(promiseId,
+                                                                  contentType,
                                                                   stream, 
                                                                   cancellationToken);
                 if (!exceptionTask.IsCompleted)
@@ -106,7 +114,7 @@ namespace Hearty.Client
                     throw exceptionPayload.ToException();
             }
 
-            return _streamReader.Invoke(contentType, stream, cancellationToken);
+            return _streamReader.Invoke(promiseId, contentType, stream, cancellationToken);
         }
 
         internal void AddAcceptHeaders(HttpHeaders httpHeaders, string headerName)

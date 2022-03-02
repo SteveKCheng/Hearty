@@ -224,10 +224,13 @@ namespace Hearty.Client
             var actualContentType = content.Headers.TryGetSingleValue(HeaderNames.ContentType)
                 ?? throw new InvalidDataException("The Content-Type returned in the response is unexpected. ");
 
+            var promiseId = GetPromiseId(content.Headers);
+
             using var stream = await content.ReadAsStreamAsync(cancellationToken)
                                             .ConfigureAwait(false);
 
-            T result = await reader.ReadFromStreamAsync(new ParsedContentType(actualContentType),
+            T result = await reader.ReadFromStreamAsync(promiseId,
+                                                        new ParsedContentType(actualContentType),
                                                         stream,
                                                         cancellationToken)
                                    .ConfigureAwait(false);
@@ -362,7 +365,11 @@ namespace Hearty.Client
 
             var multipartReader = new MultipartReader(boundary, 
                                                       content.ReadAsStream(cancellationToken));
-            return MakeItemsAsyncEnumerable(multipartReader, reader, cancellationToken);
+
+            return MakeItemsAsyncEnumerable(promiseId, 
+                                            multipartReader, 
+                                            reader, 
+                                            cancellationToken);
         }
 
         /// <summary>
@@ -426,22 +433,29 @@ namespace Hearty.Client
             response.EnsureSuccessStatusCode();
             var content = response.Content;
 
+            var promiseId = GetPromiseId(content.Headers);
+
             var boundary = RestApiUtilities.GetMultipartBoundary(
                             content.Headers.TryGetSingleValue(HeaderNames.ContentType));
 
             var multipartReader = new MultipartReader(boundary,
                                                       content.ReadAsStream(cancellationToken));
-            return MakeItemsAsyncEnumerable(multipartReader, reader, cancellationToken);
+
+            return MakeItemsAsyncEnumerable(promiseId, 
+                                            multipartReader, 
+                                            reader, 
+                                            cancellationToken);
         }
 
         private static async IAsyncEnumerable<KeyValuePair<int, T>> MakeItemsAsyncEnumerable<T>(
-            MultipartReader reader, 
-            PayloadReader<T> processor,
+            PromiseId promiseId,
+            MultipartReader multipartReader, 
+            PayloadReader<T> payloadReader,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             MultipartSection? section;
-            while ((section = await reader.ReadNextSectionAsync(cancellationToken)
-                                          .ConfigureAwait(false)) is not null)
+            while ((section = await multipartReader.ReadNextSectionAsync(cancellationToken)
+                                                   .ConfigureAwait(false)) is not null)
             {
                 var ordinalString = section.Headers![HeartyHttpHeaders.Ordinal];
                 if (ordinalString.Count != 1)
@@ -456,7 +470,10 @@ namespace Hearty.Client
                 // Is an exception
                 if (string.Equals(ordinalString[0], "Trailer"))
                 {
-                    var payload = await ExceptionPayload.TryReadAsync(contentType, section.Body, cancellationToken)
+                    var payload = await ExceptionPayload.TryReadAsync(promiseId,
+                                                                      contentType,
+                                                                      section.Body, 
+                                                                      cancellationToken)
                                                         .ConfigureAwait(false);
                     if (payload is null)
                     {
@@ -471,8 +488,18 @@ namespace Hearty.Client
                 if (!int.TryParse(ordinalString[0], out int ordinal))
                     throw new InvalidDataException("The 'Ordinal' header is in an item in the multi-part message is invalid. ");
 
-                T item = await processor.ReadFromStreamAsync(contentType, section.Body, cancellationToken)
-                                        .ConfigureAwait(false);
+                var promiseIdString = section.Headers![HeartyHttpHeaders.PromiseId];
+                if (promiseIdString.Count != 1 || 
+                    !PromiseId.TryParse(promiseIdString[0], out var itemPromiseId))
+                {
+                    throw new InvalidDataException("The server did not report the Promise ID of the item in a multi-part message properly. ");
+                }
+
+                T item = await payloadReader.ReadFromStreamAsync(itemPromiseId,
+                                                                 contentType,
+                                                                 section.Body, 
+                                                                 cancellationToken)
+                                            .ConfigureAwait(false);
                 yield return KeyValuePair.Create(ordinal, item);
             }
         }

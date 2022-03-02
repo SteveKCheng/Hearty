@@ -111,7 +111,8 @@ namespace Hearty.Server.Tests
         }
 
         private static ValueTask<MockPricingOutput> 
-            DeserializeMockPricingOutput(ParsedContentType contentType, 
+            DeserializeMockPricingOutput(PromiseId promiseId,
+                                         ParsedContentType contentType, 
                                          Stream stream, 
                                          CancellationToken cancellationToken)
         {
