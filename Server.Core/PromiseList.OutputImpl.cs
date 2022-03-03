@@ -166,7 +166,7 @@ public partial class PromiseList
                 var payload = output.GetPayload(format);
 
                 writer.WriteUtf8String("Content-Type: ");
-                writer.WriteUtf8String(formatInfo.MediaType);
+                writer.WriteUtf8String(formatInfo.MediaType.ToString());
                 writer.WriteCrLf();
 
                 writer.WriteUtf8String("Content-Length: ");
@@ -250,7 +250,7 @@ public partial class PromiseList
             var formatInfo = output.GetFormatInfo(format);
 
             writer.WriteUtf8String("Content-Type: ");
-            writer.WriteUtf8String(formatInfo.MediaType);
+            writer.WriteUtf8String(formatInfo.MediaType.ToString());
             writer.WriteCrLf();
 
             writer.WriteUtf8String("Content-Length: ");

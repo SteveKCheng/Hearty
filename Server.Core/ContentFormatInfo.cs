@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Hearty.Common;
+using System;
 
 namespace Hearty.Server;
 
@@ -18,12 +19,20 @@ public readonly partial struct ContentFormatInfo : IComparable<ContentFormatInfo
     /// The type of the content provided, identified by an IANA "media type" label.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// If <see cref="IsContainer" /> is true, this label refers to the
     /// wrapper structure of items where there are multiple.  If 
     /// <see cref="IsContainer" /> is false, this label refers to
     /// the individual items.
+    /// </para>
+    /// <para>
+    /// This member is typed as <see cref="ParsedContentType" />, so
+    /// that <see cref="ContentFormatInfo" /> can provide a cached
+    /// value for content negotation, thus avoiding parsing the
+    /// media type string over and over again.
+    /// </para>
     /// </remarks>
-    public string MediaType { get; }
+    public ParsedContentType MediaType { get; }
 
     /// <summary>
     /// Whether this format describes the wrapper structure for
@@ -53,13 +62,37 @@ public readonly partial struct ContentFormatInfo : IComparable<ContentFormatInfo
     /// <summary>
     /// Constructs an instance with the specified information. 
     /// </summary>
-    /// <param name="mediaType">The IANA "media type". </param>
+    /// <param name="mediaType">The IANA "media type". 
+    /// This constructor does not check it for validity but
+    /// it should nevertheless be in the correct syntax.
+    /// </param>
     /// <param name="preference">Indicates preference for this format. </param>
     /// <param name="canSeek">Indicates if content with this format
     /// can be partially downloaded. </param>
     /// <param name="isContainer">Whether <paramref name="mediaType"/> refers
     /// to the wrapper structure, or the items within. </param>
-    public ContentFormatInfo(string mediaType, 
+    public ContentFormatInfo(string mediaType,
+                             ContentPreference preference,
+                             ContentSeekability canSeek = ContentSeekability.None,
+                             bool isContainer = false)
+        : this(new ParsedContentType(mediaType), preference, canSeek, isContainer)
+    {
+    }
+
+    /// <summary>
+    /// Constructs an instance with the specified information. 
+    /// </summary>
+    /// <param name="mediaType">The IANA "media type". 
+    /// <see cref="ParsedContentType.IsValid" /> should be true,
+    /// even though that fact is not checked by this constructor
+    /// for performance reasons.
+    /// </param>
+    /// <param name="preference">Indicates preference for this format. </param>
+    /// <param name="canSeek">Indicates if content with this format
+    /// can be partially downloaded. </param>
+    /// <param name="isContainer">Whether <paramref name="mediaType"/> refers
+    /// to the wrapper structure, or the items within. </param>
+    public ContentFormatInfo(ParsedContentType mediaType,
                              ContentPreference preference,
                              ContentSeekability canSeek = ContentSeekability.None,
                              bool isContainer = false)
@@ -93,7 +126,7 @@ public readonly partial struct ContentFormatInfo : IComparable<ContentFormatInfo
         c = (other.IsContainer ? 1 : 0).CompareTo(this.IsContainer ? 1 : 0);
         if (c != 0) return c;
 
-        return string.CompareOrdinal(this.MediaType, other.MediaType);
+        return this.MediaType.Input.AsSpan().SequenceCompareTo(other.MediaType.Input.AsSpan());
     }
 
     /// <summary>

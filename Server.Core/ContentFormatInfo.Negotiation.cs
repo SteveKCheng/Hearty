@@ -191,9 +191,8 @@ namespace Hearty.Server
                     for (int i = 0; i < responsesCount; ++i)
                     {
                         var response = responses[i];
-                        var parsedResponse = new ParsedContentType(response.MediaType);
 
-                        int score = ScoreFormat(parsedResponse, parsedRequest,
+                        int score = ScoreFormat(response.MediaType, parsedRequest,
                                                 response.Preference);
 
                         // Argument max

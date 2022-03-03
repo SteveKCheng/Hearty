@@ -570,7 +570,7 @@ namespace Hearty.Server.WebApi
             var formatInfo = output.GetFormatInfo(format);
 
             httpResponse.StatusCode = StatusCodes.Status200OK;
-            httpResponse.ContentType = formatInfo.MediaType;
+            httpResponse.ContentType = formatInfo.MediaType.ToString();
             httpResponse.ContentLength = output.GetContentLength(format);
 
             var writeRequest = new PromiseWriteRequest

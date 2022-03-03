@@ -220,7 +220,7 @@ public static class AuthenticationEndpoints
             if (IsHeadRequest(httpRequest))
             {
                 httpResponse.StatusCode = StatusCodes.Status200OK;
-                httpResponse.ContentType = _contentFormatInfo[(int)format].MediaType;
+                httpResponse.ContentType = _contentFormatInfo[(int)format].MediaType.ToString();
                 httpResponse.Headers.CacheControl = "private";
                 httpResponse.Headers.Vary = "Accept";
                 return;
@@ -260,7 +260,7 @@ public static class AuthenticationEndpoints
             httpResponse.StatusCode = StatusCodes.Status200OK;
             httpResponse.Headers.CacheControl = "private";
 
-            httpResponse.ContentType = _contentFormatInfo[(int)format].MediaType;
+            httpResponse.ContentType = _contentFormatInfo[(int)format].MediaType.ToString();
 
             switch (format)
             {

@@ -192,7 +192,7 @@ namespace Hearty.Server
         /// can refer to.
         /// </remarks>
         /// </summary>
-        public string ContentType => GetFormatInfo(0).MediaType;
+        public string ContentType => GetFormatInfo(0).MediaType.ToString();
 
         /// <summary>
         /// The total number of bytes in the data expressed in 
