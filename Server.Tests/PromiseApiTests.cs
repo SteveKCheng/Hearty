@@ -54,7 +54,7 @@ namespace Hearty.Server.Tests
         {
             var itemList = new List<(MockPricingInput Input, PromiseId PromiseId)>();
 
-            using var client = new HeartyClient(CreateClient());
+            using var client = new HeartyHttpClient(CreateClient());
             var inputs = MockPricingInput.GenerateRandomSamples(DateTime.Today, 41, 5);
 
             foreach (var input in inputs)
@@ -83,7 +83,7 @@ namespace Hearty.Server.Tests
         [Fact]
         public async Task RunJobList()
         {
-            using var client = new HeartyClient(CreateClient());
+            using var client = new HeartyHttpClient(CreateClient());
             var inputs = MockPricingInput.GenerateRandomSamples(DateTime.Today, 41, 50)
                                          .ToList();
 
@@ -131,7 +131,7 @@ namespace Hearty.Server.Tests
         [Fact]
         public async Task BearerTokenRetrieval()
         {
-            using var client = new HeartyClient(CreateClient());
+            using var client = new HeartyHttpClient(CreateClient());
             await client.SignInAsync("admin", "admin");
             Assert.NotNull(client.BearerToken);
         }

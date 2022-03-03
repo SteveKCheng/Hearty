@@ -54,7 +54,7 @@ public readonly struct PayloadWriter
     /// of buffers. </param>
     public PayloadWriter(string contentType, in ReadOnlySequence<byte> body)
     {
-        HeartyClient.VerifyContentTypeSyntax(contentType);
+        HeartyHttpClient.VerifyContentTypeSyntax(contentType);
 
         ContentType = contentType;
         _body = body;
@@ -96,7 +96,7 @@ public readonly struct PayloadWriter
                          long? contentLength,
                          Func<Stream, Task> streamWriter)
     {
-        HeartyClient.VerifyContentTypeSyntax(contentType);
+        HeartyHttpClient.VerifyContentTypeSyntax(contentType);
 
         if (contentLength is long value && value < 0)
             throw new ArgumentOutOfRangeException(nameof(contentLength));

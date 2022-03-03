@@ -15,7 +15,8 @@
 
   <ItemGroup>
     <Compile Include="EnumerableExtensions.cs" />
-    <Compile Include="HeartyClient.cs" />
+    <Compile Include="HeartyHttpClient.cs" />
+    <Compile Include="IHeartyClient.cs" />
     <Compile Include="PayloadReader.cs" />
     <Compile Include="PayloadWriter.cs" />
     <Compile Include="PromiseByteStream.cs" />
