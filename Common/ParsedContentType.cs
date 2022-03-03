@@ -43,20 +43,15 @@ public readonly struct ParsedContentType
     /// <param name="mediaType">The <see cref="string"/> with the media type.</param>
     /// <param name="offset">The offset in the <paramref name="mediaType"/> where the parsing starts.</param>
     /// <param name="length">The length of the media type to parse if provided.</param>
-    public ParsedContentType(string mediaType, int offset, int? length)
+    public ParsedContentType(string mediaType, int offset, int length)
     {
-        ParameterParser = default(MediaTypeParameterParser);
-
         _buffer = mediaType;
 
         var typeLength = GetTypeLength(mediaType, offset, out var type);
         if (typeLength == 0)
         {
-            _typeOffset = offset;
-            _typeLength = 0;
-            _subTypeOffset = offset;
-            _subTypeLength = 0;
-            _subTypeSuffixLength = 0;
+            this = default;
+            _buffer = null!;
             return;
         }
 
@@ -66,9 +61,8 @@ public readonly struct ParsedContentType
         var subTypeLength = GetSubtypeLength(mediaType, offset + typeLength, out var subType);
         if (subTypeLength == 0)
         {
-            _subTypeOffset = _typeOffset;
-            _subTypeLength = 0;
-            _subTypeSuffixLength = 0;
+            this = default;
+            _buffer = null!;
             return;
         }
 
@@ -77,7 +71,8 @@ public readonly struct ParsedContentType
 
         TryGetSuffixLength(subType, out _subTypeSuffixLength);
 
-        ParameterParser = new MediaTypeParameterParser(mediaType, offset + typeLength + subTypeLength, length);
+        _parametersOffset = offset + typeLength + subTypeLength;
+        _bufferLength = length;
     }
 
     /// <summary>
@@ -215,6 +210,17 @@ public readonly struct ParsedContentType
     private readonly int _subTypeSuffixLength;
 
     /// <summary>
+    /// The length of the entire input string (segment).
+    /// </summary>
+    private readonly int _bufferLength;
+
+    /// <summary>
+    /// The offset within <see cref="_buffer" /> where
+    /// parameters might start.
+    /// </summary>
+    private readonly int _parametersOffset;
+
+    /// <summary>
     /// Gets the type of the <see cref="ParsedContentType"/>.
     /// </summary>
     /// <example>
@@ -310,7 +316,8 @@ public readonly struct ParsedContentType
         }
     }
 
-    private MediaTypeParameterParser ParameterParser { get; }
+    private MediaTypeParameterParser ParameterParser
+        => new MediaTypeParameterParser(_buffer, _parametersOffset, _bufferLength);
 
     /// <summary>
     /// Determines whether the current <see cref="ParsedContentType"/> is a subset of the <paramref name="set"/>
