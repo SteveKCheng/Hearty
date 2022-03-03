@@ -36,6 +36,19 @@ namespace Hearty.Client
 
         private readonly bool _throwOnException;
 
+        /// <summary>
+        /// Whether the ownership of the 
+        /// response stream should be transferred to the reader.
+        /// </summary>
+        /// <remarks>
+        /// If false, the stream should be disposed after the
+        /// reader function is invoked.  If true, the stream
+        /// is assumed to be transferred into the reader function,
+        /// which may transfer it back out in its return value.
+        /// </remarks>
+        /// </summary>
+        internal bool OwnsStream { get; }
+
         private readonly Func<PromiseId,
                               ParsedContentType, 
                               Stream, 
@@ -69,7 +82,12 @@ namespace Hearty.Client
         /// the payload is passed into <paramref name="streamReader" />
         /// without filtering for exceptional payloads.
         /// </param>
-        /// <exception cref="ArgumentNullException"></exception>
+        /// <param name="ownsStream">
+        /// If false, the response stream should be disposed after 
+        /// <paramref name="streamReader"/> is invoked.  If true, 
+        /// the stream is assumed to be transferred into that function,
+        /// which may transfer it back out in its return value.
+        /// </param>
         /// <remarks>
         /// The first argument to <paramref name="streamReader"/> is 
         /// the ID of the promise or job that the payload came from.
@@ -81,10 +99,12 @@ namespace Hearty.Client
         /// </remarks>
         public PayloadReader(StringValues contentTypes, 
                              Func<PromiseId, ParsedContentType, Stream, CancellationToken, ValueTask<T>> streamReader,
-                             bool throwOnException = true)
+                             bool throwOnException = true,
+                             bool ownsStream = false)
         {
             VerifyContentTypesSyntax(contentTypes);
             ContentTypes = contentTypes;
+            OwnsStream = ownsStream;
             _streamReader = streamReader ?? throw new ArgumentNullException(nameof(streamReader));
             _throwOnException = throwOnException;
         }

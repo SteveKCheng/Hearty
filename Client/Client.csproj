@@ -18,6 +18,7 @@
     <Compile Include="HeartyClient.cs" />
     <Compile Include="PayloadReader.cs" />
     <Compile Include="PayloadWriter.cs" />
+    <Compile Include="PromiseByteStream.cs" />
     <Compile Include="ValueStringBuilder.cs" />
   </ItemGroup>
 

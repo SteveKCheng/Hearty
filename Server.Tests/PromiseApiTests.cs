@@ -68,11 +68,9 @@ namespace Hearty.Server.Tests
 
             foreach (var (input, promiseId) in itemList)
             {
-                var stream = await client.GetContentAsync(promiseId,
-                                                          contentType: "application/json",
-                                                          timeout: TimeSpan.FromMinutes(5));
-
-                var output = MockPricingOutput.DeserializeFromStream(stream);
+                var output = await client.GetResultAsync(promiseId,
+                                                         PricingOutputReader,
+                                                         timeout: TimeSpan.FromMinutes(5));
 
                 var expected = input.Calculate();
                 Assert.Equal(expected, output);
@@ -93,7 +91,7 @@ namespace Hearty.Server.Tests
                                     input: new("application/json",
                                                stream => JsonSerializer.SerializeAsync(stream, inputs)));
 
-            var responses = await client.GetItemStreamAsync(promiseId,
+            var responses = await client.GetResultStreamAsync(promiseId,
                                                             PricingOutputReader,
                                                             default);
 

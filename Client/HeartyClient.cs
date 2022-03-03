@@ -1,5 +1,6 @@
 ﻿using Hearty.Common;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Primitives;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -261,10 +262,14 @@ namespace Hearty.Client
         }
 
         /// <summary>
-        /// Wait for and obtain the result contained by a remote promise.
+        /// Wait for and obtain the output from a remote promise.
         /// </summary>
         /// <param name="promiseId">The ID of the desired promise on the
-        /// server.
+        /// Hearty server.
+        /// </param>
+        /// <param name="contentTypes">
+        /// A list of IANA media types, with optional quality values,
+        /// that the Hearty server may return.
         /// </param>
         /// <param name="timeout">
         /// Directs this method to stop waiting if the 
@@ -275,31 +280,17 @@ namespace Hearty.Client
         /// Can be triggered to cancel the request.
         /// </param>
         /// <returns>
-        /// Forward-only read-only stream providing the bytes of 
-        /// the desired result.
+        /// The output from the remote promise.
         /// </returns>
-        public async Task<Stream> GetContentAsync(PromiseId promiseId, 
-                                                  string contentType,
-                                                  TimeSpan timeout,
-                                                  CancellationToken cancellation = default)
+        public Task<PromiseByteStream> 
+            GetResultAsync(PromiseId promiseId, 
+                           StringValues contentTypes,
+                           TimeSpan timeout,
+                           bool throwOnException = true,
+                           CancellationToken cancellationToken = default)
         {
-            var url = CreateRequestUrl("jobs/v1/id/", promiseId,
-                                       timeout: (timeout != TimeSpan.Zero) ? timeout : null);
-
-            var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Accept.ParseAdd(ExceptionPayload.JsonMediaType);
-            request.Headers.Accept.ParseAdd(contentType);
-
-            var response = await _httpClient.SendAsync(request, cancellation)
-                                            .ConfigureAwait(false);
-
-            response.EnsureSuccessStatusCode();
-
-            var content = response.Content;
-            if (!VerifyContentType(content, contentType))
-                throw new InvalidDataException("The Content-Type returned in the response is unexpected. ");
-
-            return await content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);
+            var reader = PromiseByteStream.GetPayloadReader(contentTypes, throwOnException);
+            return GetResultAsync(promiseId, reader, timeout, cancellationToken);
         }
 
         /// <summary>
@@ -398,9 +389,9 @@ namespace Hearty.Client
         /// only once as it is not buffered.
         /// </returns>
         public async Task<IAsyncEnumerable<KeyValuePair<int, T>>> 
-            GetItemStreamAsync<T>(PromiseId promiseId,
-                                  PayloadReader<T> reader,
-                                  CancellationToken cancellationToken = default)
+            GetResultStreamAsync<T>(PromiseId promiseId,
+                                    PayloadReader<T> reader,
+                                    CancellationToken cancellationToken = default)
         {
             var url = CreateRequestUrl("jobs/v1/id/", promiseId);
 
