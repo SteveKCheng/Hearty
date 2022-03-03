@@ -129,9 +129,9 @@ namespace Hearty.Server
         public override ContentFormatInfo GetFormatInfo(int format)
             => (Format)format switch
             {
-                Format.Text => new("text/plain", ContentPreference.Fair),
-                Format.Json => new("application/vnd.hearty.exception+json", ContentPreference.Good),
-                Format.MessagePack => new("application/vnd.hearty.exception+msgpack", ContentPreference.Best),
+                Format.Text => new(ServedMediaTypes.TextPlain, ContentPreference.Fair),
+                Format.Json => new(ServedMediaTypes.ExceptionJson, ContentPreference.Good),
+                Format.MessagePack => new(ServedMediaTypes.ExceptionMsgPack, ContentPreference.Best),
                 _ => throw new ArgumentOutOfRangeException(nameof(format))
             };
     }

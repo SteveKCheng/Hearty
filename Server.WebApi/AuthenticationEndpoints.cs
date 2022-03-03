@@ -54,11 +54,11 @@ public static class AuthenticationEndpoints
     /// </summary>
     private static readonly ContentFormatInfo[] _contentFormatInfo = new ContentFormatInfo[]
     {
-        new(mediaType: "application/jwt", ContentPreference.Best),
-        new(mediaType: "application/json", ContentPreference.Good),
-        new(mediaType: "text/plain", ContentPreference.Fair),
-        new(mediaType: "application/xhtml+xml", ContentPreference.Fair),
-        new(mediaType: "application/jwt+json", ContentPreference.Fair)
+        new(mediaType: ServedMediaTypes.JsonWebToken, ContentPreference.Best),
+        new(mediaType: ServedMediaTypes.Json, ContentPreference.Good),
+        new(mediaType: ServedMediaTypes.TextPlain, ContentPreference.Fair),
+        new(mediaType: ServedMediaTypes.XHtml, ContentPreference.Fair),
+        new(mediaType: ServedMediaTypes.JsonWebTokenJson, ContentPreference.Fair)
     };
 
     /// <summary>

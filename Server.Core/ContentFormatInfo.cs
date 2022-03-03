@@ -63,29 +63,10 @@ public readonly partial struct ContentFormatInfo : IComparable<ContentFormatInfo
     /// Constructs an instance with the specified information. 
     /// </summary>
     /// <param name="mediaType">The IANA "media type". 
-    /// This constructor does not check it for validity but
-    /// it should nevertheless be in the correct syntax.
-    /// </param>
-    /// <param name="preference">Indicates preference for this format. </param>
-    /// <param name="canSeek">Indicates if content with this format
-    /// can be partially downloaded. </param>
-    /// <param name="isContainer">Whether <paramref name="mediaType"/> refers
-    /// to the wrapper structure, or the items within. </param>
-    public ContentFormatInfo(string mediaType,
-                             ContentPreference preference,
-                             ContentSeekability canSeek = ContentSeekability.None,
-                             bool isContainer = false)
-        : this(new ParsedContentType(mediaType), preference, canSeek, isContainer)
-    {
-    }
-
-    /// <summary>
-    /// Constructs an instance with the specified information. 
-    /// </summary>
-    /// <param name="mediaType">The IANA "media type". 
     /// <see cref="ParsedContentType.IsValid" /> should be true,
     /// even though that fact is not checked by this constructor
-    /// for performance reasons.
+    /// for performance reasons.  An invalid media type will not
+    /// match during content negoation.
     /// </param>
     /// <param name="preference">Indicates preference for this format. </param>
     /// <param name="canSeek">Indicates if content with this format

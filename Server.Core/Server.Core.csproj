@@ -15,6 +15,7 @@
   <ItemGroup>
     <Compile Include="BasicPromiseStorage.cs" />
     <Compile Include="ClientJobQueue.cs" />
+    <Compile Include="ServedMediaTypes.cs" />
     <Compile Include="ContentFormatInfo.cs" />
     <Compile Include="ContentFormatInfo.Negotiation.cs" />
     <Compile Include="ExpiryQueue.cs" />

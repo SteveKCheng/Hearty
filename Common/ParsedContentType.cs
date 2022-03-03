@@ -20,6 +20,14 @@ namespace Hearty.Common;
 public readonly struct ParsedContentType
 {
     /// <summary>
+    /// Implicitly parses a string into a <see cref="ParsedContentType"/> instance,
+    /// typically used for string literals.
+    /// </summary>
+    /// <param name="mediaType">The <see cref="string"/> with the media type.</param>
+    public static implicit operator ParsedContentType(string mediaType)
+        => new ParsedContentType(mediaType);
+
+    /// <summary>
     /// Initializes a <see cref="ParsedContentType"/> instance.
     /// </summary>
     /// <param name="mediaType">The <see cref="string"/> with the media type.</param>

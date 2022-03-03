@@ -17,9 +17,9 @@ namespace Hearty.Server.Program
         private static ImmutableArray<TranscodedFormatInfo<ReadOnlySequence<byte>>> CreateSpec()
         {
             var builder = ImmutableArray.CreateBuilder<TranscodedFormatInfo<ReadOnlySequence<byte>>>();
-            builder.Add(new(new ContentFormatInfo("application/json", ContentPreference.Best),
+            builder.Add(new(new ContentFormatInfo(ServedMediaTypes.Json, ContentPreference.Best),
                             input => input));
-            builder.Add(new(new ContentFormatInfo("application/msgpack", ContentPreference.Best),
+            builder.Add(new(new ContentFormatInfo(ServedMediaTypes.MsgPack, ContentPreference.Best),
                             ConvertJsonToMessagePack));
             return builder.ToImmutableArray();
         }
