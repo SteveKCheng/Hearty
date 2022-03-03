@@ -69,40 +69,38 @@ internal static class HttpTokenParsingRules
         return TokenChars[character];
     }
 
-    internal static int GetTokenLength(string input, int startIndex)
+    internal static int GetTokenLength(string input, int startIndex, int endIndex)
     {
         Debug.Assert(input != null);
+        endIndex = (endIndex < input.Length) ? endIndex : input.Length;
 
-        if (startIndex >= input.Length)
-        {
+        if (startIndex >= endIndex)
             return 0;
-        }
 
         var current = startIndex;
 
-        while (current < input.Length)
+        while (current < endIndex)
         {
             if (!IsTokenChar(input[current]))
-            {
                 return current - startIndex;
-            }
+
             current++;
         }
-        return input.Length - startIndex;
+
+        return endIndex - startIndex;
     }
 
-    internal static int GetWhitespaceLength(string input, int startIndex)
+    internal static int GetWhitespaceLength(string input, int startIndex, int endIndex)
     {
         Debug.Assert(input != null);
+        endIndex = (endIndex < input.Length) ? endIndex : input.Length;
 
-        if (startIndex >= input.Length)
-        {
+        if (startIndex >= endIndex)
             return 0;
-        }
 
         var current = startIndex;
 
-        while (current < input.Length)
+        while (current < endIndex)
         {
             var c = input[current];
 
@@ -115,7 +113,7 @@ internal static class HttpTokenParsingRules
             if (c == CR)
             {
                 // If we have a #13 char, it must be followed by #10 and then at least one SP or HT.
-                if ((current + 2 < input.Length) && (input[current + 1] == LF))
+                if ((current + 2 < endIndex) && (input[current + 1] == LF))
                 {
                     var spaceOrTab = input[current + 2];
                     if ((spaceOrTab == SP) || (spaceOrTab == Tab))
@@ -130,35 +128,32 @@ internal static class HttpTokenParsingRules
         }
 
         // All characters between startIndex and the end of the string are LWS characters.
-        return input.Length - startIndex;
+        return endIndex - startIndex;
     }
 
-    internal static HttpParseResult GetQuotedStringLength(string input, int startIndex, out int length)
+    internal static HttpParseResult GetQuotedStringLength(string input, int startIndex, int endIndex, out int length)
     {
         var nestedCount = 0;
-        return GetExpressionLength(input, startIndex, '"', '"', false, ref nestedCount, out length);
+        return GetExpressionLength(input, startIndex, endIndex, '"', '"', false, ref nestedCount, out length);
     }
 
     // quoted-pair = "\" CHAR
     // CHAR = <any US-ASCII character (octets 0 - 127)>
-    internal static HttpParseResult GetQuotedPairLength(string input, int startIndex, out int length)
+    private static HttpParseResult GetQuotedPairLength(string input, int startIndex, int endIndex, out int length)
     {
         Debug.Assert(input != null);
-        Debug.Assert((startIndex >= 0) && (startIndex < input.Length));
+        Debug.Assert((startIndex >= 0) && (startIndex < endIndex));
+        endIndex = (endIndex < input.Length) ? endIndex : input.Length;
 
         length = 0;
 
         if (input[startIndex] != '\\')
-        {
             return HttpParseResult.NotParsed;
-        }
 
         // Quoted-char has 2 characters. Check whether there are 2 chars left ('\' + char)
         // If so, check whether the character is in the range 0-127. If not, it's an invalid value.
-        if ((startIndex + 2 > input.Length) || (input[startIndex + 1] > 127))
-        {
+        if ((startIndex + 2 > endIndex) || (input[startIndex + 1] > 127))
             return HttpParseResult.InvalidFormat;
-        }
 
         // We don't care what the char next to '\' is.
         length = 2;
@@ -179,6 +174,7 @@ internal static class HttpTokenParsingRules
     private static HttpParseResult GetExpressionLength(
         string input,
         int startIndex,
+        int endIndex,
         char openChar,
         char closeChar,
         bool supportsNesting,
@@ -186,22 +182,21 @@ internal static class HttpTokenParsingRules
         out int length)
     {
         Debug.Assert(input != null);
-        Debug.Assert((startIndex >= 0) && (startIndex < input.Length));
+        Debug.Assert((startIndex >= 0) && (startIndex < endIndex));
+        endIndex = (endIndex < input.Length) ? endIndex : input.Length;
 
         length = 0;
 
         if (input[startIndex] != openChar)
-        {
             return HttpParseResult.NotParsed;
-        }
 
         var current = startIndex + 1; // Start parsing with the character next to the first open-char
-        while (current < input.Length)
+        while (current < endIndex)
         {
             // Only check whether we have a quoted char, if we have at least 3 characters left to read (i.e.
             // quoted char + closing char). Otherwise the closing char may be considered part of the quoted char.
-            if ((current + 2 < input.Length) &&
-                (GetQuotedPairLength(input, current, out var quotedPairLength) == HttpParseResult.Parsed))
+            if ((current + 2 < endIndex) &&
+                (GetQuotedPairLength(input, current, endIndex, out var quotedPairLength) == HttpParseResult.Parsed))
             {
                 // We ignore invalid quoted-pairs. Invalid quoted-pairs may mean that it looked like a quoted pair,
                 // but we actually have a quoted-string: e.g. "\ü" ('\' followed by a char >127 - quoted-pair only
@@ -225,6 +220,7 @@ internal static class HttpTokenParsingRules
                     var nestedResult = GetExpressionLength(
                         input,
                         current,
+                        endIndex,
                         openChar,
                         closeChar,
                         supportsNesting,

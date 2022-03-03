@@ -51,14 +51,16 @@ public readonly struct ParsedContentType
         _bufferOffset = offset;
         _bufferLength = length;
 
-        var typeLength = GetTypeLength(mediaType, offset, out var type);
+        var typeLength = GetTypeLength(mediaType, offset, offset + length, 
+                                       out var type);
         if (typeLength == 0)
             return;
 
         _typeOffset = type.Offset;
         _typeLength = type.Length;
 
-        var subTypeLength = GetSubtypeLength(mediaType, offset + typeLength, out var subType);
+        var subTypeLength = GetSubtypeLength(mediaType, offset + typeLength, offset + length, 
+                                             out var subType);
         if (subTypeLength == 0)
             return;
 
@@ -97,18 +99,18 @@ public readonly struct ParsedContentType
     // from a previous token, like '/', ';' or '='.
     // Each method consumes the delimiter token if any, the leading whitespace, then the given token
     // itself, and finally the trailing whitespace.
-    private static int GetTypeLength(string input, int offset, out StringSegment type)
+    private static int GetTypeLength(string input, int offset, int end, out StringSegment type)
     {
-        if (offset < 0 || offset >= input.Length)
+        if (offset < 0 || offset >= end)
         {
             type = default(StringSegment);
             return 0;
         }
 
-        var current = offset + HttpTokenParsingRules.GetWhitespaceLength(input, offset);
+        var current = offset + HttpTokenParsingRules.GetWhitespaceLength(input, offset, end);
 
         // Parse the type, i.e. <type> in media type string "<type>/<subtype>; param1=value1; param2=value2"
-        var typeLength = HttpTokenParsingRules.GetTokenLength(input, current);
+        var typeLength = HttpTokenParsingRules.GetTokenLength(input, current, end);
         if (typeLength == 0)
         {
             type = default(StringSegment);
@@ -118,26 +120,26 @@ public readonly struct ParsedContentType
         type = new StringSegment(input, current, typeLength);
 
         current += typeLength;
-        current += HttpTokenParsingRules.GetWhitespaceLength(input, current);
+        current += HttpTokenParsingRules.GetWhitespaceLength(input, current, end);
 
         return current - offset;
     }
 
-    private static int GetSubtypeLength(string input, int offset, out StringSegment subType)
+    private static int GetSubtypeLength(string input, int offset, int end, out StringSegment subType)
     {
         var current = offset;
 
         // Parse the separator between type and subtype
-        if (current < 0 || current >= input.Length || input[current] != '/')
+        if (current < 0 || current >= end || input[current] != '/')
         {
             subType = default(StringSegment);
             return 0;
         }
 
         current++; // skip delimiter.
-        current += HttpTokenParsingRules.GetWhitespaceLength(input, current);
+        current += HttpTokenParsingRules.GetWhitespaceLength(input, current, end);
 
-        var subtypeLength = HttpTokenParsingRules.GetTokenLength(input, current);
+        var subtypeLength = HttpTokenParsingRules.GetTokenLength(input, current, end);
         if (subtypeLength == 0)
         {
             subType = default(StringSegment);
@@ -147,7 +149,7 @@ public readonly struct ParsedContentType
         subType = new StringSegment(input, current, subtypeLength);
 
         current += subtypeLength;
-        current += HttpTokenParsingRules.GetWhitespaceLength(input, current);
+        current += HttpTokenParsingRules.GetWhitespaceLength(input, current, end);
 
         return current - offset;
     }
@@ -331,7 +333,9 @@ public readonly struct ParsedContentType
     }
 
     private MediaTypeParameterParser ParameterParser
-        => new MediaTypeParameterParser(_buffer, _parametersOffset, _bufferLength);
+        => new MediaTypeParameterParser(_buffer, 
+                                        _parametersOffset, 
+                                        _bufferOffset + _bufferLength);
 
     /// <summary>
     /// Determines whether the current <see cref="ParsedContentType"/> is a subset of the <paramref name="set"/>
@@ -540,12 +544,12 @@ public readonly struct ParsedContentType
     private struct MediaTypeParameterParser
     {
         private readonly string _mediaTypeBuffer;
-        private readonly int? _length;
+        private readonly int _end;
 
-        public MediaTypeParameterParser(string mediaTypeBuffer, int offset, int? length)
+        public MediaTypeParameterParser(string mediaTypeBuffer, int offset, int end)
         {
             _mediaTypeBuffer = mediaTypeBuffer;
-            _length = length;
+            _end = end;
             CurrentOffset = offset;
             ParsingFailed = false;
         }
@@ -563,33 +567,33 @@ public readonly struct ParsedContentType
                 return false;
             }
 
-            var parameterLength = GetParameterLength(_mediaTypeBuffer, CurrentOffset, out result);
+            var parameterLength = GetParameterLength(_mediaTypeBuffer, CurrentOffset, _end, out result);
             CurrentOffset += parameterLength;
 
             if (parameterLength == 0)
             {
-                ParsingFailed = _length != null && CurrentOffset < _length;
+                ParsingFailed = (CurrentOffset < _end);
                 return false;
             }
 
             return true;
         }
 
-        private static int GetParameterLength(string input, int startIndex, out MediaTypeParameter parsedValue)
+        private static int GetParameterLength(string input, int startIndex, int endIndex, out MediaTypeParameter parsedValue)
         {
-            if (OffsetIsOutOfRange(startIndex, input.Length) || input[startIndex] != ';')
+            if (OffsetIsOutOfRange(startIndex, endIndex) || input[startIndex] != ';')
             {
                 parsedValue = default(MediaTypeParameter);
                 return 0;
             }
 
-            var nameLength = GetNameLength(input, startIndex, out var name);
+            var nameLength = GetNameLength(input, startIndex, endIndex, out var name);
 
             var current = startIndex + nameLength;
 
-            if (nameLength == 0 || OffsetIsOutOfRange(current, input.Length) || input[current] != '=')
+            if (nameLength == 0 || OffsetIsOutOfRange(current, endIndex) || input[current] != '=')
             {
-                if (current == input.Length && name.Equals("*", StringComparison.OrdinalIgnoreCase))
+                if (current == endIndex && name.Equals("*", StringComparison.OrdinalIgnoreCase))
                 {
                     // As a special case, we allow a trailing ";*" to indicate a wildcard
                     // string allowing any other parameters. It's the same as ";*=*".
@@ -604,7 +608,7 @@ public readonly struct ParsedContentType
                 }
             }
 
-            var valueLength = GetValueLength(input, current, out var value);
+            var valueLength = GetValueLength(input, current, endIndex, out var value);
 
             parsedValue = new MediaTypeParameter(name, value);
             current += valueLength;
@@ -612,14 +616,14 @@ public readonly struct ParsedContentType
             return current - startIndex;
         }
 
-        private static int GetNameLength(string input, int startIndex, out StringSegment name)
+        private static int GetNameLength(string input, int startIndex, int endIndex, out StringSegment name)
         {
             var current = startIndex;
 
             current++; // skip ';'
-            current += HttpTokenParsingRules.GetWhitespaceLength(input, current);
+            current += HttpTokenParsingRules.GetWhitespaceLength(input, current, endIndex);
 
-            var nameLength = HttpTokenParsingRules.GetTokenLength(input, current);
+            var nameLength = HttpTokenParsingRules.GetTokenLength(input, current, endIndex);
             if (nameLength == 0)
             {
                 name = default(StringSegment);
@@ -629,24 +633,24 @@ public readonly struct ParsedContentType
             name = new StringSegment(input, current, nameLength);
 
             current += nameLength;
-            current += HttpTokenParsingRules.GetWhitespaceLength(input, current);
+            current += HttpTokenParsingRules.GetWhitespaceLength(input, current, endIndex);
 
             return current - startIndex;
         }
 
-        private static int GetValueLength(string input, int startIndex, out StringSegment value)
+        private static int GetValueLength(string input, int startIndex, int endIndex, out StringSegment value)
         {
             var current = startIndex;
 
             current++; // skip '='.
-            current += HttpTokenParsingRules.GetWhitespaceLength(input, current);
+            current += HttpTokenParsingRules.GetWhitespaceLength(input, current, endIndex);
 
-            var valueLength = HttpTokenParsingRules.GetTokenLength(input, current);
+            var valueLength = HttpTokenParsingRules.GetTokenLength(input, current, endIndex);
 
             if (valueLength == 0)
             {
                 // A value can either be a token or a quoted string. Check if it is a quoted string.
-                var result = HttpTokenParsingRules.GetQuotedStringLength(input, current, out valueLength);
+                var result = HttpTokenParsingRules.GetQuotedStringLength(input, current, endIndex, out valueLength);
                 if (result != HttpParseResult.Parsed)
                 {
                     // We have an invalid value. Reset the name and return.
@@ -663,7 +667,7 @@ public readonly struct ParsedContentType
             }
 
             current += valueLength;
-            current += HttpTokenParsingRules.GetWhitespaceLength(input, current);
+            current += HttpTokenParsingRules.GetWhitespaceLength(input, current, endIndex);
 
             return current - startIndex;
         }
