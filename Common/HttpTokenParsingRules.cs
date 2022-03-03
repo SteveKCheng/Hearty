@@ -5,7 +5,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Text;
 
 namespace Hearty.Common;
 
@@ -20,9 +19,6 @@ internal static class HttpTokenParsingRules
     internal const char Tab = '\t';
     internal const int MaxInt64Digits = 19;
     internal const int MaxInt32Digits = 10;
-
-    // iso-8859-1, Western European (ISO)
-    internal static readonly Encoding DefaultHttpEncoding = Encoding.GetEncoding(28591);
 
     private static bool[] CreateTokenChars()
     {
