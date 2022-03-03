@@ -1,7 +1,8 @@
-﻿// Adapted from Microsoft.AspNetCore.Routing.ReadOnlyMediaTypeHeaderValue
+﻿// Adapted from Microsoft.AspNetCore.Routing.ReadOnlyMediaTypeHeaderValue,
 // which is an internal type in the Microsoft library.
 
-// The original code is licensed to the .NET Foundation under one or more agreements.
+// The original code is
+// licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System;

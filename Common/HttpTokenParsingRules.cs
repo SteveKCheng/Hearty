@@ -1,16 +1,17 @@
-﻿// Copied from Microsoft.AspNetCore.Routing where the following
+﻿// Adapted from Microsoft.AspNetCore.Routing, where the following
 // types are internal.
 
-// Licensed to the .NET Foundation under one or more agreements.
+// The original code is
+// licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System;
 using System.Diagnostics;
 
 namespace Hearty.Common;
 
 internal static class HttpTokenParsingRules
 {
-    private static readonly bool[] TokenChars = CreateTokenChars();
     private const int MaxNestedCount = 5;
 
     internal const char CR = '\r';
@@ -20,6 +21,14 @@ internal static class HttpTokenParsingRules
     internal const int MaxInt64Digits = 19;
     internal const int MaxInt32Digits = 10;
 
+    private static ReadOnlySpan<byte> TokenCharsBitSet => new byte[]
+    {
+        0x00, 0x00, 0x00, 0x00, 0xFA, 0x6C, 0xFF, 0x03,
+        0xFE, 0xFF, 0xFF, 0xC7, 0xFF, 0xFF, 0xFF, 0x57
+    };
+
+    // Above bit-set is the packed result from the following code
+    /*
     private static bool[] CreateTokenChars()
     {
         // token = 1*<any CHAR except CTLs or separators>
@@ -53,16 +62,16 @@ internal static class HttpTokenParsingRules
 
         return tokenChars;
     }
+    */
 
     internal static bool IsTokenChar(char character)
     {
         // Must be between 'space' (32) and 'DEL' (127)
         if (character > 127)
-        {
             return false;
-        }
 
-        return TokenChars[character];
+        var b = (byte)character;
+        return (TokenCharsBitSet[b >> 3] & ((byte)1 << (b & 7))) != 0;
     }
 
     internal static int GetTokenLength(string input, int startIndex, int endIndex)
