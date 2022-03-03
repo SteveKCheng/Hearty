@@ -43,28 +43,24 @@ public readonly struct ParsedContentType
     /// <param name="mediaType">The <see cref="string"/> with the media type.</param>
     /// <param name="offset">The offset in the <paramref name="mediaType"/> where the parsing starts.</param>
     /// <param name="length">The length of the media type to parse if provided.</param>
-    public ParsedContentType(string mediaType, int offset, int length)
+    private ParsedContentType(string mediaType, int offset, int length)
     {
+        this = default;
+
         _buffer = mediaType;
+        _bufferOffset = offset;
+        _bufferLength = length;
 
         var typeLength = GetTypeLength(mediaType, offset, out var type);
         if (typeLength == 0)
-        {
-            this = default;
-            _buffer = null!;
             return;
-        }
 
         _typeOffset = type.Offset;
         _typeLength = type.Length;
 
         var subTypeLength = GetSubtypeLength(mediaType, offset + typeLength, out var subType);
         if (subTypeLength == 0)
-        {
-            this = default;
-            _buffer = null!;
             return;
-        }
 
         _subTypeOffset = subType.Offset;
         _subTypeLength = subType.Length;
@@ -72,7 +68,6 @@ public readonly struct ParsedContentType
         TryGetSuffixLength(subType, out _subTypeSuffixLength);
 
         _parametersOffset = offset + typeLength + subTypeLength;
-        _bufferLength = length;
     }
 
     /// <summary>
@@ -180,6 +175,17 @@ public readonly struct ParsedContentType
     private readonly string _buffer;
 
     /// <summary>
+    /// The offset within <see cref="_buffer" /> that is considered part 
+    /// of the input.
+    /// </summary>
+    private readonly int _bufferOffset;
+
+    /// <summary>
+    /// The length of the entire input string (segment).
+    /// </summary>
+    private readonly int _bufferLength;
+
+    /// <summary>
     /// The offset within <see cref="_buffer" /> for the first
     /// character of the major type identifier, excluding whitespace.
     /// </summary>
@@ -210,15 +216,23 @@ public readonly struct ParsedContentType
     private readonly int _subTypeSuffixLength;
 
     /// <summary>
-    /// The length of the entire input string (segment).
-    /// </summary>
-    private readonly int _bufferLength;
-
-    /// <summary>
     /// The offset within <see cref="_buffer" /> where
     /// parameters might start.
     /// </summary>
     private readonly int _parametersOffset;
+
+    /// <inheritdoc cref="object.ToString" />
+    public override string ToString()
+    {
+        if (string.IsNullOrEmpty(_buffer))
+            return "(invalid media type)";
+
+        // Avoid unncessary allocation of sub-string
+        if (_bufferLength == _buffer.Length)
+            return _buffer;
+
+        return _buffer.Substring(_bufferOffset, _bufferLength);
+    }
 
     /// <summary>
     /// Gets the type of the <see cref="ParsedContentType"/>.
