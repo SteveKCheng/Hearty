@@ -158,19 +158,17 @@ public readonly struct ParsedContentType
 
     private static bool TryGetSuffixLength(StringSegment subType, out int suffixLength)
     {
-        // Find the last instance of '+', if there is one
-        var startPos = subType.Offset + subType.Length - 1;
-        for (var currentPos = startPos; currentPos >= subType.Offset; currentPos--)
+        int index = subType.LastIndexOf('+');
+        if (index >= 0)
         {
-            if (subType.Buffer![currentPos] == '+')
-            {
-                suffixLength = startPos - currentPos + 1;
-                return true; 
-            }
+            suffixLength = subType.Length - index;
+            return true;
         }
-
-        suffixLength = 0;
-        return false;
+        else
+        {
+            suffixLength = 0;
+            return false;
+        }
     }
 
     /// <summary>
