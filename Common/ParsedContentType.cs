@@ -24,7 +24,7 @@ public readonly struct ParsedContentType
     /// </summary>
     /// <param name="mediaType">The <see cref="string"/> with the media type.</param>
     public ParsedContentType(string mediaType)
-        : this(mediaType, 0, mediaType.Length)
+        : this(new StringSegment(mediaType))
     {
     }
 
@@ -33,25 +33,19 @@ public readonly struct ParsedContentType
     /// </summary>
     /// <param name="mediaType">The <see cref="StringSegment"/> with the media type.</param>
     public ParsedContentType(StringSegment mediaType)
-        : this(mediaType.Buffer ?? string.Empty, mediaType.Offset, mediaType.Length)
-    {
-    }
-
-    /// <summary>
-    /// Initializes a <see cref="ParsedContentType"/> instance.
-    /// </summary>
-    /// <param name="mediaType">The <see cref="string"/> with the media type.</param>
-    /// <param name="offset">The offset in the <paramref name="mediaType"/> where the parsing starts.</param>
-    /// <param name="length">The length of the media type to parse if provided.</param>
-    private ParsedContentType(string mediaType, int offset, int length)
     {
         this = default;
 
-        _buffer = mediaType;
-        _bufferOffset = offset;
-        _bufferLength = length;
+        if (!mediaType.HasValue)
+            mediaType = StringSegment.Empty;
 
-        var typeLength = GetTypeLength(mediaType, offset, offset + length, 
+        string buffer = mediaType.Buffer;
+        int offset = mediaType.Offset;
+        int end = offset + mediaType.Length;
+
+        Input = mediaType;
+
+        var typeLength = GetTypeLength(buffer, offset, end,
                                        out var type);
         if (typeLength == 0)
             return;
@@ -59,7 +53,7 @@ public readonly struct ParsedContentType
         _typeOffset = type.Offset;
         _typeLength = type.Length;
 
-        var subTypeLength = GetSubtypeLength(mediaType, offset + typeLength, offset + length, 
+        var subTypeLength = GetSubtypeLength(buffer, offset + typeLength, end,
                                              out var subType);
         if (subTypeLength == 0)
             return;
@@ -172,23 +166,7 @@ public readonly struct ParsedContentType
     }
 
     /// <summary>
-    /// The string that the media type is being parsed from.
-    /// </summary>
-    private readonly string _buffer;
-
-    /// <summary>
-    /// The offset within <see cref="_buffer" /> that is considered part 
-    /// of the input.
-    /// </summary>
-    private readonly int _bufferOffset;
-
-    /// <summary>
-    /// The length of the entire input string (segment).
-    /// </summary>
-    private readonly int _bufferLength;
-
-    /// <summary>
-    /// The offset within <see cref="_buffer" /> for the first
+    /// The offset within the buffer of <see cref="Input" /> for the first
     /// character of the major type identifier, excluding whitespace.
     /// </summary>
     private readonly int _typeOffset;
@@ -200,7 +178,7 @@ public readonly struct ParsedContentType
     private readonly int _typeLength;
 
     /// <summary>
-    /// The offset within <see cref="_buffer" /> for the first
+    /// The offset within the buffer of <see cref="Input" /> for the first
     /// character of the sub-type identifier, excluding whitespace.
     /// </summary>
     private readonly int _subTypeOffset;
@@ -218,23 +196,19 @@ public readonly struct ParsedContentType
     private readonly int _subTypeSuffixLength;
 
     /// <summary>
-    /// The offset within <see cref="_buffer" /> where
+    /// The offset within the buffer of <see cref="Input" /> where
     /// parameters might start.
     /// </summary>
     private readonly int _parametersOffset;
 
     /// <inheritdoc cref="object.ToString" />
-    public override string ToString()
-    {
-        if (string.IsNullOrEmpty(_buffer))
-            return "(invalid media type)";
+    public override string ToString() => Input.ToString();
 
-        // Avoid unncessary allocation of sub-string
-        if (_bufferLength == _buffer.Length)
-            return _buffer;
-
-        return _buffer.Substring(_bufferOffset, _bufferLength);
-    }
+    /// <summary>
+    /// The original input string for the media type
+    /// that had been passed to the constructor.
+    /// </summary>
+    public StringSegment Input { get; }
 
     /// <summary>
     /// Gets the type of the <see cref="ParsedContentType"/>.
@@ -242,7 +216,7 @@ public readonly struct ParsedContentType
     /// <example>
     /// For the media type <c>"application/json"</c>, this property gives the value <c>"application"</c>.
     /// </example>
-    public StringSegment Type => new StringSegment(_buffer, _typeOffset, _typeLength);
+    public StringSegment Type => new StringSegment(Input.Buffer, _typeOffset, _typeLength);
 
     /// <summary>
     /// Gets whether this <see cref="ParsedContentType"/> matches all types.
@@ -256,7 +230,7 @@ public readonly struct ParsedContentType
     /// For the media type <c>"application/vnd.example+json"</c>, this property gives the value
     /// <c>"vnd.example+json"</c>.
     /// </example>
-    public StringSegment SubType => new StringSegment(_buffer, _subTypeOffset, _subTypeLength);
+    public StringSegment SubType => new StringSegment(Input.Buffer, _subTypeOffset, _subTypeLength);
 
     /// <summary>
     /// Gets the subtype of the <see cref="ParsedContentType"/>, excluding any structured syntax suffix.
@@ -266,7 +240,7 @@ public readonly struct ParsedContentType
     /// <c>"vnd.example"</c>.
     /// </example>
     public StringSegment SubTypeWithoutSuffix
-        => new StringSegment(_buffer,
+        => new StringSegment(Input.Buffer,
                              _subTypeOffset,
                              _subTypeLength - _subTypeSuffixLength);
 
@@ -279,10 +253,15 @@ public readonly struct ParsedContentType
     /// </example>
     public StringSegment SubTypeSuffix
         => _subTypeSuffixLength > 0
-            ? new StringSegment(_buffer,
+            ? new StringSegment(Input.Buffer,
                                 _subTypeOffset + _subTypeLength - (_subTypeSuffixLength - 1),
                                 _subTypeSuffixLength - 1)
             : new StringSegment();
+
+    private MediaTypeParameterParser ParameterParser
+        => new MediaTypeParameterParser(Input.Buffer,
+                                        _parametersOffset,
+                                        Input.Offset + Input.Length);
 
     /// <summary>
     /// Gets whether this <see cref="ParsedContentType"/> matches all subtypes.
@@ -331,11 +310,6 @@ public readonly struct ParsedContentType
                 GetParameter("*").Equals("*", StringComparison.OrdinalIgnoreCase);
         }
     }
-
-    private MediaTypeParameterParser ParameterParser
-        => new MediaTypeParameterParser(_buffer, 
-                                        _parametersOffset, 
-                                        _bufferOffset + _bufferLength);
 
     /// <summary>
     /// Determines whether the current <see cref="ParsedContentType"/> is a subset of the <paramref name="set"/>
