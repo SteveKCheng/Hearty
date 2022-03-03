@@ -52,4 +52,9 @@ public static class ServedMediaTypes
     /// JSON Web Token wrapped in a JSON container.
     /// </summary>
     public static readonly ParsedContentType JsonWebTokenJson = "application/jwt+json";
+
+    /// <summary>
+    /// Opaque byte stream.
+    /// </summary>
+    public static readonly ParsedContentType OctetStream = "application/octet-stream";
 }

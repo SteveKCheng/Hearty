@@ -1,11 +1,11 @@
-﻿using Hearty.Utilities;
-using System;
+﻿using System;
 using System.Buffers;
-using System.Collections.Generic;
 using System.IO;
 using System.IO.Pipelines;
 using System.Threading;
 using System.Threading.Tasks;
+using Hearty.Common;
+using Hearty.Utilities;
 
 namespace Hearty.Server
 {
@@ -19,7 +19,7 @@ namespace Hearty.Server
         /// Content (media) type describing the data format of <see cref="Body"/>,
         /// specified in the same way as HTTP and MIME.
         /// </summary>
-        private readonly string _contentType;
+        private readonly ParsedContentType _contentType;
 
         /// <inheritdoc />
         public override bool IsFailure { get; }
@@ -33,13 +33,19 @@ namespace Hearty.Server
         /// Provide a sequence of bytes in memory, 
         /// labelled with a fixed content type.
         /// </summary>
-        /// <param name="contentType"><see cref="SuggestedContentType"/>. </param>
+        /// <param name="contentType">IANA media/content type for the body.
+        /// If this type is invalid (has incorrect syntax), it is silently
+        /// replaced by <see cref="ServedMediaTypes.OctetStream" />.
+        /// </param>
         /// <param name="body">Sequence of bytes, possibly in multiple buffers chained together. </param>
         /// <param name="isFailure">Whether this payload encapsulates a failure condition,
         /// as defined by <see cref="PromiseData.IsFailure" />.
         /// </param>
-        public Payload(string contentType, in ReadOnlySequence<byte> body, bool isFailure = false)
+        public Payload(ParsedContentType contentType, in ReadOnlySequence<byte> body, bool isFailure = false)
         {
+            if (!contentType.IsValid)
+                contentType = ServedMediaTypes.OctetStream;
+
             _contentType = contentType;
             Body = body;
             IsFailure = isFailure;
@@ -49,12 +55,15 @@ namespace Hearty.Server
         /// Provide a sequence of bytes in one contiguous memory buffer, 
         /// labelled with a fixed content type.
         /// </summary>
-        /// <param name="contentType"><see cref="SuggestedContentType"/>. </param>
+        /// <param name="contentType">IANA media/content type for the body.
+        /// If this type is invalid (has incorrect syntax), it is silently
+        /// replaced by <see cref="ServedMediaTypes.OctetStream" />.
+        /// </param>
         /// <param name="body">Sequence of bytes in one contiguous member buffer. </param>
         /// <param name="isFailure">Whether this payload encapsulates a failure condition,
         /// as defined by <see cref="PromiseData.IsFailure" />.
         /// </param>
-        public Payload(string contentType, in ReadOnlyMemory<byte> body, bool isFailure = false)
+        public Payload(ParsedContentType contentType, in ReadOnlyMemory<byte> body, bool isFailure = false)
             : this(contentType, new ReadOnlySequence<byte>(body), isFailure)
         {
         }
