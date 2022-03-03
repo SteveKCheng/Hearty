@@ -441,8 +441,8 @@ namespace Hearty.Server
         {
             return format switch
             {
-                0 => new("text/plain", isContainer: true, ContentPreference.Fair),
-                1 => new("multipart/parallel; boundary=#", isContainer: true, ContentPreference.Good),
+                0 => new("text/plain", ContentPreference.Fair, isContainer: true),
+                1 => new("multipart/parallel; boundary=#", ContentPreference.Good, isContainer: true),
                 _ => throw new ArgumentOutOfRangeException(nameof(format))
             };
         }

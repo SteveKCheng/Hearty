@@ -54,34 +54,20 @@ public readonly partial struct ContentFormatInfo : IComparable<ContentFormatInfo
     /// Constructs an instance with the specified information. 
     /// </summary>
     /// <param name="mediaType">The IANA "media type". </param>
-    /// <param name="isContainer">Whether <paramref name="mediaType"/> refers
-    /// to the wrapper structure, or the items within. </param>
     /// <param name="preference">Indicates preference for this format. </param>
     /// <param name="canSeek">Indicates if content with this format
     /// can be partially downloaded. </param>
+    /// <param name="isContainer">Whether <paramref name="mediaType"/> refers
+    /// to the wrapper structure, or the items within. </param>
     public ContentFormatInfo(string mediaType, 
-                             bool isContainer,
                              ContentPreference preference,
-                             ContentSeekability canSeek = ContentSeekability.None)
+                             ContentSeekability canSeek = ContentSeekability.None,
+                             bool isContainer = false)
     {
         MediaType = mediaType;
         _flags = (isContainer ? 1u : 0) |
                  ((uint)preference & 0x3) << 1 |
                  ((uint)canSeek & 0x3) << 3;
-    }
-
-    /// <summary>
-    /// Constructs an instance describing a format that is not a container.
-    /// </summary>
-    /// <param name="mediaType">The IANA "media type". </param>
-    /// <param name="preference">Indicates preference for this format. </param>
-    /// <param name="canSeek">Indicates if content with this format
-    /// can be partially downloaded. </param>
-    public ContentFormatInfo(string mediaType,
-                             ContentPreference preference,
-                             ContentSeekability canSeek = ContentSeekability.None)
-        : this(mediaType, false, preference, canSeek)
-    {
     }
 
     /// <summary>
