@@ -69,6 +69,46 @@ namespace Hearty.Common
         }
 
         /// <summary>
+        /// Read a named HTTP header, assuming it can only have
+        /// exactly one value.
+        /// </summary>
+        /// <param name="headers">
+        /// The collection of HTTP headers, typically in a response
+        /// from <see cref="HttpClient" />.
+        /// </param>
+        /// <param name="name">
+        /// The name of the HTTP header.
+        /// </param>
+        /// <returns>
+        /// The single value for the HTTP header.
+        /// </returns>
+        public static string GetSingleValue(this HttpHeaders headers, string name)
+        {
+            if (headers.TryGetValues(name, out var values))
+            {
+                if (values is string[] array && array.Length == 1)
+                    return array[0];
+
+                string? value = null;
+                foreach (var item in values)
+                {
+                    if (value is not null)
+                    {
+                        value = null;
+                        break;
+                    }
+
+                    value = item;
+                }
+
+                if (value is not null)
+                    return value;
+            }
+
+            throw new InvalidDataException($"The HTTP response does not have a single value for the header '{name}' as expected. ");
+        }
+
+        /// <summary>
         /// Check that a content type is "multipart/parallel",
         /// and extract its boundary parameter.
         /// </summary>

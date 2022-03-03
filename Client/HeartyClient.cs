@@ -302,6 +302,64 @@ namespace Hearty.Client
             return await content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Wait for and obtain the result contained by a remote promise.
+        /// </summary>
+        /// <param name="promiseId">The ID of the desired promise on the
+        /// server.
+        /// </param>
+        /// <param name="reader">
+        /// Translates the payload of each item into the desired
+        /// object of type <typeparamref name="T" />.
+        /// </param>
+        /// <param name="timeout">
+        /// Directs this method to stop waiting if the 
+        /// the server does not make the result available by this
+        /// time interval.
+        /// </param>
+        /// <param name="cancellation">
+        /// Can be triggered to cancel the request.
+        /// </param>
+        /// <returns>
+        /// Forward-only read-only stream providing the bytes of 
+        /// the desired result.
+        /// </returns>
+        /// <typeparam name="T">
+        /// The type of object the payload will be de-serialized to.
+        /// </typeparam>
+        public async Task<T> GetResultAsync<T>(PromiseId promiseId,
+                                               PayloadReader<T> reader,
+                                               TimeSpan timeout,
+                                               CancellationToken cancellationToken = default)
+        {
+            var url = CreateRequestUrl("jobs/v1/id/", promiseId,
+                                       timeout: (timeout != TimeSpan.Zero) ? timeout : null);
+
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            reader.AddAcceptHeaders(request.Headers);
+
+            var response = await _httpClient.SendAsync(request, 
+                                                       HttpCompletionOption.ResponseHeadersRead, 
+                                                       cancellationToken)
+                                            .ConfigureAwait(false);
+
+            response.EnsureSuccessStatusCode();
+
+            var content = response.Content;
+            var contentType = new ParsedContentType(content.Headers.GetSingleValue(HeaderNames.ContentType));
+            var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+
+            try
+            {
+                return await reader.ReadFromStreamAsync(promiseId, contentType, stream, cancellationToken);
+            }
+            finally
+            {
+                if (!reader.OwnsStream)
+                    stream.Dispose();
+            }
+        }
+
         private const string MultipartParallelMediaType = "multipart/parallel";
 
         internal static void VerifyContentTypeSyntax(string contentType)
