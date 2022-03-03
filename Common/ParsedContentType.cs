@@ -386,27 +386,6 @@ public readonly struct ParsedContentType
         return !parametersParser.ParsingFailed;
     }
 
-    /// <summary>
-    /// Get an encoding for a mediaType.
-    /// </summary>
-    /// <param name="mediaType">The mediaType.</param>
-    /// <returns>The encoding.</returns>
-    public static Encoding? GetEncoding(string mediaType)
-    {
-        return GetEncoding(new StringSegment(mediaType));
-    }
-
-    /// <summary>
-    /// Get an encoding for a mediaType.
-    /// </summary>
-    /// <param name="mediaType">The mediaType.</param>
-    /// <returns>The encoding.</returns>
-    public static Encoding? GetEncoding(StringSegment mediaType)
-    {
-        var parsedMediaType = new ParsedContentType(mediaType);
-        return parsedMediaType.Encoding;
-    }
-
     private static Encoding? GetEncodingFromCharset(StringSegment charset)
     {
         if (charset.Equals("utf-8", StringComparison.OrdinalIgnoreCase))
