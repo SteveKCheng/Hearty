@@ -265,6 +265,12 @@ public readonly struct ParsedContentType
                                 _subTypeSuffixLength - 1)
             : new StringSegment();
 
+    /// <summary>
+    /// Whether there is a suffix on the sub-type, i.e.
+    /// <see cref="SubTypeSuffix" /> has a value.
+    /// </summary>
+    public bool HasSubTypeSuffix => _subTypeSuffixLength > 0;
+
     private MediaTypeParameterParser ParameterParser
         => new MediaTypeParameterParser(Input.Buffer,
                                         _parametersOffset,
@@ -428,9 +434,9 @@ public readonly struct ParsedContentType
             return true;
         }
 
-        if (set.SubTypeSuffix.HasValue)
+        if (set.HasSubTypeSuffix)
         {
-            if (SubTypeSuffix.HasValue)
+            if (HasSubTypeSuffix)
             {
                 // Both the set and the media type being checked have suffixes, so both parts must match.
                 return MatchesSubtypeWithoutSuffix(set) && MatchesSubtypeSuffix(set);
