@@ -1,7 +1,7 @@
-﻿// Copied from Microsoft.AspNetCore.Routing.ReadOnlyMediaTypeHeaderValue
+﻿// Adapted from Microsoft.AspNetCore.Routing.ReadOnlyMediaTypeHeaderValue
 // which is an internal type in the Microsoft library.
 
-// Licensed to the .NET Foundation under one or more agreements.
+// The original code is licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System;
@@ -47,43 +47,35 @@ public readonly struct ParsedContentType
     {
         ParameterParser = default(MediaTypeParameterParser);
 
+        _buffer = mediaType;
+
         var typeLength = GetTypeLength(mediaType, offset, out var type);
         if (typeLength == 0)
         {
-            Type = new StringSegment();
-            SubType = new StringSegment();
-            SubTypeWithoutSuffix = new StringSegment();
-            SubTypeSuffix = new StringSegment();
+            _typeOffset = offset;
+            _typeLength = 0;
+            _subTypeOffset = offset;
+            _subTypeLength = 0;
+            _subTypeSuffixLength = 0;
             return;
         }
-        else
-        {
-            Type = type;
-        }
+
+        _typeOffset = type.Offset;
+        _typeLength = type.Length;
 
         var subTypeLength = GetSubtypeLength(mediaType, offset + typeLength, out var subType);
         if (subTypeLength == 0)
         {
-            SubType = new StringSegment();
-            SubTypeWithoutSuffix = new StringSegment();
-            SubTypeSuffix = new StringSegment();
+            _subTypeOffset = _typeOffset;
+            _subTypeLength = 0;
+            _subTypeSuffixLength = 0;
             return;
         }
-        else
-        {
-            SubType = subType;
 
-            if (TryGetSuffixLength(subType, out var subtypeSuffixLength))
-            {
-                SubTypeWithoutSuffix = subType.Subsegment(0, subType.Length - subtypeSuffixLength - 1);
-                SubTypeSuffix = subType.Subsegment(subType.Length - subtypeSuffixLength, subtypeSuffixLength);
-            }
-            else
-            {
-                SubTypeWithoutSuffix = SubType;
-                SubTypeSuffix = new StringSegment();
-            }
-        }
+        _subTypeOffset = subType.Offset;
+        _subTypeLength = subType.Length;
+
+        TryGetSuffixLength(subType, out _subTypeSuffixLength);
 
         ParameterParser = new MediaTypeParameterParser(mediaType, offset + typeLength + subTypeLength, length);
     }
@@ -97,8 +89,7 @@ public readonly struct ParsedContentType
     /// in a valid syntax.  Use <see cref="IsValid" />
     /// to check the parameters also.
     /// </remarks>
-    public bool HasValidType =>
-        Type.HasValue && SubTypeWithoutSuffix.HasValue;
+    public bool HasValidType => _typeLength > 0 && _subTypeLength > 0;
 
     /// <summary>
     /// Whether all the parameters can be successfully parsed.
@@ -179,8 +170,8 @@ public readonly struct ParsedContentType
         {
             if (subType.Buffer![currentPos] == '+')
             {
-                suffixLength = startPos - currentPos;
-                return true;
+                suffixLength = startPos - currentPos + 1;
+                return true; 
             }
         }
 
@@ -189,12 +180,47 @@ public readonly struct ParsedContentType
     }
 
     /// <summary>
+    /// The string that the media type is being parsed from.
+    /// </summary>
+    private readonly string _buffer;
+
+    /// <summary>
+    /// The offset within <see cref="_buffer" /> for the first
+    /// character of the major type identifier, excluding whitespace.
+    /// </summary>
+    private readonly int _typeOffset;
+
+    /// <summary>
+    /// The length in characters for the major type identifier, 
+    /// excluding whitespace at the end.
+    /// </summary>
+    private readonly int _typeLength;
+
+    /// <summary>
+    /// The offset within <see cref="_buffer" /> for the first
+    /// character of the sub-type identifier, excluding whitespace.
+    /// </summary>
+    private readonly int _subTypeOffset;
+
+    /// <summary>
+    /// The length in characters for the sub-type identifier, 
+    /// excluding whitespace at the end.
+    /// </summary>
+    private readonly int _subTypeLength;
+
+    /// <summary>
+    /// The length of the suffix in the sub-type string, 
+    /// including the separator '+', or zero if there is no suffix.
+    /// </summary>
+    private readonly int _subTypeSuffixLength;
+
+    /// <summary>
     /// Gets the type of the <see cref="ParsedContentType"/>.
     /// </summary>
     /// <example>
     /// For the media type <c>"application/json"</c>, this property gives the value <c>"application"</c>.
     /// </example>
-    public StringSegment Type { get; }
+    public StringSegment Type => new StringSegment(_buffer, _typeOffset, _typeLength);
 
     /// <summary>
     /// Gets whether this <see cref="ParsedContentType"/> matches all types.
@@ -208,7 +234,7 @@ public readonly struct ParsedContentType
     /// For the media type <c>"application/vnd.example+json"</c>, this property gives the value
     /// <c>"vnd.example+json"</c>.
     /// </example>
-    public StringSegment SubType { get; }
+    public StringSegment SubType => new StringSegment(_buffer, _subTypeOffset, _subTypeLength);
 
     /// <summary>
     /// Gets the subtype of the <see cref="ParsedContentType"/>, excluding any structured syntax suffix.
@@ -217,7 +243,10 @@ public readonly struct ParsedContentType
     /// For the media type <c>"application/vnd.example+json"</c>, this property gives the value
     /// <c>"vnd.example"</c>.
     /// </example>
-    public StringSegment SubTypeWithoutSuffix { get; }
+    public StringSegment SubTypeWithoutSuffix
+        => new StringSegment(_buffer,
+                             _subTypeOffset,
+                             _subTypeLength - _subTypeSuffixLength);
 
     /// <summary>
     /// Gets the structured syntax suffix of the <see cref="ParsedContentType"/> if it has one.
@@ -226,7 +255,12 @@ public readonly struct ParsedContentType
     /// For the media type <c>"application/vnd.example+json"</c>, this property gives the value
     /// <c>"json"</c>.
     /// </example>
-    public StringSegment SubTypeSuffix { get; }
+    public StringSegment SubTypeSuffix
+        => _subTypeSuffixLength > 0
+            ? new StringSegment(_buffer,
+                                _subTypeOffset + _subTypeLength - (_subTypeSuffixLength - 1),
+                                _subTypeSuffixLength - 1)
+            : new StringSegment();
 
     /// <summary>
     /// Gets whether this <see cref="ParsedContentType"/> matches all subtypes.
