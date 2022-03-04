@@ -390,7 +390,7 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
         {
             // When this producers finishes successfully without
             // job cancellation, complete resultBuilder.
-            resultBuilder.TryComplete(count, exception);
+            resultBuilder.TryComplete(count, exception, jobCancelToken);
             _ = FinishAsync();
         }
     }

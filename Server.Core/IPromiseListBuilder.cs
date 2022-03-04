@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Hearty.Server
@@ -49,6 +50,17 @@ namespace Hearty.Server
         /// The number of items that should have been produced so far.
         /// This argument is passed in purely to check for errors.
         /// </param>
+        /// <param name="exception">
+        /// An error condition to associate with the termination
+        /// of the list of promises, if any.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// A cancellation token to observe (asynchronously) before 
+        /// the promise list is actually terminated.  If it is
+        /// cancelled before then, and <paramref name="exception" />
+        /// is not null, then <see cref="OperationCanceledException" />
+        /// with this token will be set as the termination exception.
+        /// </param>
         /// <exception cref="InvalidOperationException">
         /// <paramref name="count" /> does not match the
         /// number of unique indices whose corresponding values
@@ -57,7 +69,9 @@ namespace Hearty.Server
         /// <returns>
         /// True if the current producer is the first to terminate.
         /// </returns>
-        bool TryComplete(int count, Exception? exception = null);
+        bool TryComplete(int count,
+                         Exception? exception = null,
+                         CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Whether the list has been conclusively terminated

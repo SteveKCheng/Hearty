@@ -141,7 +141,14 @@ public partial class PromiseList
     /// </summary>
     private sealed class MultiPartImpl : OutputImpl
     {
-        public static readonly MultiPartImpl Instance = new();
+        public static readonly MultiPartImpl Instance = new(ignoreCancelledResults: true);
+
+        private readonly bool _ignoreCancelledResults;
+
+        public MultiPartImpl(bool ignoreCancelledResults)
+        {
+            _ignoreCancelledResults = ignoreCancelledResults;
+        }
 
         public override async ValueTask<int> WriteEndAsync(PromiseList self,
                                                            PipeWriter writer,
@@ -217,8 +224,6 @@ public partial class PromiseList
                                                             PromiseId promiseId, 
                                                             CancellationToken cancellationToken)
         {
-            WriteBoundary(writer, isEnd: false);
-
             var promise = self._promiseStorage.GetPromiseById(promiseId);
             if (promise is null)
                 throw new InvalidOperationException($"Promise with ID {promiseId} does not exist even though it has been put as part of the results. ");
@@ -227,6 +232,18 @@ public partial class PromiseList
                                                       null, cancellationToken)
                                       .ConfigureAwait(false);
             var output = result.NormalOutput;
+
+            if (_ignoreCancelledResults &&
+                output is PromiseExceptionalData exceptionalOutput &&
+                exceptionalOutput.IsCancellation &&
+                self.IsCancellation)
+            {
+                // Do not write outputs from promises that occur at the
+                // end due to cancellation.
+                return 0;
+            }
+
+            WriteBoundary(writer, isEnd: false);
 
             // RFC 2046 says that Content-Transfer-Encoding is "7bit" by default!
             // However, HTTP clients have to be prepared to receive and send

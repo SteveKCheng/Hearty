@@ -66,7 +66,9 @@ namespace Hearty.Server
         ValueTask IPromiseListBuilder.WaitForAllPromisesAsync() 
             => new ValueTask(_promiseIds.Completion);
 
-        bool IPromiseListBuilder.TryComplete(int count, Exception? exception)
+        bool IPromiseListBuilder.TryComplete(int count, 
+                                             Exception? exception,
+                                             CancellationToken cancellationToken)
         {
             var outstandingPromises = _outstandingPromises;
             if (outstandingPromises is null)
@@ -85,6 +87,7 @@ namespace Hearty.Server
 
                 _promiseIdTotal = count;
                 _completionException = exception;
+                _completionCancellation = cancellationToken;
 
                 FinishUpWhenAllPromisesCompleted();
             }
@@ -191,6 +194,16 @@ namespace Hearty.Server
 
             if (c + t == total)
             {
+                if (t > 0 &&
+                    _completionException is null &&
+                    _completionCancellation.IsCancellationRequested)
+                {
+                    _completionException = new OperationCanceledException(_completionCancellation);
+                }
+
+                // Do not hold onto the cancellation token
+                _completionCancellation = default;
+
                 // Publish all transient promises at the end
                 if (t > 0)
                 {
@@ -260,6 +273,12 @@ namespace Hearty.Server
         /// </summary>
         private Exception? _completionException;
 
+        /// <summary>
+        /// Saved cancellation from <see cref="IPromiseListBuilder.TryComplete" />
+        /// to check when this promise list is really complete.
+        /// </summary>
+        private CancellationToken _completionCancellation;
+
         #endregion
 
         private readonly PromiseStorage _promiseStorage;
@@ -281,6 +300,13 @@ namespace Hearty.Server
 
         /// <inheritdoc />
         public override bool IsFailure => _promiseIds.Exception is not null;
+
+        /// <summary>
+        /// Whether generation of the promise list was stopped
+        /// by cancellation.
+        /// </summary>
+        private bool IsCancellation
+            => _promiseIds.Exception is OperationCanceledException e;
 
         /// <inheritdoc />
         public override bool IsTransient

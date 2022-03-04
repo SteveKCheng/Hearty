@@ -49,7 +49,12 @@ namespace Hearty.Server
         /// </summary>
         public override bool IsFailure => true;
 
-        public override bool IsTransient => _payload.Cancelling;
+        public override bool IsTransient => IsCancellation;
+
+        /// <summary>
+        /// Whether the exception is from cancelling an operation.
+        /// </summary>
+        public bool IsCancellation => _payload.Cancelling;
 
         private enum Format
         {
