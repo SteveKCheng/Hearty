@@ -99,7 +99,7 @@ namespace Hearty.Server.Program
             services.AddSingleton<JobQueueOwnerRetriever>((ClaimsPrincipal? principal, string? id) =>
             {
                 var name = principal?.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anonymous";
-                return new ValueTask<IJobQueueOwner?>(new JobQueueOwner(name, principal));
+                return new ValueTask<string>(name);
             });
 
             var authBuilder = services.AddAuthentication(
@@ -167,11 +167,7 @@ namespace Hearty.Server.Program
                     policy.RequireAuthenticatedUser();
                 });
             });
-
         }
-
-        internal static readonly IJobQueueOwner _dummyQueueOwner =
-            new JobQueueOwner("testClient");
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

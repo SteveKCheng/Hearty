@@ -3,25 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Hearty.Common;
 
 namespace Hearty.Server;
-
-/// <summary>
-/// A unique identifier for a job queue 
-/// <see cref="IJobQueueSystem" />.
-/// </summary>
-/// <param name="Owner">Representation of the owner of the queue. </param>
-/// <param name="Priority">
-/// The priority class, numbered from 0 to 
-/// <see cref="IJobQueueSystem.PriorityClassesCount" /> minus one.
-/// </param>
-/// <param name="Name">
-/// The name of the queue within the set of queues with the
-/// same owner and priority class.
-/// </param>
-public record struct JobQueueKey(IJobQueueOwner Owner, 
-                                 int Priority,
-                                 string Name);
 
 /// <summary>
 /// Provides access to the job queues for all clients.
@@ -71,7 +55,7 @@ public interface IJobQueueSystem
     /// <summary>
     /// List out the queues for one priority class and queue owner.
     /// </summary>
-    /// <param name="owner">Representation of the owner of the queue. </param>
+    /// <param name="owner">Identifies the owner of the queue. </param>
     /// <param name="priority">
     /// The priority class, numbered from 0 to 
     /// <see cref="IJobQueueSystem.PriorityClassesCount" /> minus one.
@@ -80,7 +64,7 @@ public interface IJobQueueSystem
     /// Snapshot of the list of queues.
     /// </returns>
     IReadOnlyList<KeyValuePair<string, ClientJobQueue>> 
-        GetClientQueues(IJobQueueOwner owner, int priority);
+        GetClientQueues(string owner, int priority);
 
     /// <summary>
     /// List out the queues for one priority class.

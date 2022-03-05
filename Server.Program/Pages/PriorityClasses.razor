@@ -30,13 +30,13 @@
             </tr>
 
             @foreach (var (key, queue) in _jobQueues.GetClientQueues(i-1)
-                                                    .OrderBy(item => item.Key.Owner.Title))
+                                                    .OrderBy(item => item.Key))
             {
                 var stats = queue.CompletionStatistics;
                 var seconds = (double)stats.CumulativeCharge / 1000.0;
 
                 <tr class="job-queue">
-                    <td>@key.Owner.Title</td>
+                    <td>@key.Owner</td>
                     <td>@queue.Count</td>
                     <td>@seconds.ToString("F3")</td>
                 </tr>

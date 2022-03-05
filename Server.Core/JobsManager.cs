@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Hearty.Scheduling;
+using Hearty.Common;
 using Microsoft.Extensions.Logging;
 
 namespace Hearty.Server

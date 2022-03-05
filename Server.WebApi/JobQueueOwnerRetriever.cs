@@ -24,6 +24,6 @@ namespace Hearty.Server.WebApi
     /// to use the well-developed authorization framework from ASP.NET Core,
     /// which already provides enormous flexibility and customization points.
     /// </remarks>
-    public delegate ValueTask<IJobQueueOwner?>
+    public delegate ValueTask<string>
         JobQueueOwnerRetriever(ClaimsPrincipal? principal, string? id);
 }

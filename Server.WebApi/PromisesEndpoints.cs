@@ -80,9 +80,9 @@ namespace Hearty.Server.WebApi
             public IRemoteJobCancellation RemoteCancellation { get; init; }
 
             /// <summary>
-            /// Obtains the instance of <see cref="IJobQueueOwner"/> 
-            /// given the client's credentials and any explicitly specified
-            /// queue owner in the incoming request.
+            /// Maps the client's credentials and any explicitly specified
+            /// queue owner in the incoming request to
+            /// <see cref="JobQueueKey.Owner" />.
             /// </summary>
             public JobQueueOwnerRetriever? JobQueueOwnerRetrieval { get; init; }
         }
@@ -206,7 +206,7 @@ namespace Hearty.Server.WebApi
                             ?? ParseQueuePriority(httpRequest.Headers[HeartyHttpHeaders.JobPriority])
                             ?? 5;
 
-            IJobQueueOwner? queueOwner = null;
+            string queueOwner = string.Empty;
             if (services.JobQueueOwnerRetrieval is not null)
             {
                 queueOwner = await services.JobQueueOwnerRetrieval

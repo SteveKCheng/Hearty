@@ -19,14 +19,12 @@
     <Compile Include="ContentFormatInfo.cs" />
     <Compile Include="ContentFormatInfo.Negotiation.cs" />
     <Compile Include="ExpiryQueue.cs" />
-    <Compile Include="IJobQueueOwner.cs" />
     <Compile Include="IJobQueueSystem.cs" />
     <Compile Include="IncrementalAsyncList.cs" />
     <Compile Include="InMemoryPathsDirectory.cs" />
     <Compile Include="IPromiseClientInfo.cs" />
     <Compile Include="IPromiseListBuilder.cs" />
     <Compile Include="IRemoteJobCancellation.cs" />
-    <Compile Include="JobQueueOwner.cs" />
     <Compile Include="JobQueueSystem.cs" />
     <Compile Include="JobsManager.cs" />
     <Compile Include="LocalWorkerAdaptor.cs" />

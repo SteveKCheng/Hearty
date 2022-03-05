@@ -1,4 +1,5 @@
-﻿using Hearty.Server.Mocks;
+﻿using Hearty.Common;
+using Hearty.Server.Mocks;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,14 +11,14 @@ namespace Hearty.Server.Program.Pages
 {
     public partial class MockJobLoad
     {
-        private readonly IJobQueueOwner[] _clients = new IJobQueueOwner[3]
+        private readonly string[] _clients = new string[3]
         {
-            new JobQueueOwner("Alice"),
-            new JobQueueOwner("Bobby"),
-            new JobQueueOwner("Charlie")
+            "Alice",
+            "Bobby",
+            "Charlie"
         };
 
-        private IJobQueueOwner GetClient(int index) => _clients[index];
+        private string GetClient(int index) => _clients[index];
 
         private void InjectJobs(int client, int priority, int load)
         {

@@ -17,6 +17,7 @@
     <Compile Include="ExceptionPayload.cs" />
     <Compile Include="HeartyHttpHeaders.cs" />
     <Compile Include="HttpTokenParsingRules.cs" />
+    <Compile Include="JobQueueKey.cs" />
     <Compile Include="ParsedContentType.cs" />
     <Compile Include="PromiseId.cs" />
     <Compile Include="RemoteWorkException.cs" />

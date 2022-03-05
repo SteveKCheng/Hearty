@@ -2,6 +2,8 @@
 using System.IO.Pipelines;
 using System.Threading;
 
+using Hearty.Common;
+
 namespace Hearty.Server.WebApi
 {
     /// <summary>

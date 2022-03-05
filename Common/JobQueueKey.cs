@@ -1,0 +1,105 @@
+﻿using System;
+using System.Diagnostics.CodeAnalysis;
+
+namespace Hearty.Common;
+
+/// <summary>
+/// A unique identifier for a job queue 
+/// <see cref="IJobQueueSystem" />.
+/// </summary>
+/// <remarks>
+/// This is an immutable type, used by both clients and servers.
+/// </remarks>
+public readonly struct JobQueueKey : IComparable<JobQueueKey>
+                                    , IEquatable<JobQueueKey>
+{
+    /// <summary>
+    /// Names the owner of the queue.
+    /// </summary>
+    /// <remarks>
+    /// Owners are specified by strings (typically a user identifier)
+    /// because that conveniences most clients. 
+    /// Implementation of the job queues, on servers, may attach
+    /// additional information about the owner, which is not expressed
+    /// here.
+    /// </remarks>
+    public string Owner { get; }
+
+    /// <summary>
+    /// The desired priority class of the queue.
+    /// </summary>
+    /// <remarks>
+    /// Priority classes are numbered from 0 to the number of
+    /// priority classes available minus one.  If this member
+    /// is null, i.e. the priority class is not specified,
+    /// the job queue system should take its default priority
+    /// when adding a job, and search over all priorities
+    /// if querying.
+    /// </remarks>
+    public int? Priority => _priority >= 0 ? _priority : null;
+
+    /// <summary>
+    /// The name of the queue that distinguishes it within
+    /// the set of queues with the same owner and priority class.
+    /// </summary>
+    /// <remarks>
+    /// There can be multiple queues filed under the same 
+    /// owner and priority, e.g. to serve different clients
+    /// connecting with the same owner identity.  For conciseness,
+    /// such queues are termed "cohorts".
+    /// </remarks>
+    public string? Cohort { get; }
+
+    private readonly int _priority;
+
+    public JobQueueKey(string owner, int? priority, string? cohort)
+    {
+        if (priority is int value && value < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                        nameof(priority),
+                        "Priority class may not be negative. ");
+        }
+
+        Owner = owner;
+        _priority = priority.HasValue ? priority.GetValueOrDefault() : -1;
+        Cohort = cohort;
+    }
+
+    /// <inheritdoc cref="IComparable{T}.CompareTo" />
+    public int CompareTo(JobQueueKey other)
+    {
+        int c = string.CompareOrdinal(Owner, other.Owner);
+        if (c != 0)
+            return c;
+
+        c = _priority.CompareTo(other.Priority);
+        if (c != 0)
+            return c;
+
+        c = string.CompareOrdinal(Cohort, other.Cohort);
+        return c;
+    }
+
+    /// <inheritdoc cref="IEquatable{T}.Equals" />
+    public bool Equals(JobQueueKey other)
+        => CompareTo(other) == 0;
+
+    /// <inheritdoc cref="object.Equals" />
+    public override bool Equals([NotNullWhen(true)] object? obj)
+        => obj is JobQueueKey other && Equals(other);
+
+    /// <inheritdoc cref="object.GetHashCode" />
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(Owner?.GetHashCode() ?? 0,
+                                (uint)_priority * 2654435761u,
+                                Cohort?.GetHashCode() ?? 0);
+    }
+
+    public static bool operator ==(JobQueueKey left, JobQueueKey right)
+        => left.Equals(right);
+
+    public static bool operator !=(JobQueueKey left, JobQueueKey right)
+        => !left.Equals(right);
+}

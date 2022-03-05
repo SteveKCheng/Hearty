@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Hearty.Scheduling;
+using Hearty.Common;
 
 namespace Hearty.Server;
 
@@ -17,7 +18,7 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
                         JobMessage,
                         KeyedQueueSystem<
                             JobMessage,
-                            IJobQueueOwner,
+                            string,
                             KeyedQueueSystem<
                                 JobMessage,
                                 string,
@@ -30,6 +31,8 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     /// <inheritdoc cref="IJobQueueSystem.PriorityClassesCount" />
     public int PriorityClassesCount => _priorityClasses.Count;
 
+    public int DefaultPriority => 5;
+
     private KeyedQueueSystem<JobMessage,
                               string,
                               ClientJobQueue> 
@@ -41,7 +44,7 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
 
     private IEnumerable<KeyedQueueSystem<
                             JobMessage, 
-                            IJobQueueOwner,
+                            string,
                             KeyedQueueSystem<
                                 JobMessage,
                                 string,
@@ -58,12 +61,15 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     /// <inheritdoc cref="IJobQueueSystem.GetOrAddJobQueue" />
     public ClientJobQueue GetOrAddJobQueue(JobQueueKey key)
     {
-        var queue = _priorityClasses[key.Priority].GetOrAdd(key.Owner)
-                                                  .GetOrAdd(key.Name, 
-                                                            out bool exists);
+        var priority = key.Priority ?? DefaultPriority;
+        var cohort = key.Cohort ?? string.Empty;
 
-        if (!exists)
-            queue.OwnerPrincipal = key.Owner.Principal;
+        var queue = _priorityClasses[priority].GetOrAdd(key.Owner)
+                                              .GetOrAdd(cohort, 
+                                                        out bool exists);
+
+        //if (!exists)
+        //    queue.OwnerPrincipal = key.Owner.Principal;
 
         return queue;
     }
@@ -71,11 +77,14 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     /// <inheritdoc cref="IJobQueueSystem.TryGetJobQueue" />
     public ClientJobQueue? TryGetJobQueue(JobQueueKey key)
     {
-        var priorityClass = _priorityClasses[key.Priority];
+        var priority = key.Priority ?? DefaultPriority;
+        var cohort = key.Cohort ?? string.Empty;
+
+        var priorityClass = _priorityClasses[priority];
         if (!priorityClass.TryGetValue(key.Owner, out var innerQueueSystem))
             return null;
 
-        if (!innerQueueSystem.TryGetValue(key.Name, out var clientJobQueue))
+        if (!innerQueueSystem.TryGetValue(cohort, out var clientJobQueue))
             return null;
 
         return clientJobQueue;
@@ -105,7 +114,7 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
 
     /// <inheritdoc cref="IJobQueueSystem.GetClientQueues(IJobQueueOwner, int)" />
     public IReadOnlyList<KeyValuePair<string, ClientJobQueue>> 
-        GetClientQueues(IJobQueueOwner owner, int priority)
+        GetClientQueues(string owner, int priority)
     {
         var priorityClass = _priorityClasses[priority];
         if (!priorityClass.TryGetValue(owner, out var innerQueueSystem))
