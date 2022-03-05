@@ -15,10 +15,10 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
 {
     private readonly PrioritizedQueueSystem<
                         JobMessage,
-                        ClientQueueSystem<
+                        KeyedQueueSystem<
                             JobMessage,
                             IJobQueueOwner,
-                            ClientQueueSystem<
+                            KeyedQueueSystem<
                                 JobMessage,
                                 string,
                                 ClientJobQueue>>> _priorityClasses;
@@ -30,7 +30,7 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     /// <inheritdoc cref="IJobQueueSystem.PriorityClassesCount" />
     public int PriorityClassesCount => _priorityClasses.Count;
 
-    private ClientQueueSystem<JobMessage,
+    private KeyedQueueSystem<JobMessage,
                               string,
                               ClientJobQueue> 
         CreateInnerQueueSystem()
@@ -39,10 +39,10 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
                    _expiryQueue);
     }
 
-    private IEnumerable<ClientQueueSystem<
+    private IEnumerable<KeyedQueueSystem<
                             JobMessage, 
                             IJobQueueOwner,
-                            ClientQueueSystem<
+                            KeyedQueueSystem<
                                 JobMessage,
                                 string,
                                 ClientJobQueue>>>

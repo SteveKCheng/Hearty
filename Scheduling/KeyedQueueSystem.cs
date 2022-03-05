@@ -36,7 +36,7 @@ namespace Hearty.Scheduling
     /// <typeparam name="TQueue">
     /// The abstract queue instantiated for each priority class.
     /// </typeparam>
-    public class ClientQueueSystem<TMessage, TKey, TQueue> 
+    public class KeyedQueueSystem<TMessage, TKey, TQueue> 
         : ISchedulingFlow<TMessage>
         , IReadOnlyDictionary<TKey, TQueue>
         where TKey : notnull
@@ -56,21 +56,21 @@ namespace Hearty.Scheduling
         private readonly Dictionary<TKey, Entry> _members;
         private readonly SimpleExpiryQueue _expiryQueue;
 
-        public ClientQueueSystem(Func<TKey, TQueue> factory,
-                                 SimpleExpiryQueue expiryQueue)
+        public KeyedQueueSystem(Func<TKey, TQueue> factory,
+                                SimpleExpiryQueue expiryQueue)
             : this(EqualityComparer<TKey>.Default, factory, expiryQueue)
         {
         }
 
-        public ClientQueueSystem(IEqualityComparer<TKey> comparer,
-                                 Func<TKey, TQueue> factory,
-                                 SimpleExpiryQueue expiryQueue)
+        public KeyedQueueSystem(IEqualityComparer<TKey> comparer,
+                                Func<TKey, TQueue> factory,
+                                SimpleExpiryQueue expiryQueue)
         {
             _factory = factory;
             _schedulingGroup = new SchedulingGroup<TMessage>(capacity: 9,
                 static (sender, args) =>
                 {
-                    var self = Unsafe.As<ClientQueueSystem<TMessage, TKey, TQueue>>(sender!);
+                    var self = Unsafe.As<KeyedQueueSystem<TMessage, TKey, TQueue>>(sender!);
                     self.OnSchedulingActivationEvent(args);
                 }, this);
             _members = new(comparer);
