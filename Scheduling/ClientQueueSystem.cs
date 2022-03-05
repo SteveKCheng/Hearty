@@ -145,17 +145,18 @@ namespace Hearty.Scheduling
         }
 
         public TQueue GetOrAdd(TKey key)
+            => GetOrAdd(key, out _);
+
+        public TQueue GetOrAdd(TKey key, out bool exists)
         {
             while (true)
             {
                 Entry entry;
-                bool exists;
+                bool exists_;
                 lock (_members)
-                {
-                    exists = _members.TryGetValue(key, out entry);
-                }
+                    exists_ = exists = _members.TryGetValue(key, out entry);
 
-                if (exists)
+                if (exists_)
                     return entry.Queue;
 
                 var queue = _factory(key);
@@ -165,11 +166,9 @@ namespace Hearty.Scheduling
                 entry.IsNewlyAdded = true;
 
                 lock (_members)
-                {
-                    exists = !_members.TryAdd(key, entry);
-                }
+                    exists_ = exists = !_members.TryAdd(key, entry);
 
-                if (!exists)
+                if (!exists_)
                 {
                     object attachment = key;
                     _schedulingGroup.AdmitChild(queue.AsFlow(), false, attachment);
