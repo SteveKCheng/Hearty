@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading;
 using Hearty.Scheduling;
 
@@ -66,4 +67,13 @@ public class ClientJobQueue
     /// Get the number of items currently in the queue.
     /// </summary>
     public int Count => _flow.Count;
+
+    /// <summary>
+    /// Credentials for the owner of this queue.
+    /// </summary>
+    /// <remarks>
+    /// This information is only used for (administrative) display
+    /// and does not affect the mechanics of queuing.
+    /// </remarks>
+    public ClaimsPrincipal? OwnerPrincipal { get; set; }
 }

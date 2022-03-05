@@ -58,7 +58,14 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     /// <inheritdoc cref="IJobQueueSystem.GetOrAddJobQueue" />
     public ClientJobQueue GetOrAddJobQueue(JobQueueKey key)
     {
-        return _priorityClasses[key.Priority].GetOrAdd(key.Owner).GetOrAdd(key.Name);
+        var queue = _priorityClasses[key.Priority].GetOrAdd(key.Owner)
+                                                  .GetOrAdd(key.Name, 
+                                                            out bool exists);
+
+        if (!exists)
+            queue.OwnerPrincipal = key.Owner.Principal;
+
+        return queue;
     }
 
     /// <inheritdoc cref="IJobQueueSystem.TryGetJobQueue" />
