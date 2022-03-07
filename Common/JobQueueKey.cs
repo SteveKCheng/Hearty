@@ -8,10 +8,18 @@ namespace Hearty.Common;
 /// <see cref="IJobQueueSystem" />.
 /// </summary>
 /// <remarks>
+/// <para>
 /// This is an immutable type, used by both clients and servers.
+/// It is essentially a tuple of the queue owner, priority class
+/// and cohort, where each part may be unspecified and left
+/// to be defaulted by the server.
+/// </para>
+/// <para>
+/// A default-constructed instance leaves all three parts unspecified.
+/// </para>
 /// </remarks>
 public readonly struct JobQueueKey : IComparable<JobQueueKey>
-                                    , IEquatable<JobQueueKey>
+                                   , IEquatable<JobQueueKey>
 {
     /// <summary>
     /// Names the owner of the queue.
@@ -23,7 +31,7 @@ public readonly struct JobQueueKey : IComparable<JobQueueKey>
     /// additional information about the owner, which is not expressed
     /// here.
     /// </remarks>
-    public string Owner { get; }
+    public string? Owner { get; }
 
     /// <summary>
     /// The desired priority class of the queue.
@@ -36,7 +44,7 @@ public readonly struct JobQueueKey : IComparable<JobQueueKey>
     /// when adding a job, and search over all priorities
     /// if querying.
     /// </remarks>
-    public int? Priority => _priority >= 0 ? _priority : null;
+    public int? Priority => _priority > 0 ? _priority - 1 : null;
 
     /// <summary>
     /// The name of the queue that distinguishes it within
@@ -50,9 +58,29 @@ public readonly struct JobQueueKey : IComparable<JobQueueKey>
     /// </remarks>
     public string? Cohort { get; }
 
+    /// <summary>
+    /// Backing field for the <see cref="Priority"/> property.
+    /// </summary>
+    /// <remarks>
+    /// For compactness, priorities (which may not be negative) 
+    /// are stored biased by one and the null value is stored
+    /// as zero.
+    /// </remarks>
     private readonly int _priority;
 
-    public JobQueueKey(string owner, int? priority, string? cohort)
+    /// <summary>
+    /// Construct with the three components of the queue key,
+    /// each optional.
+    /// </summary>
+    /// <param name="owner">Names the owner of the queue. </param>
+    /// <param name="priority">The desired priority class of the queue. </param>
+    /// <param name="cohort">The name of the queue that distinguishes it within
+    /// the set of queues with the same owner and priority class.
+    /// </param>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="priority"/> is negative.
+    /// </exception>
+    public JobQueueKey(string? owner, int? priority, string? cohort)
     {
         if (priority is int value && value < 0)
         {
@@ -62,7 +90,7 @@ public readonly struct JobQueueKey : IComparable<JobQueueKey>
         }
 
         Owner = owner;
-        _priority = priority.HasValue ? priority.GetValueOrDefault() : -1;
+        _priority = priority.HasValue ? priority.GetValueOrDefault() + 1 : 0;
         Cohort = cohort;
     }
 
@@ -73,7 +101,7 @@ public readonly struct JobQueueKey : IComparable<JobQueueKey>
         if (c != 0)
             return c;
 
-        c = _priority.CompareTo(other.Priority);
+        c = _priority.CompareTo(other._priority);
         if (c != 0)
             return c;
 

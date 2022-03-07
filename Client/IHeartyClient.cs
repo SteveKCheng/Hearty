@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Primitives;
+﻿using Hearty.Common;
+using Microsoft.Extensions.Primitives;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -25,6 +26,10 @@ public interface IHeartyClient : IDisposable
     /// data depends on <paramref name="route" /> and the
     /// application-level customization of the Hearty server.
     /// </param>
+    /// <param name="queue">
+    /// Specifies which queue that the job should belong to.
+    /// The choice will be validated by the server.
+    /// </param>
     /// <param name="cancellationToken">
     /// Can be triggered to cancel the operation of posting
     /// the job. Note, however, if cancellation races with
@@ -37,6 +42,7 @@ public interface IHeartyClient : IDisposable
     Task<PromiseId> PostJobAsync(
         string route,
         PayloadWriter input,
+        JobQueueKey queue = default,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -60,6 +66,10 @@ public interface IHeartyClient : IDisposable
     /// data depends on <paramref name="route" /> and the
     /// application-level customization of the Hearty server.
     /// </param>
+    /// <param name="queue">
+    /// Specifies which queue that the job should belong to.
+    /// The choice will be validated by the server.
+    /// </param>
     /// <param name="cancellationToken">
     /// Can be triggered to cancel the operation of posting
     /// the job. Note, however, if cancellation races with
@@ -73,6 +83,7 @@ public interface IHeartyClient : IDisposable
         string route,
         PayloadWriter input,
         PayloadReader<T> reader,
+        JobQueueKey queue = default,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -197,6 +208,10 @@ public interface IHeartyClient : IDisposable
     /// data depends on <paramref name="route" /> and the
     /// application-level customization of the Hearty server.
     /// </param>
+    /// <param name="queue">
+    /// Specifies which queue that the job should belong to.
+    /// The choice will be validated by the server.
+    /// </param>
     /// <param name="cancellationToken">
     /// Can be triggered to cancel the operation of posting
     /// the job. Note, however, if cancellation races with
@@ -216,6 +231,7 @@ public interface IHeartyClient : IDisposable
         string route,
         PayloadWriter input,
         PayloadReader<T> reader,
+        JobQueueKey queue = default,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -245,8 +261,7 @@ public interface IHeartyClient : IDisposable
     /// </returns>
     Task CancelJobAsync(
         PromiseId promiseId,
-        string? queue = null,
-        int? priority = null);
+        JobQueueKey queue);
 
     /// <summary>
     /// Stop a job on the Hearty server for all clients, 

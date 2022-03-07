@@ -199,12 +199,12 @@ namespace Hearty.Server.WebApi
         {
             var httpRequest = httpContext.Request;
 
-            string? cohort = ParseQueueName(httpRequest.Query["queue"])
-                             ?? ParseQueueName(httpRequest.Headers[HeartyHttpHeaders.JobQueueName]);
+            string? cohort = ParseQueueName(httpRequest.Query["cohort"])
+                             ?? ParseQueueName(httpRequest.Headers[HeartyHttpHeaders.JobCohort]);
             int? priority = ParseQueuePriority(httpRequest.Query["priority"])
                             ?? ParseQueuePriority(httpRequest.Headers[HeartyHttpHeaders.JobPriority]);
 
-            string owner = string.Empty;
+            string? owner = null;
             if (services.JobQueueOwnerRetrieval is not null)
             {
                 owner = await services.JobQueueOwnerRetrieval

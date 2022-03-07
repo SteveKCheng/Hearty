@@ -65,8 +65,9 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     {
         var priority = key.Priority ?? DefaultPriority;
         var cohort = key.Cohort ?? string.Empty;
+        var owner = key.Owner ?? string.Empty;
 
-        var queue = _priorityClasses[priority].GetOrAdd(key.Owner)
+        var queue = _priorityClasses[priority].GetOrAdd(owner)
                                               .GetOrAdd(cohort, 
                                                         out bool exists);
 
@@ -81,9 +82,10 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     {
         var priority = key.Priority ?? DefaultPriority;
         var cohort = key.Cohort ?? string.Empty;
+        var owner = key.Owner ?? string.Empty;
 
         var priorityClass = _priorityClasses[priority];
-        if (!priorityClass.TryGetValue(key.Owner, out var innerQueueSystem))
+        if (!priorityClass.TryGetValue(owner, out var innerQueueSystem))
             return null;
 
         if (!innerQueueSystem.TryGetValue(cohort, out var clientJobQueue))

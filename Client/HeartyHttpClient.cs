@@ -53,9 +53,14 @@ public class HeartyHttpClient : IHeartyClient
     /// <inheritdoc cref="IHeartyClient.PostJobAsync" />
     public async Task<PromiseId> PostJobAsync(string route, 
                                               PayloadWriter input,
+                                              JobQueueKey queue = default,
                                               CancellationToken cancellationToken = default)
     {
-        var response = await _httpClient.PostAsync("jobs/v1/queue/" + route, 
+        var url = CreateRequestUrl("jobs/v1/queue/",
+                                   route: route,
+                                   queue: queue);
+
+        var response = await _httpClient.PostAsync(url, 
                                                    input.CreateHttpContent(), 
                                                    cancellationToken)
                                         .ConfigureAwait(false);
@@ -84,8 +89,7 @@ public class HeartyHttpClient : IHeartyClient
                                     string? route = null,
                                     TimeSpan? timeout = null,
                                     bool? wantResult = null,
-                                    string? queue = null,
-                                    int priority = -1)
+                                    JobQueueKey queue = default)
     {
         var builder = new ValueStringBuilder(stackalloc char[1024]);
 
@@ -129,14 +133,21 @@ public class HeartyHttpClient : IHeartyClient
             builder.Append(wantResult.Value ? "true" : "false");
         }
 
-        if (queue is not null)
+        if (queue.Owner is String owner)
         {
             AppendQuerySeparator(ref builder, ref paramCount);
-            builder.Append("queue=");
-            builder.Append(Uri.EscapeDataString(queue));
+            builder.Append("owner=");
+            builder.Append(Uri.EscapeDataString(owner));
         }
 
-        if (priority >= 0)
+        if (queue.Cohort is string cohort)
+        {
+            AppendQuerySeparator(ref builder, ref paramCount);
+            builder.Append("cohort=");
+            builder.Append(Uri.EscapeDataString(cohort));
+        }
+
+        if (queue.Priority is int priority)
         {
             AppendQuerySeparator(ref builder, ref paramCount);
             builder.Append("priority=");
@@ -154,11 +165,13 @@ public class HeartyHttpClient : IHeartyClient
     public async Task<T> RunJobAsync<T>(string route, 
                                         PayloadWriter input,
                                         PayloadReader<T> reader,
+                                        JobQueueKey queue = default,
                                         CancellationToken cancellationToken = default)
     {
         var url = CreateRequestUrl("jobs/v1/queue",
                                    route: route,
-                                   wantResult: true);
+                                   wantResult: true,
+                                   queue: queue);
         var message = new HttpRequestMessage(HttpMethod.Post, url);
         reader.AddAcceptHeaders(message.Headers);
         message.Headers.TryAddWithoutValidation(HeaderNames.Accept, ExceptionPayload.JsonMediaType);
@@ -304,11 +317,13 @@ public class HeartyHttpClient : IHeartyClient
         RunJobStreamAsync<T>(string route,
                              PayloadWriter input,
                              PayloadReader<T> reader,
+                             JobQueueKey queue = default,
                              CancellationToken cancellationToken = default)
     {
         var url = CreateRequestUrl("jobs/v1/queue",
                                    route: route,
-                                   wantResult: true);
+                                   wantResult: true,
+                                   queue: queue);
 
         var request = new HttpRequestMessage(HttpMethod.Post, url);
         request.Content = input.CreateHttpContent();
@@ -419,14 +434,12 @@ public class HeartyHttpClient : IHeartyClient
     #region Job cancellation
 
     /// <inheritdoc cref="IHeartyClient.CancelJobAsync" />
-    public async Task CancelJobAsync(PromiseId promiseId, 
-                                     string? queue = null, 
-                                     int? priority = null)
+    public async Task CancelJobAsync(PromiseId promiseId,
+                                     JobQueueKey queue = default)
     {
         var url = CreateRequestUrl("jobs/v1/id/",
                                    promiseId,
-                                   queue: queue,
-                                   priority: priority ?? -1);
+                                   queue: queue);
 
         var request = new HttpRequestMessage(HttpMethod.Delete, url);
         AddAuthorizationHeader(request);

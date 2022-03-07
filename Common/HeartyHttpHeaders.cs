@@ -37,7 +37,7 @@ namespace Hearty.Common
         /// <summary>
         /// Header for the client to specify the name of the desired job queue.
         /// </summary>
-        public static readonly string JobQueueName = "Job-Queue-Name";
+        public static readonly string JobCohort = "Job-Cohort";
 
         /// <summary>
         /// Header for the client to specify the desired priority of a job.
