@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
 using Hearty.Common;
@@ -18,10 +19,16 @@ public interface IJobQueueSystem
     /// </summary>
     /// <param name="key">Identifier assigned to the job queue. 
     /// </param>
+    /// <param name="ownerPrincipal">
+    /// "Principal" object describing the owner of the queue
+    /// if the queue is to be created.  Ignored if the queue
+    /// already exists.
+    /// </param>
     /// <returns>
     /// The desired queue, which may be newly created.
     /// </returns>
-    ClientJobQueue GetOrAddJobQueue(JobQueueKey key);
+    ClientJobQueue GetOrAddJobQueue(JobQueueKey key,
+                                    ClaimsPrincipal? ownerPrincipal);
 
     /// <summary>
     /// Get the queue to push jobs into for a given client,

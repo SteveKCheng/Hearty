@@ -233,6 +233,7 @@ namespace Hearty.Server.Program
                     var promise = input.Storage.CreatePromise(request);
 
                     jobsManager.PushJob(input.JobQueueKeyRequired,
+                        input.OwnerPrincipal,
                         static w => w.Promise ?? throw new ArgumentNullException(),
                         new PromisedWork(request) { 
                             InitialWait = 1000, 
@@ -306,6 +307,7 @@ namespace Hearty.Server.Program
 
             jobScheduling.PushMacroJob(
                 input.JobQueueKeyRequired,
+                input.OwnerPrincipal,
                 static w => w.Promise! ?? throw new ArgumentNullException(), 
                 new PromisedWork(request) { Promise = promise }, 
                 _ => new PromiseList(input.Storage),

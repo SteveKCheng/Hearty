@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Hearty.Scheduling;
 using Hearty.Common;
 using Microsoft.Extensions.Logging;
+using System.Security.Claims;
 
 namespace Hearty.Server
 {
@@ -462,6 +463,11 @@ namespace Hearty.Server
         /// <param name="queueKey">
         /// Selects the queue to push the job into.
         /// </param>
+        /// <param name="ownerPrincipal">
+        /// "Principal" object describing the owner of the queue
+        /// if the queue is to be created.  Ignored if the queue
+        /// already exists.
+        /// </param>
         /// <param name="promiseRetriever">
         /// Callback to the user's code to obtain the promise which 
         /// should receive the results from the job.  The desired 
@@ -483,12 +489,13 @@ namespace Hearty.Server
         /// Used by the caller to request cancellation of the job.
         /// </param>
         public Promise PushJob(JobQueueKey queueKey,
+                               ClaimsPrincipal? ownerPrincipal,
                                PromiseRetriever promiseRetriever,
                                in PromisedWork work,
                                bool registerClient,
                                CancellationToken cancellationToken = default)
         {
-            var queue = _jobQueues.GetOrAddJobQueue(queueKey);
+            var queue = _jobQueues.GetOrAddJobQueue(queueKey, ownerPrincipal);
 
             if (registerClient)
                 cancellationToken = queue.CancellationToken;
@@ -704,6 +711,11 @@ namespace Hearty.Server
         /// <param name="queueKey">
         /// Selects the queue to push the jobs into.
         /// </param>
+        /// <param name="ownerPrincipal">
+        /// "Principal" object describing the owner of the queue
+        /// if the queue is to be created.  Ignored if the queue
+        /// already exists.
+        /// </param>
         /// <param name="promiseRetriever">
         /// Callback to the user's code to obtain the promise which 
         /// should receive the results from the job.  The desired 
@@ -735,6 +747,7 @@ namespace Hearty.Server
         /// and any micro jobs created from it.
         /// </param>
         public Promise PushMacroJob(JobQueueKey queueKey,
+                                    ClaimsPrincipal? ownerPrincipal,
                                     PromiseRetriever promiseRetriever,
                                     PromisedWork work,
                                     PromiseListBuilderFactory builderFactory,
@@ -742,7 +755,7 @@ namespace Hearty.Server
                                     bool registerClient,
                                     CancellationToken cancellationToken = default)
         {
-            var queue = _jobQueues.GetOrAddJobQueue(queueKey);
+            var queue = _jobQueues.GetOrAddJobQueue(queueKey, ownerPrincipal);
 
             if (registerClient)
                 cancellationToken = queue.CancellationToken;

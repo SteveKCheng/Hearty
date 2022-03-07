@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO.Pipelines;
+using System.Security.Claims;
 using System.Threading;
 
 using Hearty.Common;
@@ -147,6 +148,12 @@ namespace Hearty.Server.WebApi
         /// server framework, e.g. ASP.NET Core.
         /// </remarks>
         public JobQueueKey? JobQueueKey { get; init; }
+
+        /// <summary>
+        /// "Principal" object describing the owner of the queue
+        /// or promise if this information should be recorded.
+        /// </summary>
+        public ClaimsPrincipal? OwnerPrincipal { get; init; }
 
         /// <summary>
         /// Retrieve <see cref="JobQueueKeyRequired" /> and require it to

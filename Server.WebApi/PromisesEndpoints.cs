@@ -260,6 +260,7 @@ namespace Hearty.Server.WebApi
                     Directory = services.PathsDirectory,
                     RouteKey = routeKey,
                     JobQueueKey = queueKey,
+                    OwnerPrincipal = httpContext.User,
                     ContentType = httpRequest.ContentType,
                     ContentLength = httpRequest.ContentLength,
                     PipeReader = httpRequest.BodyReader,

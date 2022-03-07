@@ -44,6 +44,7 @@ namespace Hearty.Server.Program.Pages
                 var work = new PromisedWork(request) { InitialWait = waitingTime, Promise = promise };
                 var queueKey = new JobQueueKey(GetClient(client), priority, string.Empty);
                 _jobsManager.PushJob(queueKey,
+                                     ownerPrincipal: null,
                                      static w => w.Promise ?? throw new ArgumentNullException(),
                                      work,
                                      registerClient: true);

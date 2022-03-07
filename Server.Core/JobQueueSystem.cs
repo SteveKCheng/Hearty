@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Hearty.Scheduling;
 using Hearty.Common;
+using System.Security.Claims;
 
 namespace Hearty.Server;
 
@@ -59,7 +60,8 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     }
 
     /// <inheritdoc cref="IJobQueueSystem.GetOrAddJobQueue" />
-    public ClientJobQueue GetOrAddJobQueue(JobQueueKey key)
+    public ClientJobQueue GetOrAddJobQueue(JobQueueKey key,
+                                           ClaimsPrincipal? ownerPrincipal)
     {
         var priority = key.Priority ?? DefaultPriority;
         var cohort = key.Cohort ?? string.Empty;
@@ -68,8 +70,8 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
                                               .GetOrAdd(cohort, 
                                                         out bool exists);
 
-        //if (!exists)
-        //    queue.OwnerPrincipal = key.Owner.Principal;
+        if (!exists)
+            queue.OwnerPrincipal = ownerPrincipal;
 
         return queue;
     }
