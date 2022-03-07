@@ -194,29 +194,25 @@ namespace Hearty.Server.WebApi
             return priority;
         }
 
-        private static async ValueTask<JobQueueKey?> 
+        private static async ValueTask<JobQueueKey> 
             GetJobQueueKey(Services services, HttpContext httpContext)
         {
             var httpRequest = httpContext.Request;
 
-            var queueName = ParseQueueName(httpRequest.Query["queue"])
-                            ?? ParseQueueName(httpRequest.Headers[HeartyHttpHeaders.JobQueueName])
-                            ?? "default";
-            var priority = ParseQueuePriority(httpRequest.Query["priority"])
-                            ?? ParseQueuePriority(httpRequest.Headers[HeartyHttpHeaders.JobPriority])
-                            ?? 5;
+            string? cohort = ParseQueueName(httpRequest.Query["queue"])
+                             ?? ParseQueueName(httpRequest.Headers[HeartyHttpHeaders.JobQueueName]);
+            int? priority = ParseQueuePriority(httpRequest.Query["priority"])
+                            ?? ParseQueuePriority(httpRequest.Headers[HeartyHttpHeaders.JobPriority]);
 
-            string queueOwner = string.Empty;
+            string owner = string.Empty;
             if (services.JobQueueOwnerRetrieval is not null)
             {
-                queueOwner = await services.JobQueueOwnerRetrieval
-                                           .Invoke(httpContext.User, null)
-                                           .ConfigureAwait(false);
+                owner = await services.JobQueueOwnerRetrieval
+                                      .Invoke(httpContext.User, null)
+                                      .ConfigureAwait(false);
             }
 
-            return queueOwner is not null
-                    ? new JobQueueKey(queueOwner, priority, queueName)
-                    : null;
+            return new JobQueueKey(owner, priority, cohort);
         }
 
         private static bool? ParseBoolQueryParameter(IQueryCollection query, string key)
@@ -251,7 +247,7 @@ namespace Hearty.Server.WebApi
                 redirectLocally = ParseBoolQueryParameter(httpRequest.Query, "result")
                                     ?? false;
 
-                JobQueueKey? queueKey = await GetJobQueueKey(services, httpContext)
+                JobQueueKey queueKey = await GetJobQueueKey(services, httpContext)
                                                 .ConfigureAwait(false);
 
                 var jobInput = new PromiseRequest
@@ -519,8 +515,7 @@ namespace Hearty.Server.WebApi
             }
             else
             {
-                var queueKey = (await GetJobQueueKey(services, httpContext).ConfigureAwait(false))
-                                    ?? throw new InvalidOperationException("Queue must be specified. ");
+                var queueKey = await GetJobQueueKey(services, httpContext).ConfigureAwait(false);
 
                 success = services.RemoteCancellation
                                   .TryCancelJobForClient(queueKey, promiseId);

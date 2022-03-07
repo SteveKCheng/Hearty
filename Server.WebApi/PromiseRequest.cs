@@ -147,19 +147,12 @@ namespace Hearty.Server.WebApi
         /// is expected to be the responsibility of the overall 
         /// server framework, e.g. ASP.NET Core.
         /// </remarks>
-        public JobQueueKey? JobQueueKey { get; init; }
+        public JobQueueKey JobQueueKey { get; init; }
 
         /// <summary>
         /// "Principal" object describing the owner of the queue
         /// or promise if this information should be recorded.
         /// </summary>
         public ClaimsPrincipal? OwnerPrincipal { get; init; }
-
-        /// <summary>
-        /// Retrieve <see cref="JobQueueKeyRequired" /> and require it to
-        /// be not null.
-        /// </summary>
-        public JobQueueKey JobQueueKeyRequired => 
-            JobQueueKey ?? throw new InvalidOperationException("Job queue key not specified. ");
     }
 }
