@@ -8,7 +8,6 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
     <Description>Library for implementing worker hosts in Hearty, and interfaces common to the job server and worker hosts</Description>
-    <GenerateDocumentationFile>True</GenerateDocumentationFile>
   </PropertyGroup>
 
   <Import Project="..\Packaging.props" />

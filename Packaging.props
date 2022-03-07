@@ -4,6 +4,7 @@
     <Authors>Steve Cheng</Authors>
     <Company>​​</Company>
 	<PackageIdPrefix></PackageIdPrefix>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
   </PropertyGroup>
   
   <Import Project="$(MSBuildThisFileDirectory)\Packaging.local.props"
