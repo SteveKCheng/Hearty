@@ -1,0 +1,16 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <PropertyGroup>
+    <Authors>Steve Cheng</Authors>
+    <Company>​​</Company>
+	<PackageIdPrefix></PackageIdPrefix>
+  </PropertyGroup>
+  
+  <Import Project="$(MSBuildThisFileDirectory)\Packaging.local.props"
+		  Condition="exists('$(MSBuildThisFileDirectory)\Packaging.local.props')" />
+
+  <PropertyGroup>
+    <PackageId>$(PackageIdPrefix)$(AssemblyName)</PackageId>
+  </PropertyGroup>
+
+</Project>

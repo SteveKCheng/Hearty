@@ -7,11 +7,11 @@
     <AssemblyName>Hearty.WebSockets</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
-    <Authors>Steve Cheng</Authors>
-    <Company>​​</Company>
     <Description>Library for lightweight remote procedure calls based on WebSockets and MessagePack</Description>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
   </PropertyGroup>
+
+  <Import Project="..\Packaging.props" />
 
   <ItemGroup>
     <Compile Include="CancellationMessage.cs" />
