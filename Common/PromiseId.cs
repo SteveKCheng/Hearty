@@ -7,12 +7,11 @@ using System.Text;
 namespace Hearty
 {
     /// <summary>
-    /// A long-lived identifier for a promise that can refer
-    /// to it even if the <see cref="Promise" /> object
-    /// has been swapped out of memory.
+    /// A long-lived identifier for a promise.
     /// </summary>
     /// <remarks>
-    /// This is a 64-bit integer split into two parts:
+    /// <para>
+    /// This type is a 64-bit integer split into two parts:
     /// the upper 32-bit word is generated for each instance
     /// of the promise service, and the lower 32-bit word
     /// is a sequence number.  The upper 32-bit word lets multiple
@@ -20,6 +19,12 @@ namespace Hearty
     /// when recovering from failures.  Using 128-bit GUIDs for
     /// promise IDs would be ultra-safe, but is not done for the
     /// sake of conserving memory.
+    /// </para>
+    /// <para>
+    /// Clients refer to promises on the server side through this type.
+    /// On the server side, this type can unambiguously 
+    /// identify the promise object if it has been swapped out of memory.
+    /// </para>
     /// </remarks>
     public readonly struct PromiseId : IComparable<PromiseId>
                                      , IEquatable<PromiseId>
@@ -87,7 +92,7 @@ namespace Hearty
 
         /// <summary>
         /// Attempt to parse a promise ID from its string representation
-        /// as returned by <see cref="ToString" />.
+        /// as returned by <see cref="ToString()" />.
         /// </summary>
         public static bool TryParse(ReadOnlySpan<char> input,
                                     out PromiseId promiseId)
@@ -139,21 +144,43 @@ namespace Hearty
         /// <inheritdoc />
         public override int GetHashCode() => _number.GetHashCode();
 
+        /// <summary>
+        /// Returns whether this ID is equal to another.
+        /// </summary>
         public static bool operator ==(PromiseId left, PromiseId right)
             => left.Equals(right);
 
+        /// <summary>
+        /// Returns whether this ID is not equal to another.
+        /// </summary>
         public static bool operator !=(PromiseId left, PromiseId right)
             => !left.Equals(right);
 
+        /// <summary>
+        /// Returns whether one ID occurs before another in this type's
+        /// canonical sorting order.
+        /// </summary>
         public static bool operator <(PromiseId left, PromiseId right)
             => left.CompareTo(right) < 0;
 
+        /// <summary>
+        /// Returns whether one ID occurs before, or is equal
+        /// to, another in this type's canonical sorting order.
+        /// </summary>
         public static bool operator <=(PromiseId left, PromiseId right)
             => left.CompareTo(right) >= 0;
 
+        /// <summary>
+        /// Returns whether one ID occurs after another in this type's
+        /// canonical sorting order.
+        /// </summary>
         public static bool operator >(PromiseId left, PromiseId right)
             => left.CompareTo(right) > 0;
 
+        /// <summary>
+        /// Returns whether one ID occurs after, or is equal
+        /// to, another in this type's canonical sorting order.
+        /// </summary>
         public static bool operator >=(PromiseId left, PromiseId right)
             => left.CompareTo(right) >= 0;
 

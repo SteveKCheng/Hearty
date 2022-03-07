@@ -107,6 +107,11 @@ namespace Hearty.Scheduling
         /// The degree of concurrency of the new worker, i.e. how many
         /// jobs it can run simultaneously.
         /// </param>
+        /// <param name="worker">
+        /// On return, this argument is set to the
+        /// object that represents the new or existing worker
+        /// among all the other workers managed by this class.
+        /// </param>
         /// <returns>
         /// True if the worker has been successfully added;
         /// false if a worker with the same name already exists.

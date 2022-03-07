@@ -108,7 +108,7 @@ public interface IHeartyClient : IDisposable
     /// exceptional payload as a byte stream exactly
     /// as received from the server.
     /// </param>
-    /// <param name="cancellation">
+    /// <param name="cancellationToken">
     /// Can be triggered to cancel the request.
     /// </param>
     /// <returns>
@@ -140,7 +140,7 @@ public interface IHeartyClient : IDisposable
     /// the server does not make the result available by this
     /// time interval.
     /// </param>
-    /// <param name="cancellation">
+    /// <param name="cancellationToken">
     /// Can be triggered to cancel the request.
     /// </param>
     /// <returns>
@@ -249,11 +249,6 @@ public interface IHeartyClient : IDisposable
     /// pushed into, for the current client.  This argument
     /// is used to identify a specific instance of the job
     /// if the client has pushed it onto multiple queues.
-    /// </param>
-    /// <param name="priority">
-    /// The priority of that existing job.  This argument
-    /// is used to identify a specific instance of the job
-    /// if the client has pushed it for multiple priorities.
     /// </param>
     /// <returns>
     /// Asynchronous task that completes when the server

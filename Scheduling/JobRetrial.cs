@@ -65,7 +65,6 @@ namespace Hearty.Scheduling
         /// <summary>
         /// Builds the task in <see cref="OutputTask" />.
         /// </summary>
-        /// <remarks>
         private AsyncTaskMethodBuilder<TOutput> _taskBuilder;
 
         /// <summary>
@@ -74,7 +73,7 @@ namespace Hearty.Scheduling
         /// </summary>
         private int _jobLaunched;
 
-        /// <inheritdoc cref="ILaunchableJob{TInput, TOutput}.TryLaunchJo" />
+        /// <inheritdoc cref="ILaunchableJob{TInput, TOutput}.TryLaunchJob" />
         public bool TryLaunchJob(IJobWorker<TInput, TOutput> worker, uint executionId)
         {
             if (Interlocked.Exchange(ref _jobLaunched, 1) != 0)

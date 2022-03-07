@@ -70,7 +70,7 @@ namespace Hearty.Server.Mocks
         /// De-serialize an instance from JSON using the conventions of this library,
         /// from an I/O stream.
         /// </summary>
-        /// <param name="bytes">
+        /// <param name="stream">
         /// I/O stream whose content is JSON encoded in UTF-8 
         /// representing an instance of this structure.
         /// </param>

@@ -6,7 +6,7 @@ using Hearty.Utilities;
 namespace Hearty.Scheduling
 {
     /// <summary>
-    /// Credit-based scheduling from a set of <see cref="SchedulingUnit" />.
+    /// Credit-based scheduling from a set of <see cref="SchedulingFlow{T}" />.
     /// </summary>
     public partial class SchedulingGroup<T>
     {

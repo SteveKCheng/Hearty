@@ -60,7 +60,7 @@ namespace Hearty.Scheduling
         /// </summary>
         /// <remarks>
         /// This object is swapped out of <see cref="_processJobsTask" />,
-        /// and saved so that multiple calls to <see cref="Dispoasync" />
+        /// and saved so that multiple calls to <see cref="DisposeAsync" />
         /// return the same task to await.
         /// </remarks>
         private Task? _disposalTask;

@@ -4,8 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 namespace Hearty.Common;
 
 /// <summary>
-/// A unique identifier for a job queue 
-/// <see cref="IJobQueueSystem" />.
+/// A unique identifier for a queue where jobs may be posted.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -113,7 +112,7 @@ public readonly struct JobQueueKey : IComparable<JobQueueKey>
     public bool Equals(JobQueueKey other)
         => CompareTo(other) == 0;
 
-    /// <inheritdoc cref="object.Equals" />
+    /// <inheritdoc cref="object.Equals(object?)" />
     public override bool Equals([NotNullWhen(true)] object? obj)
         => obj is JobQueueKey other && Equals(other);
 
@@ -125,9 +124,17 @@ public readonly struct JobQueueKey : IComparable<JobQueueKey>
                                 Cohort?.GetHashCode() ?? 0);
     }
 
+    /// <summary>
+    /// Returns whether all the corresponding 
+    /// components of two keys are equal.
+    /// </summary>
     public static bool operator ==(JobQueueKey left, JobQueueKey right)
         => left.Equals(right);
 
+    /// <summary>
+    /// Returns whether at least one corresponding component
+    /// in two keys are unequal.
+    /// </summary>
     public static bool operator !=(JobQueueKey left, JobQueueKey right)
         => !left.Equals(right);
 }

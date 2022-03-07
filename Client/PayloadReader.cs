@@ -46,7 +46,6 @@ namespace Hearty.Client
         /// is assumed to be transferred into the reader function,
         /// which may transfer it back out in its return value.
         /// </remarks>
-        /// </summary>
         internal bool OwnsStream { get; }
 
         private readonly Func<PromiseId,

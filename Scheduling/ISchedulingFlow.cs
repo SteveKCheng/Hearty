@@ -6,7 +6,7 @@ namespace Hearty.Scheduling
     /// Represents an object that acts as a scheduling flow
     /// for fair scheduling.
     /// </summary>
-    /// <typeparam name="TMessage">
+    /// <typeparam name="T">
     /// The type of job or message to be delivered by fair scheduling.
     /// </typeparam>
     public interface ISchedulingFlow<T>

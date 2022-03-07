@@ -40,9 +40,10 @@ namespace Hearty.Scheduling
         /// <para>
         /// If this worker is detected to fail, this flag should be set to
         /// false before reporting the exception from any task returned
-        /// by <see cref="ExecuteJobAsync" />.  Thus, a client can check
+        /// by <see cref="IJobWorker{TInput, TOutput}.ExecuteJobAsync" />.  
+        /// Thus, a client can check
         /// for a failed worker by consulting this flag after awaiting
-        /// the completion of <see cref="ExecuteJobAsync" />,
+        /// the completion of that method,
         /// without risk of false negatives. 
         /// </para>
         /// </remarks>

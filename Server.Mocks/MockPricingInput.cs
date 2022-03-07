@@ -162,7 +162,7 @@ namespace Hearty.Server.Mocks
         /// <param name="valuationDate">
         /// The desired valuation date.
         /// </param>
-        /// <param name="int">
+        /// <param name="seed">
         /// Seed to construct the <see cref="Random" /> object
         /// from which pseudo-random numbers are obtained.
         /// </param>

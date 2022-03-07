@@ -42,7 +42,6 @@ namespace Hearty.Scheduling
         /// The sequence of abstract queues for each priority
         /// class, in order from class 0 to <see cref="Count" /> minus one.
         /// </param>
-        /// <remarks>
         public PrioritizedQueueSystem(IEnumerable<TQueue> queues)
         {
             var members = queues.ToArray();

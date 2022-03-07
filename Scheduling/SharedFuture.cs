@@ -246,7 +246,7 @@ namespace Hearty.Scheduling
         /// These are <see cref="_account" />, <see cref="_splitter" />,
         /// <see cref="_currentWait" />,
         /// <see cref="_currentCharge" />, <see cref="_accountingStarted" />
-        /// <see cref="_cancellationRegistration" /> and
+        /// <see cref="_singleClientData" /> and
         /// <see cref="_activeCount" />.
         /// </remarks>
         private readonly object _accountLock;

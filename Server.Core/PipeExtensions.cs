@@ -71,12 +71,12 @@ namespace Hearty.Server
         /// <returns>
         /// The number of bytes written, which is 2.
         /// </returns>
-        public static int WriteCrLf(this IBufferWriter<byte> writer)
+        public static int WriteCrLf(this IBufferWriter<byte> destination)
         {
-            var span = writer.GetSpan(2);
+            var span = destination.GetSpan(2);
             span[0] = (byte)'\r';
             span[1] = (byte)'\n';
-            writer.Advance(2);
+            destination.Advance(2);
             return 2;
         }
 

@@ -20,7 +20,8 @@ namespace Hearty.Scheduling
     /// <para>
     /// The implementation avoids locks so that continuations can be safely
     /// invoked synchronously.  Also, had locks been used, they would also
-    /// have to be recursive to work properly with <see cref="CancellationToken.Register" />.
+    /// have to be recursive to work properly when registering callbacks
+    /// with <see cref="CancellationToken" />.
     /// Recursive locks are, of course, widely agreed to be problematic.
     /// </para>
     /// </remarks>

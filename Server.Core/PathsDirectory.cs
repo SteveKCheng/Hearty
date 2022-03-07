@@ -18,7 +18,7 @@ namespace Hearty.Server
     /// <para>
     /// A promise may be assigned more than one path, so effectively
     /// paths form secondary indices (like in SQL databases) to promises
-    /// whose actual data are stored in <see cref="PromiseStoage" />.
+    /// whose actual data are stored in <see cref="PromiseStorage" />.
     /// </para>
     /// </remarks>
     public abstract class PathsDirectory

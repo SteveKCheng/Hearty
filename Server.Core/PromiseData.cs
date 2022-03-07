@@ -191,7 +191,6 @@ namespace Hearty.Server
         /// or "default" serialization of the underlying data, which this property
         /// can refer to.
         /// </remarks>
-        /// </summary>
         public string ContentType => GetFormatInfo(0).MediaType.ToString();
 
         /// <summary>
@@ -263,7 +262,7 @@ namespace Hearty.Server
         /// accepted by the client.  The strings follow the format 
         /// of the "Accept" header in the HTTP/1.1 specification.
         /// If empty, this method simply returns 0, referring
-        /// to the first element of <paramref name="responses" />.
+        /// to the first format from <see cref="GetFormatInfo(int)" />.
         /// </param>
         /// <returns>
         /// The index of the format, ranging from 0 to 
@@ -296,6 +295,7 @@ namespace Hearty.Server
         /// Integer index selecting the format, ranging from 0 to
         /// <see cref="CountFormats" /> minus one.
         /// </param>
+        /// <returns>
         /// Null if the data is not multi-valued or the number
         /// of items is not known at this point.
         /// </returns>

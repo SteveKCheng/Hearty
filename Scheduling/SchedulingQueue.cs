@@ -17,7 +17,7 @@ namespace Hearty.Scheduling
     /// (job) queues.  This functionality is not possible using an
     /// abstract <see cref="System.Threading.Channels.ChannelReader{T}" />,
     /// even though internally the implementation from 
-    /// <see cref="System.Threading.Channels.Channel.CreateUnbounded{T}"/>
+    /// <see cref="System.Threading.Channels.Channel.CreateUnbounded{T}()"/>
     /// internally based on <see cref="ConcurrentQueue{T}" />.
     /// </para>
     /// <para>
