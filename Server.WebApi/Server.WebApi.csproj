@@ -1,19 +1,17 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <OutputType>Library</OutputType>
-    <NoDefaultLaunchSettingsFile>true</NoDefaultLaunchSettingsFile>
     <Nullable>enable</Nullable>
     <RootNamespace>Hearty.Server.WebApi</RootNamespace>
     <AssemblyName>Hearty.Server.WebApi</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
-    <Authors>Steve Cheng</Authors>
-    <Company>​​</Company>
     <Description>Implementation of Web-based APIs for Hearty through ASP.NET Core</Description>
-    <GenerateDocumentationFile>True</GenerateDocumentationFile>
   </PropertyGroup>
+
+  <Import Project="..\Packaging.props" />
 
   <ItemGroup>
     <Compile Include="AuthenticationEndpoints.cs" />
@@ -33,6 +31,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="GitVersion.MsBuild" Version="5.8.3" PrivateAssets="all" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="6.0.2" />
   </ItemGroup>

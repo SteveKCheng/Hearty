@@ -3,12 +3,13 @@
   <PropertyGroup>
     <Authors>Steve Cheng</Authors>
     <Company>​​</Company>
-	<PackageIdPrefix></PackageIdPrefix>
+    <PackageIdPrefix></PackageIdPrefix>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <IsPackable>true</IsPackable>
   </PropertyGroup>
   
   <Import Project="$(MSBuildThisFileDirectory)\Packaging.local.props"
-		  Condition="exists('$(MSBuildThisFileDirectory)\Packaging.local.props')" />
+          Condition="exists('$(MSBuildThisFileDirectory)\Packaging.local.props')" />
 
   <PropertyGroup>
     <PackageId>$(PackageIdPrefix)$(AssemblyName)</PackageId>
