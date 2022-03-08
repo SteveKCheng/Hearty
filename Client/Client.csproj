@@ -30,5 +30,9 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="GitVersion.MsBuild" Version="5.8.3" PrivateAssets="all" />
+  </ItemGroup>
   
 </Project>
