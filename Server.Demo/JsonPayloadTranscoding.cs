@@ -8,7 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace Hearty.Server.Program
+namespace Hearty.Server.Demo
 {
     public static class JsonPayloadTranscoding
     {

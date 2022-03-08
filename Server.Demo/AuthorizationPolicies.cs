@@ -1,6 +1,6 @@
 ﻿using idunno.Authentication.Basic;
 
-namespace Hearty.Server.Program
+namespace Hearty.Server.Demo
 {
     internal static class AuthorizationPolicies
     {

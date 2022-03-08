@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
-namespace Hearty.Server.Program.Pages
+namespace Hearty.Server.Demo.Pages
 {
     public partial class HostPageModel : PageModel
     {

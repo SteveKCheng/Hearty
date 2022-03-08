@@ -6,7 +6,7 @@ using Xunit;
 using System.Text;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using Hearty.Server.Program;
+using Hearty.Server.Demo;
 using Hearty.Server.Mocks;
 using Hearty.Client;
 using Microsoft.Extensions.Configuration;

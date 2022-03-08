@@ -2,7 +2,7 @@
 using Hearty.Scheduling;
 using Hearty.Server.WebUi;
 
-namespace Hearty.Server.Program
+namespace Hearty.Server.Demo
 {
     internal sealed class SimpleTimeoutProvider : TimeoutProvider, IDisposable
     {

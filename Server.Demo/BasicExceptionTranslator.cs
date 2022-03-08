@@ -1,7 +1,7 @@
 ﻿using System;
 using Hearty.Common;
 
-namespace Hearty.Server.Program
+namespace Hearty.Server.Demo
 {
     public static class BasicExceptionTranslator
     {

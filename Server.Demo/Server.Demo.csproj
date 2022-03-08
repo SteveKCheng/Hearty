@@ -2,8 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
-    <RootNamespace>Hearty.Server.Program</RootNamespace>
-    <AssemblyName>Hearty.Server.Program</AssemblyName>
+    <RootNamespace>Hearty.Server.Demo</RootNamespace>
+    <AssemblyName>Hearty.Server.Demo</AssemblyName>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <RollForward>Major</RollForward>

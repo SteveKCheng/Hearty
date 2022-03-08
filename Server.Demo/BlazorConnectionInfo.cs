@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 
-namespace Hearty.Server.Program
+namespace Hearty.Server.Demo
 {
     /// <summary>
     /// Information established on a client's connection to Blazor

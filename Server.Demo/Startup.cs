@@ -22,7 +22,7 @@ using idunno.Authentication.Basic;
 using System.Security.Claims;
 using Hearty.Server.WebUi;
 
-namespace Hearty.Server.Program
+namespace Hearty.Server.Demo
 {
     public class Startup
     {

@@ -7,7 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Hearty.Server.Program
+namespace Hearty.Server.Demo
 {
     public class Program
     {
