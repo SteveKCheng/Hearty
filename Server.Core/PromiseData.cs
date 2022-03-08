@@ -344,7 +344,7 @@ namespace Hearty.Server
     }
 
     /// <summary>
-    /// Input parameters for <see cref="PromiseData.WriteToPipeAsync" />
+    /// Input parameters for <see cref="PromiseData.WriteToPipeAsync(PipeWriter, PromiseWriteRequest, CancellationToken)" />.
     /// </summary>
     public readonly struct PromiseWriteRequest
     {
@@ -360,12 +360,12 @@ namespace Hearty.Server
         /// to a value for this member, call
         /// <see cref="PromiseData.NegotiateFormat(StringValues)" />.
         /// </remarks>
-        public int Format { get; init; }
+        public int Format { get; init; } = 0;
 
         /// <summary>
         /// The desired starting position in the data.
         /// </summary>
-        public long Start { get; init; }
+        public long Start { get; init; } = 0;
 
         /// <summary>
         /// The desired ending position in the data.
@@ -386,6 +386,13 @@ namespace Hearty.Server
         /// negotiation itself, and if it fails, report
         /// that error within the payload of the container.
         /// </remarks>
-        public StringValues InnerFormat { get; init; }
+        public StringValues InnerFormat { get; init; } = StringValues.Empty;
+
+        /// <summary>
+        /// Initializes properties to their default values.
+        /// </summary>
+        public PromiseWriteRequest() 
+        { 
+        }
     }
 }
