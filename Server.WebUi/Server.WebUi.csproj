@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Hearty.Server.WebUi</RootNamespace>
+    <AssemblyName>Hearty.Server.WebUi</AssemblyName>
+    <Description>Dashboards for Hearty implemented through ASP.NET Core server-side Blazor </Description>
+  </PropertyGroup>
+
+  <Import Project="..\Packaging.props" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\Server.Core\Server.Core.csproj" />
+    <ProjectReference Include="..\Server.Mocks\Server.Mocks.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="GitVersion.MsBuild" Version="5.8.3" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="6.0.1" />
+  </ItemGroup>
+  
+</Project>

@@ -1,10 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Hearty.Scheduling;
 
-namespace Hearty.Server.Program
+namespace Hearty.Server.WebUi
 {
     /// <summary>
     /// Triggers actions after short, relative timeouts in a scalable way.

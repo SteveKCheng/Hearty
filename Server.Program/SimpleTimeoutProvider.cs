@@ -1,5 +1,6 @@
 ﻿using System;
 using Hearty.Scheduling;
+using Hearty.Server.WebUi;
 
 namespace Hearty.Server.Program
 {

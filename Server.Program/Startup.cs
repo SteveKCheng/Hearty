@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using System.Linq;
 using idunno.Authentication.Basic;
 using System.Security.Claims;
+using Hearty.Server.WebUi;
 
 namespace Hearty.Server.Program
 {
