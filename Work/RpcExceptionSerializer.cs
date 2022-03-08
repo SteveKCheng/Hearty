@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Buffers;
 using MessagePack;
-using Hearty.WebSockets;
+using Hearty.Carp;
 using Hearty.Common;
 
 namespace Hearty.Work

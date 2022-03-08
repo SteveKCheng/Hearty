@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using System.Net.WebSockets;
-using Hearty.WebSockets;
+using Hearty.Carp;
 using System.IO.Pipes;
 using MessagePack;
 using System.Threading;

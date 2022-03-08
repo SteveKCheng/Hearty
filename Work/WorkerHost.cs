@@ -1,4 +1,4 @@
-﻿using Hearty.WebSockets;
+﻿using Hearty.Carp;
 using MessagePack;
 using System;
 using System.Net.WebSockets;

@@ -2,7 +2,7 @@
 using System;
 using System.Buffers;
 
-namespace Hearty.WebSockets
+namespace Hearty.Carp
 {
     /// <summary>
     /// Holds a reply before it gets sent over WebSockets.

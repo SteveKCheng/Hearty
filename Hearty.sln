@@ -13,7 +13,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Server.Core", "Server.Core\
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Server.Program", "Server.Program\Server.Program.csproj", "{BC53DF36-4F87-447D-AEB1-6901E0DFE0AC}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WebSockets", "WebSockets\WebSockets.csproj", "{292A2C53-6258-49C2-9AB1-126C405151BC}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Carp", "Carp\Carp.csproj", "{292A2C53-6258-49C2-9AB1-126C405151BC}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Work", "Work\Work.csproj", "{CBFA9C31-9F6B-40A4-9432-FEFE162AC14A}"
 EndProject
@@ -25,7 +25,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Server.Mocks", "Server.Mock
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Server.Tests", "Server.Tests\Server.Tests.csproj", "{ADAB545B-E199-4AE2-A6FD-F1411B1B3CE2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Server.WebApi", "Server.WebApi\Server.WebApi.csproj", "{C598FCEF-4FE1-4F4A-97E0-08CFA38DF2B3}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Server.WebApi", "Server.WebApi\Server.WebApi.csproj", "{C598FCEF-4FE1-4F4A-97E0-08CFA38DF2B3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

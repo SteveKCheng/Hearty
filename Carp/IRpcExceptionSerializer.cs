@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Buffers;
 
-namespace Hearty.WebSockets
+namespace Hearty.Carp
 {
     /// <summary>
     /// Allows customizing how .NET exceptions are serialized by the RPC system.

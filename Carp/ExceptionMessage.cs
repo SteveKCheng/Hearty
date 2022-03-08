@@ -2,7 +2,7 @@
 using System;
 using System.Buffers;
 
-namespace Hearty.WebSockets
+namespace Hearty.Carp
 {
     internal sealed class ExceptionMessage : RpcMessage
     {

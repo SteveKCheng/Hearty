@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MessagePack;
 
-namespace Hearty.WebSockets
+namespace Hearty.Carp
 {
     /// <summary>
     /// An asynchronous function that can be invoked by the RPC

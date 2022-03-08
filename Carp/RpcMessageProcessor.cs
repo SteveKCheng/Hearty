@@ -4,7 +4,7 @@ using System.Buffers;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Hearty.WebSockets
+namespace Hearty.Carp
 {
     /// <summary>
     /// Accepts incoming non-reply messages for processing

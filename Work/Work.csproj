@@ -21,7 +21,7 @@
     
   <ItemGroup>
     <ProjectReference Include="..\Common\Common.csproj" />
-    <ProjectReference Include="..\WebSockets\WebSockets.csproj" />
+    <ProjectReference Include="..\Carp\Carp.csproj" />
   </ItemGroup>
 
 </Project>

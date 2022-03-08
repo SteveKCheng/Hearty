@@ -2,7 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Hearty.WebSockets
+namespace Hearty.Carp
 {
     /// <summary>
     /// Arguments for the <see cref="RpcConnection.OnClose" /> event.

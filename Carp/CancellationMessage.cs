@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Hearty.WebSockets
+namespace Hearty.Carp
 {
     internal sealed class CancellationMessage : RpcMessage
     {

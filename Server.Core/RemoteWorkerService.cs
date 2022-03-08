@@ -3,7 +3,7 @@ using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Hearty.Scheduling;
-using Hearty.WebSockets;
+using Hearty.Carp;
 using Hearty.Work;
 
 namespace Hearty.Server

@@ -2,7 +2,7 @@
 using System.Buffers;
 using System.IO;
 
-namespace Hearty.WebSockets
+namespace Hearty.Carp
 {
     /// <summary>
     /// Represents a pending message in <see cref="WebSocketRpc"/>'s internal

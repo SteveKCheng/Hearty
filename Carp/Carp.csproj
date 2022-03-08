@@ -3,11 +3,11 @@
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <RootNamespace>Hearty.WebSockets</RootNamespace>
-    <AssemblyName>Hearty.WebSockets</AssemblyName>
+    <RootNamespace>Hearty.Carp</RootNamespace>
+    <AssemblyName>Hearty.Carp</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
-    <Description>Library for lightweight remote procedure calls based on WebSockets and MessagePack</Description>
+    <Description>Lightweight library for C#-first asynchronous remote procedure (CARP) calls</Description>
   </PropertyGroup>
 
   <Import Project="..\Packaging.props" />

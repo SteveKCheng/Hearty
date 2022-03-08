@@ -1,5 +1,5 @@
 ﻿using Hearty.Scheduling;
-using Hearty.WebSockets;
+using Hearty.Carp;
 using Hearty.Work;
 using System;
 using System.Threading;

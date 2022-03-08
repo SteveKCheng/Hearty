@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using System.Threading.Tasks.Sources;
 using MessagePack;
 
-namespace Hearty.WebSockets
+namespace Hearty.Carp
 {
     /// <summary>
     /// Holds the request data before it gets sent over WebSockets,
