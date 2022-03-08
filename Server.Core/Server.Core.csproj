@@ -51,12 +51,12 @@
 
   <ItemGroup>
     <PackageReference Include="GitVersion.MsBuild" Version="5.8.3" PrivateAssets="all" />
-    <PackageReference Include="GoldSaucer.BTree" Version="0.2.1" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="5.0.0" />
     <PackageReference Include="System.IO.Pipelines" Version="6.0.1" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\BTree\BTree.csproj" />
     <ProjectReference Include="..\Common\Common.csproj" />
     <ProjectReference Include="..\Utilities\Utilities.csproj" />
     <ProjectReference Include="..\Scheduling\Scheduling.csproj" />

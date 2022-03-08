@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net5.0</TargetFramework>
+    <AssemblyName>Hearty.BTree</AssemblyName>
+    <RootNamespace>Hearty.BTree</RootNamespace>
+    <Nullable>enable</Nullable>
+    <Description>Managed in-memory implementation of B+Trees</Description>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <Import Project="..\Packaging.props" />
+
+  <ItemGroup>
+    <Compile Include="BTree.cs" />
+    <Compile Include="BTree.Delete.cs" />
+    <Compile Include="BTree.Insert.cs" />
+    <Compile Include="BTreeCore.cs" />
+    <Compile Include="BTreeEnumerator.cs" />
+    <Compile Include="BTreeKeysCollection.cs" />
+    <Compile Include="BTreeMap.cs" />
+    <Compile Include="BTreePath.cs" />
+    <Compile Include="BTreeSet.cs" />
+    <Compile Include="BTreeValuesCollection.cs" />
+    <Compile Include="NodeLink.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="GitVersion.MsBuild" Version="5.8.3" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>
