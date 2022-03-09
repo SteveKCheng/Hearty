@@ -13,6 +13,7 @@
   <Import Project="..\Packaging.props" />
 
   <ItemGroup>
+    <Compile Include="BasicExceptionTranslator.cs" />
     <Compile Include="BasicPromiseStorage.cs" />
     <Compile Include="ClientJobQueue.cs" />
     <Compile Include="ServedMediaTypes.cs" />
