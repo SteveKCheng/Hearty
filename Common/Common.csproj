@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFrameworks>net6.0;net5.0</TargetFrameworks>
@@ -20,6 +20,7 @@
     <Compile Include="JobQueueKey.cs" />
     <Compile Include="ParsedContentType.cs" />
     <Compile Include="PromiseId.cs" />
+    <Compile Include="PromiseIdJsonConverter.cs" />
     <Compile Include="RemoteWorkException.cs" />
     <Compile Include="RestApiUtilities.cs" />
   </ItemGroup>

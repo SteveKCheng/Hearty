@@ -3,6 +3,9 @@ using System.Globalization;
 using System.Diagnostics.CodeAnalysis;
 using static System.FormattableString;
 using System.Text;
+using System.Text.Json.Serialization;
+
+using Hearty.Common;
 
 namespace Hearty
 {
@@ -26,6 +29,7 @@ namespace Hearty
     /// identify the promise object if it has been swapped out of memory.
     /// </para>
     /// </remarks>
+    [JsonConverter(typeof(PromiseIdJsonConverter))]
     public readonly struct PromiseId : IComparable<PromiseId>
                                      , IEquatable<PromiseId>
 #if NET6_0_OR_GREATER
@@ -184,10 +188,24 @@ namespace Hearty
         public static bool operator >=(PromiseId left, PromiseId right)
             => left.CompareTo(right) >= 0;
 
-#if NET6_0_OR_GREATER
         /// <inheritdoc />
         public bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format, IFormatProvider? provider)
-            => destination.TryWrite(provider, $"{ServiceId:X8}/{SequenceNumber}", out charsWritten);
+        {
+#if NET6_0_OR_GREATER
+            return destination.TryWrite(null, $"{ServiceId:X8}/{SequenceNumber}", out charsWritten);
+#else
+            if (destination.Length < MaxChars)
+            {
+                charsWritten = 0;
+                return false;
+            }
+
+            var s = ToString();
+            s.AsSpan().CopyTo(destination);
+            charsWritten = s.Length;
+            return true;
+#endif
+        }
 
         /// <inheritdoc />
         public string ToString(string? format, IFormatProvider? formatProvider)
@@ -236,6 +254,5 @@ namespace Hearty
         /// </exception>
         public int FormatAscii(Memory<byte> destination)
             => FormatAscii(destination.Span);
-#endif
     }
 }
