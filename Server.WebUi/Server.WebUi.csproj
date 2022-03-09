@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Razor">
+﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
@@ -12,7 +12,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Server.Core\Server.Core.csproj" />
-    <ProjectReference Include="..\Server.Mocks\Server.Mocks.csproj" />
   </ItemGroup>
 
   <ItemGroup>

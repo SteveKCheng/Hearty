@@ -7,7 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Hearty.Server.WebUi.Pages
+namespace Hearty.Server.Demo.Pages
 {
     public partial class MockJobLoad
     {
