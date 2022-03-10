@@ -23,7 +23,8 @@ namespace Hearty.Server
         /// <summary>
         /// Create a promise object with the specified input.
         /// </summary>
-        public abstract Promise CreatePromise(PromiseData request);
+        public abstract Promise CreatePromise(PromiseData? input,
+                                              PromiseData? output = null);
 
         /// <summary>
         /// Retrieve the promise object that had been assigned

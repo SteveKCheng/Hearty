@@ -49,12 +49,13 @@ namespace Hearty.Server
         }
 
         /// <inheritdoc />
-        public override Promise CreatePromise(PromiseData request)
+        public override Promise CreatePromise(PromiseData? input,
+                                              PromiseData? output = null)
         {
             var newId = new PromiseId(Interlocked.Increment(ref _currentId));
 
             var currentTime = DateTime.UtcNow;
-            var promise = new Promise(currentTime, newId, request);
+            var promise = new Promise(currentTime, newId, input, output);
             var expiryTime = GetDefaultPromiseExpiryTime(currentTime);
 
             if (!_promisesById.TryAdd(newId, promise))

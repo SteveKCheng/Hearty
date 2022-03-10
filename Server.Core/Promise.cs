@@ -77,11 +77,18 @@ namespace Hearty.Server
 
         public PromiseId Id { get; }
 
-        public Promise(DateTime creationTime, PromiseId id, PromiseData request)
+        public Promise(DateTime creationTime, PromiseId id, PromiseData? input, PromiseData? output)
         {
             Id = id;
             CreationTime = creationTime;
-            RequestOutput = request;
+            RequestOutput = input;
+
+            if (output is not null)
+            {
+                _resultOutput = output;
+                _hasAsyncResult = 1;
+                _isFulfilled = 1;
+            }
         }
 
         public DateTime? Expiry { get; internal set; }
@@ -102,7 +109,7 @@ namespace Hearty.Server
         /// <remarks>
         /// Any subscribers to this promise are notified.
         /// </remarks>
-        internal void PostResult(PromiseData result)
+        internal void PostResultInternal(PromiseData result)
         {
             Debug.Assert(_isFulfilled == 0);
 
@@ -187,7 +194,7 @@ namespace Hearty.Server
         }
 
         /// <summary>
-        /// Calls <see cref="PostResult"/> with a job's output when the result task
+        /// Calls <see cref="PostResultInternal"/> with a job's output when the result task
         /// completes.
         /// </summary>
         /// <remarks>
@@ -216,7 +223,7 @@ namespace Hearty.Server
                 output = exceptionTranslator.Invoke(Id, e);
             }
 
-            PostResult(output);
+            PostResultInternal(output);
             postAction?.Invoke(this);
         }
 
