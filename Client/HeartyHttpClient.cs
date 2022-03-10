@@ -173,6 +173,7 @@ public class HeartyHttpClient : IHeartyClient
                                    wantResult: true,
                                    queue: queue);
         var message = new HttpRequestMessage(HttpMethod.Post, url);
+        AddAuthorizationHeader(message);
         reader.AddAcceptHeaders(message.Headers);
         message.Headers.TryAddWithoutValidation(HeaderNames.Accept, ExceptionPayload.JsonMediaType);
         message.Content = input.CreateHttpContent();
@@ -246,6 +247,7 @@ public class HeartyHttpClient : IHeartyClient
                                    timeout: (timeout != TimeSpan.Zero) ? timeout : null);
 
         var request = new HttpRequestMessage(HttpMethod.Get, url);
+        AddAuthorizationHeader(request);
         reader.AddAcceptHeaders(request.Headers);
 
         var response = await _httpClient.SendAsync(request, 
@@ -287,6 +289,7 @@ public class HeartyHttpClient : IHeartyClient
         var url = CreateRequestUrl("jobs/v1/id/", promiseId);
 
         var request = new HttpRequestMessage(HttpMethod.Get, url);
+        AddAuthorizationHeader(request);
         request.Headers.TryAddWithoutValidation(HeaderNames.Accept, MultipartParallelMediaType);
         request.Headers.TryAddWithoutValidation(HeaderNames.Accept, ExceptionPayload.JsonMediaType);
         request.Headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, ExceptionPayload.JsonMediaType);
@@ -326,6 +329,7 @@ public class HeartyHttpClient : IHeartyClient
                                    queue: queue);
 
         var request = new HttpRequestMessage(HttpMethod.Post, url);
+        AddAuthorizationHeader(request);
         request.Content = input.CreateHttpContent();
         request.Headers.TryAddWithoutValidation(HeaderNames.Accept, MultipartParallelMediaType);
         request.Headers.TryAddWithoutValidation(HeaderNames.Accept, ExceptionPayload.JsonMediaType);
@@ -494,10 +498,11 @@ public class HeartyHttpClient : IHeartyClient
     /// </summary>
     private void AddAuthorizationHeader(HttpRequestMessage httpRequest)
     {
-        var headerValue = _bearerTokenHeaderValue ??
-                throw new InvalidOperationException(
-                    "This client must sign in to the Hearty server " +
-                    "first or be supplied a bearer token. ");
+        var headerValue = _bearerTokenHeaderValue;
+
+        if (headerValue is null)
+            return;
+
         httpRequest.Headers.TryAddWithoutValidation(HeaderNames.Authorization, 
                                                     headerValue);
     }
