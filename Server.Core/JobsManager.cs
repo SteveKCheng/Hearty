@@ -286,7 +286,7 @@ namespace Hearty.Server
         /// has been pushed before (for another client).
         /// This sharing is accomplished by this method
         /// storing the relevant details into a table, keyed by 
-        /// <paramref name="promiseId" />.
+        /// <see cref="Promise.Id" /> of <paramref name="promise" />.
         /// </para>
         /// <para>
         /// This method is only used for non-macro jobs.
@@ -732,7 +732,7 @@ namespace Hearty.Server
         /// <param name="builderFactory">Provides the implementation
         /// of <see cref="IPromiseListBuilder" /> for gathering the
         /// promises generated from <paramref name="expansion" />,
-        /// and storing them into <paramref name="promise" />.
+        /// and storing them into the created promise.
         /// </param>
         /// <param name="expansion">
         /// Expands the macro job into the micro jobs once 
@@ -790,6 +790,65 @@ namespace Hearty.Server
 
             return promise;
         }
+
+        /// <summary>
+        /// Create a push a "macro job" into a job queue which
+        /// dynamically expands into many "micro jobs".
+        /// </summary>
+        /// <param name="queueKey">
+        /// Selects the queue to push the jobs into.
+        /// </param>
+        /// <param name="ownerPrincipal">
+        /// "Principal" object describing the owner of the queue
+        /// if the queue is to be created.  Ignored if the queue
+        /// already exists.
+        /// </param>
+        /// <param name="promiseRetriever">
+        /// Callback to the user's code to obtain the promise which 
+        /// should receive the results from the job.  The desired 
+        /// <see cref="Promise" /> object cannot be passed down directly, 
+        /// because in the rare case that an existing job raced to cancel, 
+        /// the promise object needs to be refreshed in a retry loop.
+        /// </param>
+        /// <param name="work">
+        /// Describes the work to do in the scheduled job.
+        /// Unlike for micro jobs, the work described in this argument
+        /// is not "executed" directly; it only exists here so that
+        /// it can be forwarded to <paramref name="promiseRetriever" />.
+        /// </param>
+        /// <param name="builderFactory">Provides the implementation
+        /// of <see cref="IPromiseListBuilder" /> for gathering the
+        /// promises generated from <paramref name="expansion" />,
+        /// and storing them into the created promise.
+        /// </param>
+        /// <param name="expansion">
+        /// Expands the macro job into the micro jobs once 
+        /// it has been de-queued and ready to run.
+        /// </param>
+        /// <param name="registerClient">
+        /// If true, the client is registered for remote cancellation,
+        /// and <paramref name="cancellationToken" /> is ignored.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Used by the caller to request cancellation of the macro job
+        /// and any micro jobs created from it.
+        /// </param>
+        public Promise PushMacroJob(JobQueueKey queueKey,
+                                    ClaimsPrincipal? ownerPrincipal,
+                                    PromiseRetriever promiseRetriever,
+                                    PromisedWork work,
+                                    PromiseListBuilderFactory builderFactory,
+                                    IEnumerable<(PromiseRetriever, PromisedWork)> expansion,
+                                    bool registerClient,
+                                    CancellationToken cancellationToken = default)
+            => PushMacroJob(queueKey,
+                            ownerPrincipal,
+                            promiseRetriever,
+                            work,
+                            builderFactory,
+                            new AsyncEnumerableAdaptor<(PromiseRetriever, PromisedWork)>(expansion),
+                            registerClient,
+                            cancellationToken);
 
         #endregion
     }

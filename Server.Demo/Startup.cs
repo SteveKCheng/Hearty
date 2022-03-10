@@ -312,17 +312,11 @@ namespace Hearty.Server.Demo
                 static w => w.Promise! ?? throw new ArgumentNullException(), 
                 new PromisedWork(request) { Promise = promise }, 
                 _ => new PromiseList(input.Storage),
-                AsAsyncEnumerable(microJobs),
+                microJobs,
                 input.FireAndForget,
                 input.CancellationToken);
 
             return promise.Id;
-        }
-
-        private static async IAsyncEnumerable<T> AsAsyncEnumerable<T>(IEnumerable<T> sequence)
-        {
-            foreach (var item in sequence)
-                yield return item;
         }
 
         /// <summary>
