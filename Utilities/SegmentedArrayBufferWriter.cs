@@ -25,7 +25,7 @@ namespace Hearty.Utilities
     /// allocation per use.
     /// </para>
     /// </remarks>
-    public struct SegmentedArrayBufferWriter<T> : IBufferWriter<T>
+    public class SegmentedArrayBufferWriter<T> : IBufferWriter<T>
     {
         /// <summary>
         /// The size assumed when allocating buffers initially, unless
