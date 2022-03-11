@@ -321,6 +321,9 @@ public class HeartyHttpClient : IHeartyClient
             PayloadReader<T> reader,
             CancellationToken cancellationToken = default)
     {
+        if (reader.OwnsStream)
+            ThrowOnReaderOwningStream(nameof(reader));
+
         var url = CreateRequestUrl("jobs/v1/id/", promiseId);
 
         var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -371,6 +374,11 @@ public class HeartyHttpClient : IHeartyClient
         }
     }
 
+    private static void ThrowOnReaderOwningStream(string paramName)
+    {
+        throw new ArgumentException("The payload reader on each item cannot own the underlying stream. ",
+                                    paramName);
+    }
 
     /// <inheritdoc cref="IHeartyClient.RunJobStreamAsync" />
     public IAsyncEnumerable<KeyValuePair<int, T>>
@@ -380,6 +388,9 @@ public class HeartyHttpClient : IHeartyClient
                              JobQueueKey queue = default,
                              CancellationToken cancellationToken = default)
     {
+        if (reader.OwnsStream)
+            ThrowOnReaderOwningStream(nameof(reader));
+
         var url = CreateRequestUrl("jobs/v1/queue",
                                    route: route,
                                    wantResult: true,
