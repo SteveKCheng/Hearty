@@ -19,7 +19,7 @@ namespace Hearty.Common
         /// <summary>
         /// Header that reports the promise ID in the response.
         /// </summary>
-        public static readonly string PromiseId = "X-Promise-Id";
+        public static readonly string PromiseId = "Promise-Id";
 
         /// <summary>
         /// Content type desired by the client for the items 
