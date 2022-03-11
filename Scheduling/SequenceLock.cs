@@ -87,7 +87,8 @@ namespace Hearty.Scheduling
         /// avoid concurrent writers, but they will work correctly.
         /// </para>
         /// <para>
-        /// You must call <see cref="EndWriteTransaction(uint, T)" />
+        /// You must call <see cref="EndWriteTransaction(uint)" />
+        /// or <see cref="EndWriteTransaction(uint, in T)" />
         /// unconditionally after this method returns, or the sequence
         /// lock will be "stuck".  Be especially careful of exceptions.
         /// </para>

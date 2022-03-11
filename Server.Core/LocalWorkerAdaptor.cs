@@ -27,16 +27,21 @@ namespace Hearty.Server
     /// </remarks>
     public class LocalWorkerAdaptor : IJobWorker<PromisedWork, PromiseData>
     {
+        /// <inheritdoc cref="IWorkerNotification.Name" />
         public string Name { get; }
 
+        /// <inheritdoc cref="IWorkerNotification.IsAlive" />
         public bool IsAlive => true;
 
+        /// <inheritdoc cref="IWorkerNotification.OnEvent" />
         public event EventHandler<WorkerEventArgs>? OnEvent;
 
+        /// <inheritdoc cref="IJobWorker{TInput, TOutput}.AbandonJob" />
         public void AbandonJob(uint executionId)
         {
         }
 
+        /// <inheritdoc cref="IJobWorker{TInput, TOutput}.ExecuteJobAsync" />
         public ValueTask<PromiseData> ExecuteJobAsync(uint executionId,
                                                       IRunningJob<PromisedWork> runningJob,
                                                       CancellationToken cancellationToken)
@@ -47,6 +52,15 @@ namespace Hearty.Server
         
         private readonly IJobSubmission _impl;
 
+        /// <summary>
+        /// Constructs a local worker that executes jobs 
+        /// according to <see cref="IJobSubmission" />.
+        /// </summary>
+        /// <param name="impl">
+        /// Implementation of executing the work using serialized inputs/outputs.
+        /// </param>
+        /// <param name="name">The name of the new worker, for logging
+        /// and reporting. </param>
         public LocalWorkerAdaptor(IJobSubmission impl, string name)
         {
             _impl = impl;

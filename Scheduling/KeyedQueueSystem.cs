@@ -205,7 +205,7 @@ namespace Hearty.Scheduling
         /// <inheritdoc cref="IReadOnlyDictionary{TKey, TValue}.Values" />
         public IEnumerable<TQueue> Values => ListMembers().Select(item => item.Value);
 
-        /// <inheritdoc cref="IReadOnlyDictionary{TKey, TValue}.Count" />
+        /// <inheritdoc cref="IReadOnlyCollection{T}.Count" />
         public int Count => _members.Count;
 
         /// <inheritdoc cref="IReadOnlyDictionary{TKey, TValue}.ContainsKey" />

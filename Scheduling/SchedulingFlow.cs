@@ -73,7 +73,7 @@ namespace Hearty.Scheduling
 
         /// <summary>
         /// Whether this queue is active, i.e. it may have a job available
-        /// from the next call to <see cref="TakeJob" />.
+        /// from the next call to <see cref="TryTakeItem(out T, out int)" />.
         /// </summary>
         public bool IsActive => PriorityHeapIndex >= 0;
 
@@ -156,7 +156,7 @@ namespace Hearty.Scheduling
         /// </summary>
         /// <remarks>
         /// This flag is needed by 
-        /// <see cref="SchedulingGroup{T}.TakeJob" />
+        /// <see cref="SchedulingGroup{T}.TryTakeItem(out T, out int)" />
         /// to avoid accidentally de-activating this child queue
         /// if there is a race with the user trying to re-activating it.
         /// </remarks>
@@ -178,10 +178,14 @@ namespace Hearty.Scheduling
         }
 
         /// <summary>
-        /// Pull out one job to execute for the fair scheduling system.
+        /// Pull out the next item from this scheduling flow.
         /// </summary>
+        /// <param name="item">
+        /// Set to the retrieved item when this method
+        /// returns true; otherwise set to the default value.
+        /// </param>
         /// <param name="charge">The amount of credit to charge
-        /// to the abstract queue where the job is coming from,
+        /// to the abstract queue where the item is coming from,
         /// to effect fair scheduling.
         /// </param>
         /// <remarks>
@@ -191,9 +195,9 @@ namespace Hearty.Scheduling
         /// calls to this method is made until re-activation.
         /// </remarks>
         /// <returns>
-        /// The job that the fair job scheduling system should be
-        /// processing next, or null if this source instance
-        /// currently has no job to process.  
+        /// The item that the fair scheduling system should be
+        /// processing next, or null if this flow 
+        /// currently has no item to process.  
         /// </returns>
         protected abstract bool TryTakeItem(
             [MaybeNullWhen(false)] out T item, out int charge);

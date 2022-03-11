@@ -17,24 +17,53 @@ namespace Hearty.Server.Mocks
     /// </remarks>
     public readonly struct MockPricingOutput : IEquatable<MockPricingOutput>
     {
+        /// <summary>
+        /// The name of the instrument, echoed back from 
+        /// <see cref="MockPricingInput.InstrumentName" />.
+        /// </summary>
         [JsonPropertyName("name")]
         public string? InstrumentName { get; init; }
 
+        /// <summary>
+        /// The computed net present value of the instrument.
+        /// </summary>
         [JsonPropertyName("value")]
         public double Value { get; init; }
 
+        /// <summary>
+        /// The "delta" (sensitivity to underlying spot price)
+        /// expressed in notional terms (the currency amount
+        /// of the underlying to hold to hedge the instrument).
+        /// </summary>
         [JsonPropertyName("delta")]
         public double NotionalDelta { get; init; }
 
+        /// <summary>
+        /// The "gamma" (second-order sensitivity to underlying spot price)
+        /// expressed in notional terms, measured for a 1%
+        /// move in the spot price of the underlying.
+        /// </summary>
         [JsonPropertyName("gamma")]
         public double NotionalGamma { get; init; }
 
+        /// <summary>
+        /// The "theta" (change in instrment value after one day,
+        /// assuming all other variables are held fixed).
+        /// </summary>
         [JsonPropertyName("theta")]
         public double ThetaDay { get; init; }
 
+        /// <summary>
+        /// The "vega" (sensitivity to volatility)
+        /// measured for a 1% absolute move in implied log-normal volatility.
+        /// </summary>
         [JsonPropertyName("vega")]
         public double Vega { get; init; }
 
+        /// <summary>
+        /// Get an instance of <see cref="JsonReaderOptions" /> suitable for JSON
+        /// de-serialization of this structure.
+        /// </summary>
         public static JsonReaderOptions GetJsonReaderOptions()
         {
             return new JsonReaderOptions

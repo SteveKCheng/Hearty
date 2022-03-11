@@ -49,8 +49,8 @@ public class ClientJobQueue
     /// Enqueue a "macro" job to the back of the queue that
     /// will generate a series of "micro" jobs.
     /// </summary>
-    /// <param name="job">
-    /// The macro job to enqueue.
+    /// <param name="jobs">
+    /// The sequence of jobs (which make up the "macro job") to enqueue.
     /// </param>
     public void Enqueue(IAsyncEnumerable<ILaunchableJob<PromisedWork, PromiseData>> jobs)
         => _flow.Enqueue(jobs);

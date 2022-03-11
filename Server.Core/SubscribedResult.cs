@@ -13,7 +13,7 @@ namespace Hearty.Server
     /// When this structure gets used inside <see cref="ValueTask{PromiseResult}" />,
     /// the client's subscription remains active even when the result is available
     /// immediately.  This behavior is deliberate.  Firstly, the "result" can be
-    /// an additional object like <see cref="PipeReader" /> that can have more
+    /// an additional object like a pipe reader that can have more
     /// asynchronous operations requested.   Secondly, sending the results to
     /// the client (over a network) is usually asynchronous also, and for more
     /// precise monitoring, it is best if the subscription stays open until the data

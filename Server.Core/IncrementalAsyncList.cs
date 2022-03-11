@@ -79,7 +79,7 @@ namespace Hearty.Server
         /// </summary>
         /// <remarks>
         /// <para>
-        /// When <see cref="TryGetMemberAsync(int)" /> is asked to
+        /// When <see cref="TryGetMemberAsync(int, CancellationToken)" /> is asked to
         /// read a member yet to be populated in an incomplete list,
         /// it asynchronously waits by populating the task for
         /// the desired index into this dictionary. The task is completed
@@ -343,7 +343,7 @@ namespace Hearty.Server
         /// Attempt to terminate the list.
         /// </summary>
         /// <remarks>
-        /// Terminating the list means that <see cref="TryGetMemberAsync(int)" />
+        /// Terminating the list means that <see cref="TryGetMemberAsync(int, CancellationToken)" />
         /// no longer waits for a member to be populated if it is not
         /// already there.
         /// </remarks>

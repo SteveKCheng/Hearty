@@ -112,7 +112,7 @@ namespace Hearty.Scheduling
         /// token may trigger at a slightly later time then when
         /// this object considers itself cancelled, i.e. when all
         /// of its clients trigger their cancellation tokens
-        /// (those passed in to <see cref="CreateJob" /> or
+        /// (those passed in to the constructor or
         /// <see cref="TryShareJob" />).
         /// </para>
         /// </remarks>
@@ -394,7 +394,7 @@ namespace Hearty.Scheduling
         /// Where to charge back for the time taken when the job is executed.
         /// There must be an "original" account, passed as a parameter here.
         /// More accounts can share the charges by adding them implicitly
-        /// through <see cref="CreateJob(ISchedulingAccount)" />.
+        /// through <see cref="TryShareJob" />.
         /// </param>
         /// <param name="timingQueue">
         /// Used to periodically fire timers to update the estimate
@@ -617,18 +617,11 @@ namespace Hearty.Scheduling
         /// </param>
         /// <remarks>
         /// <para>
-        /// If the same job gets scheduled multiple times (by different clients),
-        /// each time there is a different representative 
-        /// (of type <see cref="ScheduledJob{TInput, TOutput}" />
-        /// that points to the same instance of 
-        /// <see cref="SharedFuture{TInput, TOutput}" />.
-        /// </para>
-        /// <para>
         /// There can be an unavoidable race condition in that this future object
         /// gets cancelled by current clients (i.e. <see cref="IsCancelled" />
         /// becomes true) while this method is attempting to attach a new client.
         /// When that happens, the caller, if it wants the cancelled job restarted,
-        /// must create a new instance of this class through <see cref="CreateJob" />.
+        /// must create a new instance of this class.
         /// </para>
         /// <para>
         /// The race condition can be reliably and correctly detected

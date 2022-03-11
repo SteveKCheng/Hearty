@@ -103,7 +103,7 @@ namespace Hearty.Server
         public static PromisePath ForNumberedFile(string folder, uint number)
             => new PromisePath(number, folder, null);
 
-        /// <inheritdoc cref="IComparable{T}.CompareTo(T?)" />
+        /// <inheritdoc cref="IComparable{T}.CompareTo(T)" />
         public int CompareTo(PromisePath other)
         {
             int c = Folder.CompareTo(other.Folder);
@@ -117,7 +117,7 @@ namespace Hearty.Server
             return Name!.CompareTo(other.Name);
         }
 
-        /// <inheritdoc cref="IEquatable{T}.Equals(T?)" />
+        /// <inheritdoc cref="IEquatable{T}.Equals(T)" />
         public bool Equals(PromisePath other)
             => CompareTo(other) == 0;
 
@@ -133,6 +133,7 @@ namespace Hearty.Server
                                     Name?.GetHashCode() ?? 0);
         }
 
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
         public static bool operator ==(PromisePath left, PromisePath right)
             => left.Equals(right);
 
@@ -150,6 +151,7 @@ namespace Hearty.Server
 
         public static bool operator >=(PromisePath left, PromisePath right)
             => left.CompareTo(right) >= 0;
+#pragma warning restore CS1591 // Missing XML comment for publicly visible type or member
 
         /// <summary>
         /// Parse a path string for a promise 

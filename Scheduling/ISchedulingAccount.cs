@@ -53,7 +53,7 @@ namespace Hearty.Scheduling
         /// </summary>
         /// <remarks>
         /// This method updates the statistics that are returned by
-        /// <see cref="GetCompletionStatistics" />.
+        /// <see cref="CompletionStatistics" />.
         /// </remarks>
         /// <param name="charge">
         /// The cumulative charge for one of the items (typically a job)

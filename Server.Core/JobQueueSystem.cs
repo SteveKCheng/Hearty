@@ -32,6 +32,10 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     /// <inheritdoc cref="IJobQueueSystem.PriorityClassesCount" />
     public int PriorityClassesCount => _priorityClasses.Count;
 
+    /// <summary>
+    /// The default assumed when looking up a queue
+    /// without a specified priority class.
+    /// </summary>
     public int DefaultPriority => 5;
 
     private KeyedQueueSystem<JobMessage,
@@ -116,7 +120,7 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     public int GetPriorityClassWeight(int priority) 
         => _priorityClasses[priority].AsFlow().Weight;
 
-    /// <inheritdoc cref="IJobQueueSystem.GetClientQueues(IJobQueueOwner, int)" />
+    /// <inheritdoc cref="IJobQueueSystem.GetClientQueues(string, int)" />
     public IReadOnlyList<KeyValuePair<string, ClientJobQueue>> 
         GetClientQueues(string owner, int priority)
     {

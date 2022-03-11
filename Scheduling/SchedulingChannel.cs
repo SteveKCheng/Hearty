@@ -14,11 +14,18 @@ namespace Hearty.Scheduling
     {
         private readonly ChannelReader<T> _channelReader;
 
+        /// <summary>
+        /// Construct the scheduling flow which reads from the specified channel.
+        /// </summary>
+        /// <param name="channelReader">
+        /// The channel to read items from.
+        /// </param>
         public SchedulingChannel(ChannelReader<T> channelReader)
         {
             _channelReader = channelReader;
         }
 
+        /// <inheritdoc />
         protected override bool TryTakeItem(
             [MaybeNullWhen(false)] out T item, out int charge)
         {

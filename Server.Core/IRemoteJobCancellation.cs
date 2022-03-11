@@ -15,7 +15,7 @@ namespace Hearty.Server
     /// <para>
     /// When a remote process schedules work in the current
     /// .NET process through an API, it obviously cannot hold
-    /// instances of <see cref="CancellationTokenSource" /> 
+    /// instances of <see cref="System.Threading.CancellationTokenSource" /> 
     /// directly to trigger cancellations.  It only has an
     /// identifier or abstract reference to the work which 
     /// will have to be de-references from a look-up table.
@@ -24,7 +24,7 @@ namespace Hearty.Server
     /// </para>
     /// <para>
     /// This interface was originally made for 
-    /// <see cref="PromisesEndpoints" /> to be able to
+    /// the Web API to be able to
     /// cancel promises obtain 
     /// from <see cref="JobsManager" />.  However,
     /// the latter is deliberately 

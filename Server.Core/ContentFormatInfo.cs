@@ -132,21 +132,43 @@ public readonly partial struct ContentFormatInfo : IComparable<ContentFormatInfo
     public override int GetHashCode()
         => HashCode.Combine(MediaType, _flags);
 
+    /// <summary>
+    /// Returns true if the two instances of this structure are equivalent.
+    /// </summary>
     public static bool operator ==(ContentFormatInfo left, ContentFormatInfo right)
         => left.Equals(right);
 
+    /// <summary>
+    /// Returns true if the two instances of this structure are different.
+    /// </summary>
     public static bool operator !=(ContentFormatInfo left, ContentFormatInfo right)
         => !(left == right);
 
+    /// <summary>
+    /// Returns true when <paramref name="left" /> occurs earlier
+    /// than <paramref name="right"/> in the canonical sort ordering.
+    /// </summary>
     public static bool operator <(ContentFormatInfo left, ContentFormatInfo right)
         => left.CompareTo(right) < 0;
 
+    /// <summary>
+    /// Returns true when <paramref name="left" /> occurs earlier 
+    /// than <paramref name="right"/> or is equivalent in the canonical sort ordering.
+    /// </summary>
     public static bool operator <=(ContentFormatInfo left, ContentFormatInfo right)
         => left.CompareTo(right) <= 0;
 
+    /// <summary>
+    /// Returns true when <paramref name="left" /> occurs later
+    /// than <paramref name="right"/> in the canonical sort ordering.
+    /// </summary>
     public static bool operator >(ContentFormatInfo left, ContentFormatInfo right)
         => left.CompareTo(right) > 0;
 
+    /// <summary>
+    /// Returns true when <paramref name="left" /> occurs later
+    /// than <paramref name="right"/> or is equivalent in the canonical sort ordering.
+    /// </summary>
     public static bool operator >=(ContentFormatInfo left, ContentFormatInfo right)
         => left.CompareTo(right) >= 0;
 }

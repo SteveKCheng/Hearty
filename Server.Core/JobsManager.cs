@@ -535,8 +535,7 @@ namespace Hearty.Server
         /// Unregister the macro job/promise when it has finished expanding.
         /// </summary>
         /// <param name="promiseId">The promise ID for the macro job
-        /// as passed to <see cref="PushMacroJob" />, which registered
-        /// it.
+        /// which registered it.
         /// </param>
         /// <returns>
         /// Whether the registration entry existed and has been removed.
