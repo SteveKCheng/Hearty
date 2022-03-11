@@ -282,7 +282,7 @@ public class HeartyHttpClient : IHeartyClient
 
     private async IAsyncEnumerable<KeyValuePair<int, T>>
         GetResultStreamInternalAsync<T>(
-            PromiseId promiseId,
+            PromiseId? inputPromiseId,
             HttpRequestMessage request,
             PayloadReader<T> reader,
             [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -294,6 +294,9 @@ public class HeartyHttpClient : IHeartyClient
 
         response.EnsureSuccessStatusCode();
         var content = response.Content;
+
+        var promiseId = inputPromiseId ??
+                        GetPromiseId(response.Headers);
 
         var boundary = RestApiUtilities.GetMultipartBoundary(
                         content.Headers.TryGetSingleValue(HeaderNames.ContentType));
@@ -340,40 +343,6 @@ public class HeartyHttpClient : IHeartyClient
                 cancellationToken);
     }
 
-    private async IAsyncEnumerable<KeyValuePair<int, T>>
-        RunJobStreamInternalAsync<T>(
-            HttpRequestMessage request,
-            PayloadReader<T> reader,
-            [EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        var response = await _httpClient.SendAsync(request,
-                                                   HttpCompletionOption.ResponseHeadersRead,
-                                                   cancellationToken)
-                                        .ConfigureAwait(false);
-
-        response.EnsureSuccessStatusCode();
-        var content = response.Content;
-
-        var promiseId = GetPromiseId(content.Headers);
-
-        var boundary = RestApiUtilities.GetMultipartBoundary(
-                        content.Headers.TryGetSingleValue(HeaderNames.ContentType));
-
-        var multipartReader = new MultipartReader(boundary,
-                                                  content.ReadAsStream(cancellationToken));
-
-        KeyValuePair<int, T>? item;
-        while ((item = await ReadNextItemFromMultipartReaderAsync(
-                        promiseId,
-                        multipartReader,
-                        reader,
-                        cancellationToken).ConfigureAwait(false))
-                        is not null)
-        {
-            yield return item.GetValueOrDefault();
-        }
-    }
-
     private static void ThrowOnReaderOwningStream(string paramName)
     {
         throw new ArgumentException("The payload reader on each item cannot own the underlying stream. ",
@@ -404,7 +373,11 @@ public class HeartyHttpClient : IHeartyClient
         request.Headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, ExceptionPayload.JsonMediaType);
         reader.AddAcceptHeaders(request.Headers, HeartyHttpHeaders.AcceptItem);
 
-        return RunJobStreamInternalAsync(request, reader, cancellationToken);
+        return GetResultStreamInternalAsync(
+                null, 
+                request, 
+                reader, 
+                cancellationToken);
     }
 
     private static async ValueTask<KeyValuePair<int, T>?>
