@@ -173,16 +173,14 @@ public interface IHeartyClient : IDisposable
     /// operation.
     /// </param>
     /// <returns>
-    /// Asynchronous task returning the stream of items, once
-    /// the streaming connection to the server for the desired
-    /// promise has been established.  The stream itself is 
-    /// asynchronous, as it will be incrementally downloading
-    /// items.  The server may be also be producing
+    /// Asynchronous stream of items, which are downloaded
+    /// incrementally.  The server may be producing
     /// the items concurrently, so that it also cannot make
-    /// them available immediately.  The stream may be enumerated
-    /// only once as it is not buffered.
+    /// them available immediately.  The stream cannot be
+    /// assumed to be buffered, so if enumerating it more than once
+    /// may entail sending a new download request to the server.
     /// </returns>
-    Task<IAsyncEnumerable<KeyValuePair<int, T>>> GetResultStreamAsync<T>(
+    IAsyncEnumerable<KeyValuePair<int, T>> GetResultStreamAsync<T>(
         PromiseId promiseId,
         PayloadReader<T> reader,
         CancellationToken cancellationToken = default);
@@ -218,16 +216,15 @@ public interface IHeartyClient : IDisposable
     /// successful posting of the job, the job is not cancelled.
     /// </param>
     /// <returns>
-    /// Asynchronous task returning the stream of items, once
-    /// the streaming connection to the server for the desired
-    /// promise has been established.  The stream itself is 
-    /// asynchronous, as it will be incrementally downloading
-    /// items.  The server may be also be producing
-    /// the items concurrently, so that it also cannot make
-    /// them available immediately.  The stream may be enumerated
-    /// only once as it is not buffered.
+    /// Asynchronous stream of items from the job, which 
+    /// are downloaded incrementally and may be produced
+    /// by the server incrementally.  The job is submitted
+    /// upon the first time the stream is enumerated.  
+    /// Subsequent enumerations may re-submit the job,
+    /// depending on the implementation and whether the
+    /// job results get cached by the server.
     /// </returns>
-    Task<IAsyncEnumerable<KeyValuePair<int, T>>> RunJobStreamAsync<T>(
+    IAsyncEnumerable<KeyValuePair<int, T>> RunJobStreamAsync<T>(
         string route,
         PayloadWriter input,
         PayloadReader<T> reader,

@@ -91,9 +91,8 @@ namespace Hearty.Server.Tests
                                     input: new("application/json",
                                                stream => JsonSerializer.SerializeAsync(stream, inputs)));
 
-            var responses = await client.GetResultStreamAsync(promiseId,
-                                                            PricingOutputReader,
-                                                            default);
+            var responses = client.GetResultStreamAsync(promiseId,
+                                                        PricingOutputReader);
 
             var ordinalsSeen = new HashSet<int>();
 

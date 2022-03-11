@@ -280,23 +280,15 @@ public class HeartyHttpClient : IHeartyClient
             throw new FormatException("The content type to accept for the job output is invalid. ");
     }
 
-    /// <inheritdoc cref="IHeartyClient.GetResultStreamAsync" />
-    public async Task<IAsyncEnumerable<KeyValuePair<int, T>>> 
-        GetResultStreamAsync<T>(PromiseId promiseId,
-                                PayloadReader<T> reader,
-                                CancellationToken cancellationToken = default)
+    private async IAsyncEnumerable<KeyValuePair<int, T>> 
+        GetResultStreamInternalAsync<T>(
+            PromiseId promiseId,
+            HttpRequestMessage request,
+            PayloadReader<T> reader,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var url = CreateRequestUrl("jobs/v1/id/", promiseId);
-
-        var request = new HttpRequestMessage(HttpMethod.Get, url);
-        AddAuthorizationHeader(request);
-        request.Headers.TryAddWithoutValidation(HeaderNames.Accept, MultipartParallelMediaType);
-        request.Headers.TryAddWithoutValidation(HeaderNames.Accept, ExceptionPayload.JsonMediaType);
-        request.Headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, ExceptionPayload.JsonMediaType);
-        reader.AddAcceptHeaders(request.Headers, HeartyHttpHeaders.AcceptItem);
-            
-        var response = await _httpClient.SendAsync(request, 
-                                                   HttpCompletionOption.ResponseHeadersRead, 
+        var response = await _httpClient.SendAsync(request,
+                                                   HttpCompletionOption.ResponseHeadersRead,
                                                    cancellationToken)
                                         .ConfigureAwait(false);
 
@@ -306,17 +298,77 @@ public class HeartyHttpClient : IHeartyClient
         var boundary = RestApiUtilities.GetMultipartBoundary(
                         content.Headers.TryGetSingleValue(HeaderNames.ContentType));
 
-        var multipartReader = new MultipartReader(boundary, 
+        var multipartReader = new MultipartReader(boundary,
                                                   content.ReadAsStream(cancellationToken));
 
-        return MakeItemsAsyncEnumerable(promiseId, 
-                                        multipartReader, 
-                                        reader, 
-                                        cancellationToken);
+        var enumerator = MakeItemsAsyncEnumerator(promiseId,
+                                                  multipartReader,
+                                                  reader,
+                                                  cancellationToken);
+
+        while (await enumerator.MoveNextAsync().ConfigureAwait(false))
+            yield return enumerator.Current;
     }
 
+
+    /// <inheritdoc cref="IHeartyClient.GetResultStreamAsync" />
+    public IAsyncEnumerable<KeyValuePair<int, T>> 
+        GetResultStreamAsync<T>(
+            PromiseId promiseId,
+            PayloadReader<T> reader,
+            CancellationToken cancellationToken = default)
+    {
+        var url = CreateRequestUrl("jobs/v1/id/", promiseId);
+
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        AddAuthorizationHeader(request);
+        request.Headers.TryAddWithoutValidation(HeaderNames.Accept, MultipartParallelMediaType);
+        request.Headers.TryAddWithoutValidation(HeaderNames.Accept, ExceptionPayload.JsonMediaType);
+        request.Headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, ExceptionPayload.JsonMediaType);
+        reader.AddAcceptHeaders(request.Headers, HeartyHttpHeaders.AcceptItem);
+
+        return GetResultStreamInternalAsync(
+                promiseId, 
+                request, 
+                reader, 
+                cancellationToken);
+    }
+
+    private async IAsyncEnumerable<KeyValuePair<int, T>>
+        RunJobStreamInternalAsync<T>(
+            HttpRequestMessage request,
+            PayloadReader<T> reader,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var response = await _httpClient.SendAsync(request,
+                                                   HttpCompletionOption.ResponseHeadersRead,
+                                                   cancellationToken)
+                                        .ConfigureAwait(false);
+
+        response.EnsureSuccessStatusCode();
+        var content = response.Content;
+
+        var promiseId = GetPromiseId(content.Headers);
+
+        var boundary = RestApiUtilities.GetMultipartBoundary(
+                        content.Headers.TryGetSingleValue(HeaderNames.ContentType));
+
+        var multipartReader = new MultipartReader(boundary,
+                                                  content.ReadAsStream(cancellationToken));
+
+        var enumerator = MakeItemsAsyncEnumerator(
+                            promiseId,
+                            multipartReader,
+                            reader,
+                            cancellationToken);
+
+        while (await enumerator.MoveNextAsync().ConfigureAwait(false))
+            yield return enumerator.Current;
+    }
+
+
     /// <inheritdoc cref="IHeartyClient.RunJobStreamAsync" />
-    public async Task<IAsyncEnumerable<KeyValuePair<int, T>>>
+    public IAsyncEnumerable<KeyValuePair<int, T>>
         RunJobStreamAsync<T>(string route,
                              PayloadWriter input,
                              PayloadReader<T> reader,
@@ -336,33 +388,15 @@ public class HeartyHttpClient : IHeartyClient
         request.Headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, ExceptionPayload.JsonMediaType);
         reader.AddAcceptHeaders(request.Headers, HeartyHttpHeaders.AcceptItem);
 
-        var response = await _httpClient.SendAsync(request,
-                                                   HttpCompletionOption.ResponseHeadersRead,
-                                                   cancellationToken)
-                                        .ConfigureAwait(false);
-
-        response.EnsureSuccessStatusCode();
-        var content = response.Content;
-
-        var promiseId = GetPromiseId(content.Headers);
-
-        var boundary = RestApiUtilities.GetMultipartBoundary(
-                        content.Headers.TryGetSingleValue(HeaderNames.ContentType));
-
-        var multipartReader = new MultipartReader(boundary,
-                                                  content.ReadAsStream(cancellationToken));
-
-        return MakeItemsAsyncEnumerable(promiseId, 
-                                        multipartReader, 
-                                        reader, 
-                                        cancellationToken);
+        return RunJobStreamInternalAsync(request, reader, cancellationToken);
     }
 
-    private static async IAsyncEnumerable<KeyValuePair<int, T>> MakeItemsAsyncEnumerable<T>(
-        PromiseId promiseId,
-        MultipartReader multipartReader, 
-        PayloadReader<T> payloadReader,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    private static async IAsyncEnumerator<KeyValuePair<int, T>>
+        MakeItemsAsyncEnumerator<T>(
+            PromiseId promiseId,
+            MultipartReader multipartReader,
+            PayloadReader<T> payloadReader,
+            CancellationToken cancellationToken = default)
     {
         MultipartSection? section;
         while ((section = await multipartReader.ReadNextSectionAsync(cancellationToken)
@@ -373,7 +407,7 @@ public class HeartyHttpClient : IHeartyClient
                 throw new InvalidDataException("The 'Ordinal' header is expected in an item in the multi-part message but is not found. ");
 
             var contentType = new ParsedContentType(
-                                section.ContentType 
+                                section.ContentType
                                 ?? throw new InvalidDataException(
                                     "The 'Content-Type' header is missing for an item " +
                                     "in the multi-part message. "));
@@ -383,7 +417,7 @@ public class HeartyHttpClient : IHeartyClient
             {
                 var payload = await ExceptionPayload.TryReadAsync(promiseId,
                                                                   contentType,
-                                                                  section.Body, 
+                                                                  section.Body,
                                                                   cancellationToken)
                                                     .ConfigureAwait(false);
                 if (payload is null)
@@ -400,7 +434,7 @@ public class HeartyHttpClient : IHeartyClient
                 throw new InvalidDataException("The 'Ordinal' header is in an item in the multi-part message is invalid. ");
 
             var promiseIdString = section.Headers![HeartyHttpHeaders.PromiseId];
-            if (promiseIdString.Count != 1 || 
+            if (promiseIdString.Count != 1 ||
                 !PromiseId.TryParse(promiseIdString[0], out var itemPromiseId))
             {
                 throw new InvalidDataException("The server did not report the Promise ID of the item in a multi-part message properly. ");
@@ -408,12 +442,14 @@ public class HeartyHttpClient : IHeartyClient
 
             T item = await payloadReader.ReadFromStreamAsync(itemPromiseId,
                                                              contentType,
-                                                             section.Body, 
+                                                             section.Body,
                                                              cancellationToken)
                                         .ConfigureAwait(false);
+
             yield return KeyValuePair.Create(ordinal, item);
         }
     }
+
 
     private static bool VerifyContentType(ParsedContentType parsedActual, string expected)
     {
