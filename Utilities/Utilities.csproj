@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFrameworks>net6.0;net5.0</TargetFrameworks>
     <Nullable>enable</Nullable>
+    <LangVersion>10</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>Hearty.Utilities</RootNamespace>
     <AssemblyName>Hearty.Utilities</AssemblyName>
@@ -14,6 +15,7 @@
   <Import Project="..\Packaging.props" />
 
   <ItemGroup>
+    <Compile Include="BufferTextWriter.cs" />
     <Compile Include="CancellationSourcePool.cs" />
     <Compile Include="CircularListLinks.cs" />
     <Compile Include="MemoryReadingStream.cs" />
