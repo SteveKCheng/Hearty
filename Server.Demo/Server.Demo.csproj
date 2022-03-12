@@ -7,7 +7,6 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <RollForward>Major</RollForward>
-    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
   <ItemGroup>
