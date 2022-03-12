@@ -22,14 +22,42 @@ public class HeartyHttpClient : IHeartyClient
 {
     private readonly HttpClient _httpClient;
     private readonly bool _leaveOpen;
+    private readonly string _serverUrl;
 
     /// <summary>
     /// Wrap a strongly-typed interface for Hearty over 
     /// a standard HTTP client.
     /// </summary>
-    public HeartyHttpClient(HttpClient httpClient, bool leaveOpen = false)
+    /// <param name="httpClient">
+    /// Existing HTTP client instance.
+    /// </param>
+    /// <param name="serverUrl">
+    /// The HTTP URL to the Hearty server. 
+    /// If null, the URL will be taken from 
+    /// <see cref="HttpClient.BaseAddress" />.
+    /// </param>
+    /// <param name="leaveOpen">
+    /// If true, do not dispose <paramref name="httpClient" />
+    /// on disposing this instance.
+    /// </param>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="httpClient" /> is null,
+    /// or <paramref name="serverUrl" /> 
+    /// and
+    /// <see cref="HttpClient.BaseAddress" /> 
+    /// on <paramref name="httpClient" /> are both null.
+    /// </exception>
+    public HeartyHttpClient(HttpClient httpClient,
+                            string? serverUrl = null,
+                            bool leaveOpen = false)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _serverUrl = serverUrl ?? httpClient.BaseAddress?.AbsoluteUri
+                               ?? throw new ArgumentNullException(
+                                    nameof(serverUrl),
+                                    "The server URL must be specified " +
+                                    "since it is not present in HttpClient.BaseAddress. ");
+
         _leaveOpen = leaveOpen;
     }
 
@@ -92,6 +120,10 @@ public class HeartyHttpClient : IHeartyClient
                                     JobQueueKey queue = default)
     {
         var builder = new ValueStringBuilder(stackalloc char[1024]);
+
+        builder.Append(_serverUrl);
+        if (!_serverUrl.EndsWith('/'))
+            builder.Append('/');
 
         builder.Append(path);
 
