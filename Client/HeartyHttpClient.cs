@@ -34,6 +34,9 @@ public class HeartyHttpClient : IHeartyClient
     /// <param name="serverUrl">
     /// The HTTP URL to the Hearty server. 
     /// If null, the URL will be taken from 
+    /// <see cref="HttpClient.BaseAddress" />
+    /// which must then be set.
+    /// This URL may be relative to 
     /// <see cref="HttpClient.BaseAddress" />.
     /// </param>
     /// <param name="leaveOpen">
@@ -52,13 +55,26 @@ public class HeartyHttpClient : IHeartyClient
                             bool leaveOpen = false)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-        _serverUrl = serverUrl ?? httpClient.BaseAddress?.AbsoluteUri
-                               ?? throw new ArgumentNullException(
-                                    nameof(serverUrl),
-                                    "The server URL must be specified " +
-                                    "since it is not present in HttpClient.BaseAddress. ");
-
         _leaveOpen = leaveOpen;
+
+        // We assume this is an absolute URI if non-null, which
+        // is ensured by the property setter of HttpClient.BaseAddress.
+        Uri? baseAddress = httpClient.BaseAddress;
+
+        if (Uri.IsWellFormedUriString(serverUrl, UriKind.Absolute))
+            _serverUrl = serverUrl;
+        else if (baseAddress is not null && serverUrl is null)
+            _serverUrl = baseAddress.AbsoluteUri;
+        else if (baseAddress is not null && 
+                 Uri.IsWellFormedUriString(serverUrl, UriKind.Relative))
+            _serverUrl = new Uri(baseAddress, serverUrl).AbsoluteUri;
+        else if (serverUrl is null)
+            throw new ArgumentNullException(
+                        nameof(serverUrl),
+                        "The server URL must be specified " +
+                        "since it is not present in HttpClient.BaseAddress. ");
+        else
+            throw new ArgumentException("The server URL is invalid. ", nameof(serverUrl));
     }
 
     /// <inheritdoc cref="IDisposable.Dispose" />
