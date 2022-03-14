@@ -11,6 +11,13 @@ namespace Hearty.Scheduling
     /// <summary>
     /// A scheduling flow backed by <see cref="ConcurrentQueue{T}" />.
     /// </summary>
+    /// <typeparam name="T">
+    /// The type of items that are put into the queue.
+    /// </typeparam>
+    /// <typeparam name="TOut">
+    /// The type of items that come out from the queue
+    /// after transformation.
+    /// </typeparam>
     /// <remarks>
     /// <para>
     /// The contents of the queue can be observed, useful to visualize
@@ -46,10 +53,17 @@ namespace Hearty.Scheduling
     /// in the sub-sequence need to stay in the same scheduling flow
     /// to be prioritized correctly.
     /// </para>
+    /// <para>
+    /// Finally, individual items are subject to a transformation that
+    /// can be arbitrarily specified.  The transformation is typically
+    /// used to stamp the items 
+    /// so the originating scheduling flow can be identified when
+    /// the items come out of the containing scheduling group.
+    /// </para>
     /// </remarks>
-    public sealed class SchedulingQueue<T> 
-        : SchedulingFlow<T>
-        , ISchedulingFlow<T>
+    public class SchedulingQueue<T, TOut> 
+        : SchedulingFlow<TOut>
+        , ISchedulingFlow<TOut>
         , ISchedulingAccount
         , IReadOnlyCollection<AsyncExpandable<T>>
         where T: ISchedulingExpense
@@ -61,6 +75,12 @@ namespace Hearty.Scheduling
         private readonly ConcurrentQueue<AsyncExpandable<T>> _queue;
 
         /// <summary>
+        /// Function to transform the items put into the queue
+        /// to what comes out of the scheduling flow.
+        /// </summary>
+        private readonly Func<T, TOut> _itemTransform;
+
+        /// <summary>
         /// Current count of items, to optimize activation/de-activation of this queue.
         /// </summary>
         private int _count = 0;
@@ -69,13 +89,18 @@ namespace Hearty.Scheduling
         public int Count => _count;
 
         /// <inheritdoc cref="ISchedulingFlow{T}.AsFlow" />
-        public SchedulingFlow<T> AsFlow() => this;
+        public SchedulingFlow<TOut> AsFlow() => this;
 
         /// <summary>
         /// Construct the queue as initially empty.
         /// </summary>
-        public SchedulingQueue()
+        /// <param name="itemTransform">
+        /// Function to transform the items put into the queue
+        /// to what comes out of the scheduling flow.
+        /// </param>
+        public SchedulingQueue(Func<T, TOut> itemTransform)
         {
+            _itemTransform = itemTransform ?? throw new ArgumentNullException(nameof(itemTransform));
             _queue = new ConcurrentQueue<AsyncExpandable<T>>();
         }
 
@@ -143,7 +168,7 @@ namespace Hearty.Scheduling
         /// asynchronously when the flow is activated again.
         /// </remarks>
         private bool TryTakeItemFromEnumerator(
-            [MaybeNullWhen(false)] out T item, 
+            [MaybeNullWhen(false)] out TOut item, 
             out int charge,
             out bool waiting)
         {
@@ -162,8 +187,9 @@ namespace Hearty.Scheduling
 
                 if (task.IsCompletedSuccessfully && task.Result == true)
                 {
-                    item = enumerator.Current;
-                    charge = item.GetInitialCharge();
+                    var input = enumerator.Current;
+                    item = _itemTransform(input);
+                    charge = input.GetInitialCharge();
                     _currentEnumeratorTask = SafelyAdvanceAsyncEnumerator(enumerator);
                     return true;
                 }
@@ -269,7 +295,7 @@ namespace Hearty.Scheduling
         }
 
         /// <inheritdoc />
-        protected override bool TryTakeItem([MaybeNullWhen(false)] out T item, out int charge)
+        protected sealed override bool TryTakeItem([MaybeNullWhen(false)] out TOut item, out int charge)
         {
             lock (ReadSideCriticalSection)
             {
@@ -287,11 +313,7 @@ namespace Hearty.Scheduling
                     }
 
                     if (!_queue.TryDequeue(out entry))
-                    {
-                        item = default;
-                        charge = default;
                         return false;
-                    }
 
                     var enumerable = entry.Multiple;
                     if (enumerable is null)
@@ -302,8 +324,9 @@ namespace Hearty.Scheduling
                     _currentEnumeratorTask = SafelyAdvanceAsyncEnumerator(enumerator);
                 }
 
-                item = entry.Single;
-                charge = item.GetInitialCharge();
+                var input = entry.Single;
+                item = _itemTransform(input);
+                charge = input.GetInitialCharge();
 
                 DeactivateOnEmptyQueue();
 
@@ -387,5 +410,30 @@ namespace Hearty.Scheduling
         public SchedulingStatistics CompletionStatistics => _completionStats.Read();
 
         #endregion
+    }
+
+    /// <summary>
+    /// Same as <see cref="SchedulingQueue{T, TOut}" />
+    /// without any item transformation. 
+    /// </summary>
+    /// <typeparam name="T">
+    /// The type of items that are put into the queue.
+    /// </typeparam>
+    public class SchedulingQueue<T> : SchedulingQueue<T,T>
+        where T : ISchedulingExpense
+    {
+        /// <summary>
+        /// The identity function to do no transformation of
+        /// the input items.
+        /// </summary>
+        private static readonly Func<T, T> _identityTransform = x => x;
+
+        /// <summary>
+        /// Construct the queue as initially empty.
+        /// </summary>
+        public SchedulingQueue()
+            : base(_identityTransform)
+        {
+        }
     }
 }
