@@ -35,24 +35,26 @@
             {
                 var stats = queue.CompletionStatistics;
                 var seconds = (double)stats.CumulativeCharge / 1000.0;
-                bool showDetails = ShouldDisplayInDetail(key);
+
+                var jobs = ShouldDisplayInDetail(key) ? queue.GetCurrentJobs() : null;
+                var jobsCount = jobs?.Count ?? queue.Count;
 
                 <tr class="job-queue">
                     <td>@key.Owner</td>
-                    <td>@queue.Count</td>
+                    <td>@jobsCount</td>
                     <td>
                         @seconds.ToString("F3")
                         <a @onclick="() => AddToDetailDisplay(key)">(+)</a>
                     </td>
                 </tr>
 
-                if (showDetails)
+                if (jobs is not null)
                 {
                     <tr>
                         <td colspan="3">Details</td>
                     </tr>
 
-                    foreach (IPromisedWorkInfo job in queue)
+                    foreach (IPromisedWorkInfo job in jobs)
                     {
                         <tr>
                             <td>@job.Route</td>

@@ -228,15 +228,43 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
 
                 if (vacanciesChannel.TryRead(out var vacancy))
                 {
-                    if (jobMessagesChannel.TryRead(out var clientJob))
-                        vacancy.TryLaunchJob(clientJob.Job);
-                    else
-                        vacancy.Dispose();
+                    bool consumed = false;
+
+                    try
+                    {
+                        if (jobMessagesChannel.TryRead(out var clientJob))
+                        {
+                            consumed = true;
+                            if (vacancy.TryLaunchJob(clientJob.Job))
+                                _ = RegisterJobWhileRunningAsync(clientJob);
+                        }
+                    }
+                    finally
+                    {
+                        if (!consumed)
+                            vacancy.Dispose();
+                    }
                 }
             }
         }
         catch (OperationCanceledException e) when (e.CancellationToken == cancellationToken)
         {
+        }
+    }
+
+    /// <summary>
+    /// Register a job that has just been de-queued as running,
+    /// then unregister it when the job finishes.
+    /// </summary>
+    private static async Task RegisterJobWhileRunningAsync(ClientJobMessage clientJob)
+    {
+        using var _ = clientJob.Queue.RegisterRunningJob(clientJob.Job);
+        try
+        {
+            await clientJob.Job.OutputTask.ConfigureAwait(false);
+        }
+        catch 
+        { 
         }
     }
 
