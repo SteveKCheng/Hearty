@@ -144,10 +144,16 @@ public class HeartyHttpClient : IHeartyClient
         builder.Append(path);
 
         if (route is not null)
+        {
+            if (!path.EndsWith('/'))
+                builder.Append('/');
             builder.Append(route);
+        }
 
         if (promiseId != null)
         {
+            if (!path.EndsWith('/'))
+                builder.Append('/');
 #if NET6_0_OR_GREATER
             builder.Append(promiseId.Value);
 #else
