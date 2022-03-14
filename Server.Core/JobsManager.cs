@@ -588,6 +588,7 @@ namespace Hearty.Server
 
             // Retry loop for concurrently cancelled promises
             while ((message = TryRegisterMacroJob(queue,
+                                                  work.ReplacePromise(promise),
                                                   promise, 
                                                   builderFactory, 
                                                   expansion,
@@ -625,6 +626,7 @@ namespace Hearty.Server
         /// </summary>
         private MacroJobMessage? TryRegisterMacroJob(
                                     ClientJobQueue queue,
+                                    in PromisedWork work,
                                     Promise promise,
                                     PromiseListBuilderFactory builderFactory,
                                     MacroJobExpansion expansion,
@@ -646,13 +648,14 @@ namespace Hearty.Server
 
             // This code is separated into a local function to avoid
             // "goto" for re-doing operations due to concurrency conflict.
-            static MacroJobMessage? ProcessExistingEntry(MacroJob entry,
+            static MacroJobMessage? ProcessExistingEntry(in PromisedWork work,
+                                                         MacroJob entry,
                                                          PromiseData? existingOutput,
                                                          ClientJobQueue queue,
                                                          CancellationToken cancellationToken,
                                                          out bool isNewJob)
             {
-                var message = new MacroJobMessage(entry, queue, cancellationToken);
+                var message = new MacroJobMessage(work, entry, queue, cancellationToken);
                 if (message.IsValid)
                 {
                     isNewJob = false;
@@ -676,7 +679,8 @@ namespace Hearty.Server
                 // Promise is already registered.
                 if (!Unsafe.IsNullRef(ref entry))
                 {
-                    return ProcessExistingEntry(entry!,
+                    return ProcessExistingEntry(work,
+                                                entry!,
                                                 promise.ResultOutput,
                                                 queue, 
                                                 cancellationToken, 
@@ -705,7 +709,8 @@ namespace Hearty.Server
                 // and discard resultBuilder.
                 if (exists)
                 {
-                    return ProcessExistingEntry(newEntry!,
+                    return ProcessExistingEntry(work, 
+                                                newEntry!,
                                                 promise.ResultOutput,
                                                 queue,
                                                 cancellationToken,
@@ -714,7 +719,7 @@ namespace Hearty.Server
 
                 // Populate the new entry.
                 var macroJob = new MacroJob(this, resultBuilder, promiseId, expansion);
-                var message = new MacroJobMessage(macroJob, queue, cancellationToken);
+                var message = new MacroJobMessage(work, macroJob, queue, cancellationToken);
                 newEntry = macroJob;
                 isNewJob = true;
                 return message;

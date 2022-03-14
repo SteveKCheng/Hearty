@@ -39,6 +39,7 @@ using MacroJobLinks = CircularListLinks<MacroJobMessage, MacroJobMessage.ListLin
 /// </para>
 /// </remarks>
 internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
+                                      , IPromisedWorkInfo
                                       , IJobCancellation
                                       , IDisposable
 {
@@ -143,6 +144,20 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
     public bool IsValid => (_isInvalid == 0);
 
     /// <summary>
+    /// Data that is reported through <see cref="IPromisedWorkInfo" />;
+    /// it is not involved in creating or scheduling the jobs at all.
+    /// </summary>
+    private readonly PromisedWork _work;
+
+    string? IPromisedWorkInfo.Route => _work.Route;
+
+    string? IPromisedWorkInfo.Path => _work.Path;
+
+    PromiseId? IPromisedWorkInfo.PromiseId => _work.Promise?.Id;
+
+    int IPromisedWorkInfo.InitialWait => _work.InitialWait;
+
+    /// <summary>
     /// If true, the client's request needs to be unregistered 
     /// from <see cref="JobsManager" /> when the macro
     /// job finishes.
@@ -197,6 +212,10 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
     /// <summary>
     /// Construct the macro job message.
     /// </summary>
+    /// <param name="work">
+    /// Information about the work.  This is only used
+    /// for reporting.
+    /// </param>
     /// <param name="source">
     /// The macro job that this message should be attached to.
     /// </param>
@@ -210,7 +229,8 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
     /// and micro jobs cannot be cancelled independently
     /// of one another.
     /// </param>
-    internal MacroJobMessage(MacroJob source,
+    internal MacroJobMessage(in PromisedWork work,
+                             MacroJob source,
                              ClientJobQueue queue,
                              CancellationToken cancellationToken)
     {
