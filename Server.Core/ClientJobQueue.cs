@@ -8,24 +8,51 @@ using Hearty.Scheduling;
 namespace Hearty.Server;
 
 /// <summary>
+/// A job tagged with the client queue that it came from.
+/// </summary>
+internal struct ClientJobMessage
+{
+    /// <summary>
+    /// The client queue that the job had been enqueued into.
+    /// </summary>
+    public readonly ClientJobQueue Queue;
+
+    /// <summary>
+    /// The job to run on a worker.
+    /// </summary>
+    public readonly ILaunchableJob<PromisedWork, PromiseData> Job;
+
+    /// <summary>
+    /// Constructor.
+    /// </summary>
+    public ClientJobMessage(ClientJobQueue queue,
+                            ILaunchableJob<PromisedWork, PromiseData> job)
+    {
+        Queue = queue;
+        Job = job;
+    }
+}
+
+/// <summary>
 /// Queue for job messages submitted by one client, to take
 /// part in <see cref="JobsManager" />.
 /// </summary>
 public class ClientJobQueue
-    : ISchedulingFlow<ILaunchableJob<PromisedWork, PromiseData>>
+    : ISchedulingFlow<ClientJobMessage>
     , IReadOnlyCollection<IPromisedWorkInfo>
 {
-    private readonly SchedulingQueue<ILaunchableJob<PromisedWork, PromiseData>>
-        _flow = new();
+    private readonly SchedulingQueue<ILaunchableJob<PromisedWork, PromiseData>,
+                                     ClientJobMessage>
+        _flow;
 
     private readonly CancellationTokenSource _cancellationSource = new();
 
-    SchedulingFlow<ILaunchableJob<PromisedWork, PromiseData>> 
-        ISchedulingFlow<ILaunchableJob<PromisedWork, PromiseData>>.AsFlow()
-        => _flow;
+    SchedulingFlow<ClientJobMessage> 
+        ISchedulingFlow<ClientJobMessage>.AsFlow() => _flow;
 
     internal ClientJobQueue()
     {
+        _flow = new(item => new ClientJobMessage(this, item));
     }
 
     /// <summary>

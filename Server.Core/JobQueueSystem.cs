@@ -9,20 +9,18 @@ using System.Threading.Channels;
 
 namespace Hearty.Server;
 
-using JobMessage = ILaunchableJob<PromisedWork, PromiseData>;
-
 /// <summary>
 /// Manages a system of queues for scheduling clients' jobs.
 /// </summary>
 public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposable
 {
     private readonly PrioritizedQueueSystem<
-                        JobMessage,
+                        ClientJobMessage,
                         KeyedQueueSystem<
-                            JobMessage,
+                            ClientJobMessage,
                             string,
                             KeyedQueueSystem<
-                                JobMessage,
+                                ClientJobMessage,
                                 string,
                                 ClientJobQueue>>> _priorityClasses;
 
@@ -39,7 +37,7 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     /// </summary>
     public int DefaultPriority => 5;
 
-    private KeyedQueueSystem<JobMessage,
+    private KeyedQueueSystem<ClientJobMessage,
                               string,
                               ClientJobQueue> 
         CreateInnerQueueSystem()
@@ -49,10 +47,10 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     }
 
     private IEnumerable<KeyedQueueSystem<
-                            JobMessage, 
+                            ClientJobMessage, 
                             string,
                             KeyedQueueSystem<
-                                JobMessage,
+                                ClientJobMessage,
                                 string,
                                 ClientJobQueue>>>
         GenerateMiddleQueueSystems(int count)
@@ -195,7 +193,7 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     /// Assign jobs from a channel as soon as resources to execute that
     /// job are made available from another channel.
     /// </summary>
-    /// <param name="jobsChannel">
+    /// <param name="jobMessagesChannel">
     /// Presents the jobs to execute in a potentially non-ending sequence.
     /// The channel may be implemented by a queuing system like the one
     /// from this library.
@@ -217,7 +215,7 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     /// <paramref name="cancellationToken"/> signals cancellation.
     /// </exception>
     private static async Task RunJobsAsync(
-        ChannelReader<JobMessage> jobsChannel,
+        ChannelReader<ClientJobMessage> jobMessagesChannel,
         ChannelReader<JobVacancy<PromisedWork, PromiseData>> vacanciesChannel,
         CancellationToken cancellationToken)
     {
@@ -225,13 +223,13 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
         {
             while (await vacanciesChannel.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                if (!await jobsChannel.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+                if (!await jobMessagesChannel.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
                     break;
 
                 if (vacanciesChannel.TryRead(out var vacancy))
                 {
-                    if (jobsChannel.TryRead(out var job))
-                        vacancy.TryLaunchJob(job);
+                    if (jobMessagesChannel.TryRead(out var clientJob))
+                        vacancy.TryLaunchJob(clientJob.Job);
                     else
                         vacancy.Dispose();
                 }
