@@ -21,6 +21,8 @@ using System.Linq;
 using idunno.Authentication.Basic;
 using System.Security.Claims;
 using Hearty.Server.WebUi;
+using System.Diagnostics.Metrics;
+using OpenTelemetry.Metrics;
 
 namespace Hearty.Server.Demo
 {
@@ -52,6 +54,14 @@ namespace Hearty.Server.Demo
                 services.AddRazorPages();
                 services.AddServerSideBlazor();
             }
+
+            services.AddSingleton<Meter>(p => new Meter("Hearty.Server.Demo"));
+
+            services.AddOpenTelemetryMetrics(c =>
+            {
+                c.AddMeter("Hearty.Server.Demo", "System.Runtime")
+                 .AddPrometheusExporter();
+            });
 
             services.AddSingleton<PromiseStorage>(c =>
             {
@@ -200,6 +210,8 @@ namespace Hearty.Server.Demo
             app.UseAuthorization();
 
             app.UseWebSockets();
+
+            app.UseOpenTelemetryPrometheusScrapingEndpoint();
 
             app.UseEndpoints(endpoints =>
             {

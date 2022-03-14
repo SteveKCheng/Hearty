@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -43,11 +44,19 @@ namespace Hearty.Server
         private readonly IJobQueueSystem _jobQueues;
 
         /// <summary>
+        /// Counts the number of macro jobs successfully enqueued.
+        /// </summary>
+        private readonly Counter<int>? _macroJobsCounter;
+
+        /// <summary>
         /// Prepare the system to schedule jobs and assign them to workers.
         /// </summary>
         /// <param name="logger">
         /// Receives log messages for significant events in the job scheduling
         /// system.
+        /// </param>
+        /// <param name="meter">
+        /// Used to report metrics.
         /// </param>
         /// <param name="exceptionTranslator">
         /// Translates .NET exceptions when they occur as a result of 
@@ -57,13 +66,22 @@ namespace Hearty.Server
         /// Accepts client jobs after they have been registered and de-duplicated
         /// by this class.
         /// </param>        
-        public JobsManager(ILogger<JobsManager> logger, 
+        public JobsManager(ILogger<JobsManager> logger,
                            PromiseExceptionTranslator exceptionTranslator,
-                           IJobQueueSystem jobQueues)
+                           IJobQueueSystem jobQueues,
+                           Meter? meter = null)
         {
             _logger = logger;
             _exceptionTranslator = exceptionTranslator;
             _jobQueues = jobQueues;
+
+            if (meter is not null)
+            {
+                _macroJobsCounter = meter.CreateCounter<int>(
+                                        name: "macro-jobs", 
+                                        unit: "jobs",
+                                        description: "Number of macro jobs accepted");
+            }
 
             _unregisterClientJobAction = (future, _, clientToken) =>
                     this.UnregisterClientRequest(future.Input.Promise!.Id, 
@@ -775,6 +793,7 @@ namespace Hearty.Server
                     {
                         queue.Enqueue(message);
                         message = null;
+                        _macroJobsCounter?.Add(1);
                     }
                 }
                 catch (Exception e)

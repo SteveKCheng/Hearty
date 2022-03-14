@@ -24,6 +24,8 @@
 
   <ItemGroup>
     <PackageReference Include="idunno.Authentication.Basic" Version="2.2.3" />
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus" Version="1.2.0-rc3" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.0.0-rc9" />
   </ItemGroup>
 
 </Project>
