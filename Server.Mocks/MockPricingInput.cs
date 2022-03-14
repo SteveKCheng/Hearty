@@ -116,10 +116,15 @@ namespace Hearty.Server.Mocks
         /// Generator providing uniformly distributed
         /// pseudo-random variates.
         /// </param>
+        /// <param name="meanWaitTime">
+        /// Sets <see cref="MeanWaitTime" />.
+        /// </param>
         /// <returns>
         /// A randomly generated instance of this type.
         /// </returns>
-        public static MockPricingInput GenerateRandomSample(DateTime valuationDate, Random random)
+        public static MockPricingInput GenerateRandomSample(DateTime valuationDate, 
+                                                            Random random,
+                                                            int meanWaitTime = 0)
         {
             // Generate random volatility
             double sigma = 0.10 * MathFunctions.InverseGaussianCdf(random.NextDouble()) + 0.30;
@@ -152,7 +157,8 @@ namespace Hearty.Server.Mocks
                 ValuationDate = valuationDate,
                 MaturityDate = maturityDate,
                 IsCall = true,
-                Units = 1.0
+                Units = 1.0,
+                MeanWaitTime = meanWaitTime
             };
         }
 
@@ -169,17 +175,24 @@ namespace Hearty.Server.Mocks
         /// <param name="count">
         /// Number of instances to generate.
         /// </param>
+        /// <param name="meanWaitTime">
+        /// Sets <see cref="MeanWaitTime" />.
+        /// </param>
         /// <returns>
         /// A sequence of <paramref name="count" /> 
         /// random instances of this type.
         /// </returns>
         public static IEnumerable<MockPricingInput> 
-            GenerateRandomSamples(DateTime valuationDate, int seed, int count)
+            GenerateRandomSamples(
+                DateTime valuationDate, 
+                int seed, 
+                int count, 
+                int meanWaitTime = 0)
         {
             var random = new Random(seed);
 
             for (int i = 0; i < count; ++i)
-                yield return GenerateRandomSample(valuationDate, random);
+                yield return GenerateRandomSample(valuationDate, random, meanWaitTime);
         }
 
         /// <summary>

@@ -35,10 +35,12 @@ namespace Hearty.Server.Demo.Pages
             {
                 int waitingTime = (int)waitingTimeGenerator();
 
-                var requestJson = MockPricingInput.GenerateRandomSample(DateTime.Today, _random)
-                                                  .SerializeToJsonUtf8Bytes();
+                var input = MockPricingInput.GenerateRandomSample(DateTime.Today, 
+                                                                  _random, 
+                                                                  waitingTime);
 
-                PromiseData request = new Payload("application/json", requestJson);
+                PromiseData request = new Payload("application/json",
+                                                  input.SerializeToJsonUtf8Bytes());
 
                 var promise = _promiseStorage.CreatePromise(request);
                 var work = new PromisedWork(request) { InitialWait = waitingTime, Promise = promise };
