@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading;
@@ -12,6 +13,7 @@ namespace Hearty.Server;
 /// </summary>
 public class ClientJobQueue
     : ISchedulingFlow<ILaunchableJob<PromisedWork, PromiseData>>
+    , IReadOnlyCollection<IPromisedWorkInfo>
 {
     private readonly SchedulingQueue<ILaunchableJob<PromisedWork, PromiseData>>
         _flow = new();
@@ -54,6 +56,27 @@ public class ClientJobQueue
     /// </param>
     public void Enqueue(IAsyncEnumerable<ILaunchableJob<PromisedWork, PromiseData>> jobs)
         => _flow.Enqueue(jobs);
+
+    /// <summary>
+    /// Gets a snapshot of the items in the queue in 
+    /// summary form, for monitoring purposes.
+    /// </summary>
+    public IEnumerator<IPromisedWorkInfo> GetEnumerator()
+    {
+        using var source = _flow.GetEnumerator();
+
+        while (source.MoveNext())
+        {
+            var item = source.Current;
+            var macroJob = item.Multiple;
+            if (macroJob is IPromisedWorkInfo info)
+                yield return info;
+            else if (macroJob is null)
+                yield return item.Single.Input;
+        }
+    }
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
     /// <summary>
     /// Cancellation token associated with this queue.
