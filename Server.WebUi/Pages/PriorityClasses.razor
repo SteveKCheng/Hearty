@@ -1,4 +1,5 @@
 ﻿@page "/priority-classes"
+@using Hearty.Common
 
 @inject IJobQueueSystem _jobQueues
 @inject TimeoutProvider _timeoutProvider
@@ -34,12 +35,32 @@
             {
                 var stats = queue.CompletionStatistics;
                 var seconds = (double)stats.CumulativeCharge / 1000.0;
+                bool showDetails = ShouldDisplayInDetail(key);
 
                 <tr class="job-queue">
                     <td>@key.Owner</td>
                     <td>@queue.Count</td>
-                    <td>@seconds.ToString("F3")</td>
+                    <td>
+                        @seconds.ToString("F3")
+                        <a @onclick="() => AddToDetailDisplay(key)">(+)</a>
+                    </td>
                 </tr>
+
+                if (showDetails)
+                {
+                    <tr>
+                        <td colspan="3">Details</td>
+                    </tr>
+
+                    foreach (IPromisedWorkInfo job in queue)
+                    {
+                        <tr>
+                            <td>@job.Route</td>
+                            <td>@job.Path</td>
+                            <td>@(job.PromiseId?.ToString() ?? string.Empty)</td>
+                        </tr>
+                    }
+                }
             }
         </tbody>
     }
