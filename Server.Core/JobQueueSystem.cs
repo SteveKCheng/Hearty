@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Hearty.Scheduling;
 using Hearty.Common;
 using System.Security.Claims;
+using System.Threading.Channels;
 
 namespace Hearty.Server;
 
@@ -183,12 +184,62 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
         // Do not eagerly run RunJobsAsync inside this constructor.
         // This is the workaround for "Task.Yield" + "ConfigureAwait(false)":
         //   https://stackoverflow.com/questions/28309185/task-yield-in-library-needs-configurewaitfalse
-        _jobRunnerTask = Task.Run(() => JobScheduling.RunJobsAsync(
+        _jobRunnerTask = Task.Run(() => RunJobsAsync(
                                             _priorityClasses.AsChannel(),
                                             _workerDistribution.AsChannel(),
-                                            throwOnCancellation: false,
                                             _cancelSource.Token), 
                                   _cancelSource.Token);
+    }
+
+    /// <summary>
+    /// Assign jobs from a channel as soon as resources to execute that
+    /// job are made available from another channel.
+    /// </summary>
+    /// <param name="jobsChannel">
+    /// Presents the jobs to execute in a potentially non-ending sequence.
+    /// The channel may be implemented by a queuing system like the one
+    /// from this library.
+    /// </param>
+    /// <param name="vacanciesChannel">
+    /// Presents claims to resources to execute the jobs in a potentially
+    /// non-ending sequence.  This channel may also be implemented by a queuing system 
+    /// like the one from this library.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Can be used to interrupt processing of jobs.
+    /// </param>
+    /// <returns>
+    /// Asynchronous task that completes when interrupted by 
+    /// <paramref name="cancellationToken" />, or when at least one
+    /// of the channels is closed.
+    /// </returns>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> signals cancellation.
+    /// </exception>
+    private static async Task RunJobsAsync(
+        ChannelReader<JobMessage> jobsChannel,
+        ChannelReader<JobVacancy<PromisedWork, PromiseData>> vacanciesChannel,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (await vacanciesChannel.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (!await jobsChannel.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+                    break;
+
+                if (vacanciesChannel.TryRead(out var vacancy))
+                {
+                    if (jobsChannel.TryRead(out var job))
+                        vacancy.TryLaunchJob(job);
+                    else
+                        vacancy.Dispose();
+                }
+            }
+        }
+        catch (OperationCanceledException e) when (e.CancellationToken == cancellationToken)
+        {
+        }
     }
 
     /// <summary>
