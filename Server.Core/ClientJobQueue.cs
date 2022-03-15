@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Security.Claims;
 using System.Threading;
 using Hearty.Scheduling;
@@ -41,19 +39,23 @@ internal struct ClientJobMessage
 /// </summary>
 public readonly struct RunningJobRegistration : IDisposable
 {
-    private readonly ClientJobQueue _queue;
-    private readonly IRunningJob<PromisedWork> _job;
+    private readonly LinkedListNode<IRunningJob<PromisedWork>> _node;
 
-    internal RunningJobRegistration(ClientJobQueue queue, IRunningJob<PromisedWork> job)
+    internal RunningJobRegistration(LinkedListNode<IRunningJob<PromisedWork>> node)
     {
-        _queue = queue;
-        _job = job;
+        _node = node;
     }
 
     /// <inheritdoc cref="IDisposable.Dispose" />
     public void Dispose()
     {
-        _queue?.UnregisterRunningJob(_job);
+        var node = _node;
+        var list = node?.List;
+        if (list is not null)
+        {
+            lock (list)
+                list.Remove(node!);
+        }
     }
 }
 
@@ -89,8 +91,14 @@ public class ClientJobQueue
     /// </remarks>
     internal ISchedulingAccount SchedulingAccount => _flow;
 
-    private readonly Dictionary<IRunningJob<PromisedWork>, int> 
-        _runningJobs = new();
+    /// <summary>
+    /// Jobs registered by <see cref="RunningJobRegistration" />.
+    /// </summary>
+    /// <remarks>
+    /// A linked list is used for its absolute O(1) running time 
+    /// and that it preserves the order of insertion.
+    /// </remarks>
+    private readonly LinkedList<IRunningJob<PromisedWork>> _runningJobs = new();
 
     /// <summary>
     /// Registers a job for monitoring after it has been de-queued
@@ -135,7 +143,7 @@ public class ClientJobQueue
     /// but usually are.  Typically both registrations are required.
     /// Jobs are objects entirely internal to the job server and so 
     /// the registration here can be implemented in simpler ways,
-    /// such as a (locked) linked list.
+    /// in particular, a (locked) linked list.
     /// </para>
     /// </remarks>
     /// <param name="job">
@@ -147,36 +155,13 @@ public class ClientJobQueue
     /// </returns>
     public RunningJobRegistration RegisterRunningJob(IRunningJob<PromisedWork> job)
     {
-        lock (_runningJobs)
-        {
-            ref int count = ref CollectionsMarshal.GetValueRefOrAddDefault(
-                                _runningJobs, job, out _);
-            ++count;
-            return new RunningJobRegistration(this, job);
-        }
-    }
+        // Avoid allocating node inside lock
+        var node = new LinkedListNode<IRunningJob<PromisedWork>>(job);
 
-    /// <summary>
-    /// Unregister a job that has been registered with <see cref="RegisterRunningJob" />.
-    /// </summary>
-    /// <param name="job">
-    /// The (stopped) job to unregister.  
-    /// </param>
-    /// <exception cref="InvalidOperationException">
-    /// The job had not been registered earlier.
-    /// </exception>
-    internal void UnregisterRunningJob(IRunningJob<PromisedWork> job)
-    {
         lock (_runningJobs)
-        {
-            ref int count = ref CollectionsMarshal.GetValueRefOrNullRef(
-                                _runningJobs, job);
-            if (Unsafe.IsNullRef(ref count))
-                throw new InvalidOperationException("Cannot unregister a running job that had not been registered. ");
+            _runningJobs.AddLast(node);
 
-            if (--count == 0)
-                _runningJobs.Remove(job);
-        }
+        return new RunningJobRegistration(node);
     }
 
     /// <summary>
@@ -202,14 +187,32 @@ public class ClientJobQueue
     /// Gets a snapshot of the items in the queue or currently executing,
     /// in summary form, for monitoring purposes.
     /// </summary>
-    public IReadOnlyList<IRunningJob<PromisedWork>> GetCurrentJobs()
+    /// <param name="limit">
+    /// If non-negative, return at most this number of items.
+    /// </param>
+    /// <remarks>
+    /// The list of jobs.  Those jobs that are currently running 
+    /// or are closest to the head of the queue take precedence.
+    /// </remarks>
+    public IReadOnlyList<IRunningJob<PromisedWork>> GetCurrentJobs(int limit = -1)
     {
-        var result = new List<IRunningJob<PromisedWork>>(capacity: Count);
+        if (limit == 0)
+            return Array.Empty<IRunningJob<PromisedWork>>();
+
+        limit = (limit >= 0) ? limit : int.MaxValue;
+        int capacity = Math.Min(Count, limit);
+
+        int count = 0;
+        var result = new List<IRunningJob<PromisedWork>>(capacity);
 
         lock (_runningJobs)
         {
-            foreach (var (job, _) in _runningJobs)
+            foreach (var job in _runningJobs)
+            {
                 result.Add(job);
+                if (++count == limit)
+                    return result;
+            }
         }
 
         foreach (var item in _flow)
@@ -219,6 +222,11 @@ public class ClientJobQueue
                 result.Add(job);
             else if (macroJob is null)
                 result.Add(item.Single);
+            else
+                continue;
+
+            if (++count == limit)
+                return result;
         }
 
         return result;
