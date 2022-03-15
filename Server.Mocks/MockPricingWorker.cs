@@ -2,12 +2,12 @@
 using System;
 using System.Buffers;
 using System.IO;
-using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Encodings.Web;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Hearty.Common;
 
 namespace Hearty.Server.Mocks
 {
@@ -17,25 +17,34 @@ namespace Hearty.Server.Mocks
     /// </summary>
     public class MockPricingWorker : IJobSubmission 
     {
-        private const string JsonMediaType = "application/json";
+        /// <summary>
+        /// The most specific IANA media type for the JSON format
+        /// accepted for mock pricing jobs.
+        /// </summary>
+        public static readonly ParsedContentType RequestJsonContentType 
+            = "application/vnd.hearty.mock-pricing-request+json";
 
-        private static void ValidateJsonContentType(string contentType)
+        /// <summary>
+        /// Check that the IANA media type is accepted as
+        /// a request for mock pricing.
+        /// </summary>
+        /// <param name="mediaType">
+        /// The "media type" or value of the "Content-Type" header.
+        /// If null or empty, meaning the client did not specify the media
+        /// type, this method succeeds, i.e. assumes the payload
+        /// is in the correct format.
+        /// </param>
+        /// <exception cref="InvalidDataException">
+        /// The media type is not what is expected for a mock 
+        /// pricing job.
+        /// </exception>
+        public static void ValidateJsonContentType(string? mediaType)
         {
-            if (string.Equals(contentType, JsonMediaType, StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrEmpty(mediaType))
                 return;
 
-            if (!MediaTypeHeaderValue.TryParse(contentType, out var parsedContentType))
-                throw new InvalidDataException("Content-Type is invalid. ");
-
-            if (!string.Equals(parsedContentType.MediaType,
-                               JsonMediaType,
-                               StringComparison.OrdinalIgnoreCase))
+            if (!RequestJsonContentType.IsSubsetOf(new ParsedContentType(mediaType)))
                 throw new InvalidDataException("The pricing request is not in JSON. ");
-
-            if (parsedContentType.CharSet != null &&
-                !string.Equals(parsedContentType.CharSet, "utf-8", 
-                                StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("JSON data must be encoded in UTF-8. ");
         }
 
         private static MockPricingInput 
@@ -72,7 +81,7 @@ namespace Hearty.Server.Mocks
 
             return new JobReplyMessage
             {
-                ContentType = JsonMediaType,
+                ContentType = "application/vnd.hearty.mock-pricing-result+json",
                 Data = new ReadOnlySequence<byte>(bytes)
             };
         }
