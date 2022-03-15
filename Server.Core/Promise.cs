@@ -50,6 +50,13 @@ namespace Hearty.Server
     /// </remarks>
     public partial class Promise
     {
+        /// <summary>
+        /// The output object of the promise.
+        /// </summary>
+        /// <remarks>
+        /// This property returns null if the promise has 
+        /// not been fulfilled yet.
+        /// </remarks>
         public PromiseData? ResultOutput
         {
             get
@@ -66,6 +73,10 @@ namespace Hearty.Server
         /// </summary>
         public DateTime CreationTime { get; }
 
+        /// <summary>
+        /// The input object for the promise, if it has been provided
+        /// on creation.
+        /// </summary>
         public PromiseData? RequestOutput { get; internal set; }
 
         public bool IsCompleted => _isFulfilled != 0;
@@ -75,9 +86,29 @@ namespace Hearty.Server
         /// </summary>
         public bool IsTransient => IsCompleted && (RequestOutput?.IsTransient ?? false);
 
+        /// <summary>
+        /// The ID that has been assigned to this promise.
+        /// </summary>
         public PromiseId Id { get; }
 
-        public Promise(DateTime creationTime, PromiseId id, PromiseData? input, PromiseData? output)
+        /// <summary>
+        /// Construct or re-materialize an in-memory representation of a promise.
+        /// </summary>
+        /// <param name="creationTime">
+        /// The time that this promise was first created.
+        /// </param>
+        /// <param name="id">The ID assigned to the promise. </param>
+        /// <param name="input">
+        /// The input which is considered to create this promise. 
+        /// This argument may be null if the input is not to be stored.
+        /// </param>
+        /// <param name="output">
+        /// The output of this promise, if it is available synchronously.
+        /// </param>
+        public Promise(DateTime creationTime, 
+                       PromiseId id, 
+                       PromiseData? input, 
+                       PromiseData? output)
         {
             Id = id;
             CreationTime = creationTime;
@@ -93,6 +124,9 @@ namespace Hearty.Server
 
         public DateTime? Expiry { get; internal set; }
 
+        /// <summary>
+        /// Hash code based on <see cref="Id" />.
+        /// </summary>
         public override int GetHashCode() => Id.GetHashCode();
 
         private PromiseData? _resultOutput;
