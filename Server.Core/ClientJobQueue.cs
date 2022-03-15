@@ -41,7 +41,7 @@ internal struct ClientJobMessage
 /// </summary>
 public class ClientJobQueue
     : ISchedulingFlow<ClientJobMessage>
-    , IReadOnlyCollection<IPromisedWorkInfo>
+    , IReadOnlyCollection<IRunningJob<PromisedWork>>
 {
     private readonly SchedulingQueue<ILaunchableJob<PromisedWork, PromiseData>,
                                      ClientJobMessage>
@@ -67,7 +67,7 @@ public class ClientJobQueue
     /// </remarks>
     internal ISchedulingAccount SchedulingAccount => _flow;
 
-    private readonly Dictionary<ILaunchableJob<PromisedWork, PromiseData>, int> 
+    private readonly Dictionary<IRunningJob<PromisedWork>, int> 
         _runningJobs = new();
 
     /// <summary>
@@ -182,23 +182,23 @@ public class ClientJobQueue
     /// Gets a snapshot of the items in the queue or currently executing,
     /// in summary form, for monitoring purposes.
     /// </summary>
-    public IReadOnlyList<IPromisedWorkInfo> GetCurrentJobs()
+    public IReadOnlyList<IRunningJob<PromisedWork>> GetCurrentJobs()
     {
-        var result = new List<IPromisedWorkInfo>(capacity: Count);
+        var result = new List<IRunningJob<PromisedWork>>(capacity: Count);
 
         lock (_runningJobs)
         {
             foreach (var (job, _) in _runningJobs)
-                result.Add(job.Input);
+                result.Add(job);
         }
 
         foreach (var item in _flow)
         {
             var macroJob = item.Multiple;
-            if (macroJob is IPromisedWorkInfo info)
-                result.Add(info);
+            if (macroJob is IRunningJob<PromisedWork> job)
+                result.Add(job);
             else if (macroJob is null)
-                result.Add(item.Single.Input);
+                result.Add(item.Single);
 
         }
 
@@ -210,7 +210,7 @@ public class ClientJobQueue
     /// the queue or are currently running.
     /// </summary>
     /// <returns></returns>
-    public IEnumerator<IPromisedWorkInfo> GetEnumerator()
+    public IEnumerator<IRunningJob<PromisedWork>> GetEnumerator()
         => GetCurrentJobs().GetEnumerator();
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

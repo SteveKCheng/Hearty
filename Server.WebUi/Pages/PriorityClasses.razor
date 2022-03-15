@@ -1,5 +1,6 @@
 ﻿@page "/priority-classes"
 @using Hearty.Common
+@using Hearty.Scheduling
 
 @inject IJobQueueSystem _jobQueues
 @inject TimeoutProvider _timeoutProvider
@@ -54,12 +55,14 @@
                         <td colspan="3">Details</td>
                     </tr>
 
-                    foreach (IPromisedWorkInfo job in jobs)
+                    foreach (IRunningJob<PromisedWork> job in jobs)
                     {
+                        var work = job.Input;
+
                         <tr>
-                            <td>@job.Route</td>
-                            <td>@job.Path</td>
-                            <td>@(job.PromiseId?.ToString() ?? string.Empty)</td>
+                            <td>@work.Route</td>
+                            <td>@work.Path</td>
+                            <td>@(work.Promise?.Id.ToString() ?? string.Empty)</td>
                         </tr>
                     }
                 }

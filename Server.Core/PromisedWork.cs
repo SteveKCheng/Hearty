@@ -13,7 +13,7 @@ namespace Hearty.Server
     /// that have the word "job" in their names, which control
     /// job scheduling and queuing.
     /// </remarks>
-    public readonly struct PromisedWork : IPromisedWorkInfo
+    public readonly struct PromisedWork
     {
         /// <summary>
         /// A string that may be used to select a sub-function 
@@ -101,8 +101,6 @@ namespace Hearty.Server
         /// </remarks>
         public Promise? Promise { get; init; }
 
-        PromiseId? IPromisedWorkInfo.PromiseId => Promise?.Id;
-
         /// <summary>
         /// The initial estimate of the amount of time the job
         /// would take, in milliseconds.
@@ -171,7 +169,7 @@ namespace Hearty.Server
             };
 
         /// <summary>
-        /// Implements <see cref="IPromisedWorkInfo.GetDisplayProperty" />
+        /// Implements <see cref="GetDisplayProperty(string)" />
         /// by consulting <see cref="Data" /> and <see cref="Promise" />.
         /// </summary>
         public Func<object, Promise?, string, object?>? 

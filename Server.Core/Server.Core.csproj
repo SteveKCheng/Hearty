@@ -17,7 +17,6 @@
     <Compile Include="BasicExceptionTranslator.cs" />
     <Compile Include="BasicPromiseStorage.cs" />
     <Compile Include="ClientJobQueue.cs" />
-    <Compile Include="IPromisedWorkInfo.cs" />
     <Compile Include="ServedMediaTypes.cs" />
     <Compile Include="ContentFormatInfo.cs" />
     <Compile Include="ContentFormatInfo.Negotiation.cs" />

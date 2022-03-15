@@ -39,7 +39,7 @@ using MacroJobLinks = CircularListLinks<MacroJobMessage, MacroJobMessage.ListLin
 /// </para>
 /// </remarks>
 internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
-                                      , IPromisedWorkInfo
+                                      , IRunningJob<PromisedWork>
                                       , IJobCancellation
                                       , IDisposable
 {
@@ -144,21 +144,17 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
     public bool IsValid => (_isInvalid == 0);
 
     /// <summary>
-    /// Data that is reported through <see cref="IPromisedWorkInfo" />;
-    /// it is not involved in creating or scheduling the jobs at all.
+    /// Data that is reported through <see cref="IRunningJob{TInput}.Input" />
+    /// for monitoring; it is not involved in creating or scheduling 
+    /// the jobs at all.
     /// </summary>
     private readonly PromisedWork _work;
 
-    string? IPromisedWorkInfo.Route => _work.Route;
+    int IRunningJob.EstimatedWait => _work.InitialWait;
 
-    string? IPromisedWorkInfo.Path => _work.Path;
+    long IRunningJob.LaunchStartTime => 0; // FIXME
 
-    PromiseId? IPromisedWorkInfo.PromiseId => _work.Promise?.Id;
-
-    int IPromisedWorkInfo.InitialWait => _work.InitialWait;
-
-    object? IPromisedWorkInfo.GetDisplayProperty(string key) 
-        => _work.GetDisplayProperty(key);
+    PromisedWork IRunningJob<PromisedWork>.Input => _work;
 
     /// <summary>
     /// If true, the client's request needs to be unregistered 
