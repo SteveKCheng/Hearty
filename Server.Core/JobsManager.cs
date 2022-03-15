@@ -574,7 +574,7 @@ namespace Hearty.Server
         private MacroJobMessage? RegisterMacroJob(
             ClientJobQueue queue,
             PromiseRetriever promiseRetriever,
-            PromisedWork work,
+            in PromisedWork work,
             PromiseListBuilderFactory builderFactory,
             MacroJobExpansion expansion,
             CancellationToken cancellationToken,
@@ -771,7 +771,7 @@ namespace Hearty.Server
         public Promise PushMacroJob(JobQueueKey queueKey,
                                     ClaimsPrincipal? ownerPrincipal,
                                     PromiseRetriever promiseRetriever,
-                                    PromisedWork work,
+                                    in PromisedWork work,
                                     PromiseListBuilderFactory builderFactory,
                                     MacroJobExpansion expansion,
                                     bool registerClient,

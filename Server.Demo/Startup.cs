@@ -332,11 +332,15 @@ namespace Hearty.Server.Demo
                 input.JobQueueKey,
                 input.OwnerPrincipal,
                 static w => w.Promise! ?? throw new ArgumentNullException(), 
-                new PromisedWork(request) { Promise = promise }, 
+                new PromisedWork(request) { 
+                    Promise = promise,
+                    DisplayPropertyRetrieval = 
+                        (_, _, key) => (key == "Instrument") ? $"Macro Job for {promise.Id}" : null
+                }, 
                 _ => new PromiseList(input.Storage),
                 microJobs,
                 input.FireAndForget,
-                input.CancellationToken);
+                input.CancellationToken);;
 
             return promise.Id;
         }

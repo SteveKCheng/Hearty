@@ -36,6 +36,28 @@ internal struct ClientJobMessage
 }
 
 /// <summary>
+/// To be disposed when the job registered with
+/// <see cref="ClientJobQueue.RegisterRunningJob" /> has finished running.
+/// </summary>
+public readonly struct RunningJobRegistration : IDisposable
+{
+    private readonly ClientJobQueue _queue;
+    private readonly IRunningJob<PromisedWork> _job;
+
+    internal RunningJobRegistration(ClientJobQueue queue, IRunningJob<PromisedWork> job)
+    {
+        _queue = queue;
+        _job = job;
+    }
+
+    /// <inheritdoc cref="IDisposable.Dispose" />
+    public void Dispose()
+    {
+        _queue?.UnregisterRunningJob(_job);
+    }
+}
+
+/// <summary>
 /// Queue for job messages submitted by one client, to take
 /// part in <see cref="JobsManager" />.
 /// </summary>
@@ -104,6 +126,17 @@ public class ClientJobQueue
     /// to simplify the current implementation, this
     /// race condition is accepted.
     /// </para>
+    /// <para>
+    /// This registration is separate from what <see cref="JobsManager" />
+    /// does.  Registrations in the latter are keyed by 
+    /// <see cref="PromiseId"/> to allow remote cancellation.
+    /// The registration here is for monitoring jobs, which are
+    /// not necessarily associated with a <see cref="PromiseId" />,
+    /// but usually are.  Typically both registrations are required.
+    /// Jobs are objects entirely internal to the job server and so 
+    /// the registration here can be implemented in simpler ways,
+    /// such as a (locked) linked list.
+    /// </para>
     /// </remarks>
     /// <param name="job">
     /// The job to register as running.  
@@ -112,28 +145,15 @@ public class ClientJobQueue
     /// The return value is to be disposed once the
     /// job is finished.
     /// </returns>
-    internal RunningJobRegistration RegisterRunningJob(ILaunchableJob<PromisedWork, PromiseData> job)
+    public RunningJobRegistration RegisterRunningJob(IRunningJob<PromisedWork> job)
     {
         lock (_runningJobs)
         {
             ref int count = ref CollectionsMarshal.GetValueRefOrAddDefault(
                                 _runningJobs, job, out _);
             ++count;
-            return new RunningJobRegistration(new(this, job));
+            return new RunningJobRegistration(this, job);
         }
-    }
-
-    /// <summary>
-    /// To be disposed when the job registered with
-    /// <see cref="RegisterRunningJob" /> has finished running.
-    /// </summary>
-    internal readonly struct RunningJobRegistration : IDisposable
-    {
-        private readonly ClientJobMessage _message;
-        internal RunningJobRegistration(ClientJobMessage message)
-            => _message = message;
-        public void Dispose() 
-            => _message.Queue.UnregisterRunningJob(_message.Job);
     }
 
     /// <summary>
@@ -145,7 +165,7 @@ public class ClientJobQueue
     /// <exception cref="InvalidOperationException">
     /// The job had not been registered earlier.
     /// </exception>
-    private void UnregisterRunningJob(ILaunchableJob<PromisedWork, PromiseData> job)
+    internal void UnregisterRunningJob(IRunningJob<PromisedWork> job)
     {
         lock (_runningJobs)
         {
@@ -199,7 +219,6 @@ public class ClientJobQueue
                 result.Add(job);
             else if (macroJob is null)
                 result.Add(item.Single);
-
         }
 
         return result;

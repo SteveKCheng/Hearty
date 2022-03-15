@@ -113,6 +113,12 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
     private CancellationTokenRegistration _clientCancellationRegistration;
 
     /// <summary>
+    /// Registration of this job into <see cref="_queue" />,
+    /// for monitoring purposes.
+    /// </summary>
+    private RunningJobRegistration _runningJobRegistration;
+
+    /// <summary>
     /// Set to non-zero when this instance is no longer valid
     /// as a job message. 
     /// </summary>
@@ -233,9 +239,11 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
                              ClientJobQueue queue,
                              CancellationToken cancellationToken)
     {
-        Source = source;
-        _queue = queue;
         ClientToken = cancellationToken;
+        Source = source;
+
+        _queue = queue;
+        _work = work;
 
         _listLinks = new(this);
         _isInvalid = Source.AddParticipant(this) ? 0 : -1;
@@ -285,6 +293,8 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
                         "Enumerator for MacroJobMessage may not be retrieved " +
                         "more than once. ");
         }
+
+        _runningJobRegistration = _queue.RegisterRunningJob(this);
 
         int count = 0;
         Exception? exception = null;
@@ -433,6 +443,9 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
         // cancellation source from going away concurrently.
         _clientCancellationRegistration.Unregister();
         _clientCancellationRegistration = default;
+
+        _runningJobRegistration.Dispose();
+        _runningJobRegistration = default;
 
         if (_isTrackingClientRequest)
             Source.JobsManager.UnregisterClientRequest(Source.PromiseId, ClientToken);
