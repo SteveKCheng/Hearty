@@ -18,6 +18,12 @@
             foreach (var promiseId in _promiseIds)
             {
                 var promise = _promiseStorage.GetPromiseById(promiseId);
+
+                // Promise may have expired since its ID was received, 
+                // but very unlikely
+                if (promise is null)
+                    continue;
+
                 <tr>
                     <td>@promiseId</td>
                     <td>@promise.CreationTime</td>
