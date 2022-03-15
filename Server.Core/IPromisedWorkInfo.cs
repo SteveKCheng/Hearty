@@ -40,4 +40,22 @@ public interface IPromisedWorkInfo
     /// See <see cref="PromisedWork.InitialWait" />.
     /// </remarks>
     int InitialWait { get; }
+
+    /// <summary>
+    /// Get a property keyed by a string 
+    /// that a monitoring tool that display.
+    /// </summary>
+    /// <remarks>
+    /// The monitoring tool can select a handful of
+    /// such properties to display in a table,
+    /// one column for each selected property,
+    /// with one row for each active work item.
+    /// </remarks>
+    /// <param name="key">Name of the property. </param>
+    /// <returns>
+    /// Value of the property.  Commonly values will
+    /// be strings or scalars; a monitoring tool
+    /// is not expected to be able to display complex values.
+    /// </returns>
+    object? GetDisplayProperty(string key);
 }

@@ -149,6 +149,7 @@ namespace Hearty.Server
             InitialWait = default;
             InputSerializer = inputSerializer;
             OutputDeserializer = Payload.JobOutputDeserializer;
+            DisplayPropertyRetrieval = null;
         }
 
         /// <summary>
@@ -165,8 +166,20 @@ namespace Hearty.Server
                 Path = this.Path,
                 Promise = promise,
                 InitialWait = this.InitialWait,
-                OutputDeserializer = this.OutputDeserializer
+                OutputDeserializer = this.OutputDeserializer,
+                DisplayPropertyRetrieval = this.DisplayPropertyRetrieval
             };
+
+        /// <summary>
+        /// Implements <see cref="IPromisedWorkInfo.GetDisplayProperty" />
+        /// by consulting <see cref="Data" /> and <see cref="Promise" />.
+        /// </summary>
+        public Func<object, Promise?, string, object?>? 
+            DisplayPropertyRetrieval { get; init; }
+
+        /// <see cref="GetDisplayProperty(string)" />.
+        public object? GetDisplayProperty(string key)
+            => DisplayPropertyRetrieval?.Invoke(Data, Promise, key);
     }
 
     /// <summary>

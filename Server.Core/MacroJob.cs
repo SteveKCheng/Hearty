@@ -157,6 +157,9 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
 
     int IPromisedWorkInfo.InitialWait => _work.InitialWait;
 
+    object? IPromisedWorkInfo.GetDisplayProperty(string key) 
+        => _work.GetDisplayProperty(key);
+
     /// <summary>
     /// If true, the client's request needs to be unregistered 
     /// from <see cref="JobsManager" /> when the macro
