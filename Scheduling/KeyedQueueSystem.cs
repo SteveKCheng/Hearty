@@ -56,12 +56,38 @@ namespace Hearty.Scheduling
         private readonly Dictionary<TKey, Entry> _members;
         private readonly SimpleExpiryQueue _expiryQueue;
 
+        /// <summary>
+        /// Prepare an initially empty collection of queues.
+        /// </summary>
+        /// <param name="factory">
+        /// Factory function invoked to create a queue
+        /// for a given key if it has been requested but
+        /// does not exist.
+        /// </param>
+        /// <param name="expiryQueue">
+        /// Used to expire queues after a certain amount of time.
+        /// </param>
         public KeyedQueueSystem(Func<TKey, TQueue> factory,
                                 SimpleExpiryQueue expiryQueue)
             : this(EqualityComparer<TKey>.Default, factory, expiryQueue)
         {
         }
 
+        /// <summary>
+        /// Prepare an initially empty collection of queues.
+        /// </summary>
+        /// <param name="comparer">
+        /// Overrides the comparison function on the keys
+        /// associated to the queues.
+        /// </param>
+        /// <param name="factory">
+        /// Factory function invoked to create a queue
+        /// for a given key if it has been requested but
+        /// does not exist.
+        /// </param>
+        /// <param name="expiryQueue">
+        /// Used to expire queues after a certain amount of time.
+        /// </param>
         public KeyedQueueSystem(IEqualityComparer<TKey> comparer,
                                 Func<TKey, TQueue> factory,
                                 SimpleExpiryQueue expiryQueue)
@@ -144,9 +170,31 @@ namespace Hearty.Scheduling
             return true;
         }
 
+        /// <summary>
+        /// Get a queue with the given key, adding it if it does not already exist.
+        /// </summary>
+        /// <param name="key">
+        /// The key to the queue.
+        /// </param>
+        /// <returns>
+        /// The existing or newly created queue.
+        /// </returns>
         public TQueue GetOrAdd(TKey key)
             => GetOrAdd(key, out _);
 
+        /// <summary>
+        /// Get a queue with the given key, adding it if it does not already exist.
+        /// </summary>
+        /// <param name="key">
+        /// The key to the queue.
+        /// </param>
+        /// <param name="exists">
+        /// On return, this parameter is set to true if the queue
+        /// already exists (and is being returned), otherwise false.
+        /// </param>
+        /// <returns>
+        /// The existing or newly created queue.
+        /// </returns>
         public TQueue GetOrAdd(TKey key, out bool exists)
         {
             while (true)
@@ -178,6 +226,10 @@ namespace Hearty.Scheduling
             }
         }
 
+        /// <summary>
+        /// Get a queue with the given key, throwing an exception 
+        /// if it does not exist.
+        /// </summary>
         public TQueue this[TKey key]
         {
             get
