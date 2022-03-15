@@ -39,11 +39,15 @@ namespace Hearty.Server.Demo.Pages
                                                                   _random, 
                                                                   waitingTime);
 
-                PromiseData request = new Payload("application/json",
-                                                  input.SerializeToJsonUtf8Bytes());
+                var request = new Payload("application/json",
+                                          input.SerializeToJsonUtf8Bytes());
 
                 var promise = _promiseStorage.CreatePromise(request);
-                var work = new PromisedWork(request) { InitialWait = waitingTime, Promise = promise };
+                var work = new PromisedWork(request) { 
+                    InitialWait = waitingTime, 
+                    Promise = promise,
+                    DisplayPropertyRetrieval = Startup.RequestDisplayProperties.Construct(request)
+                };
                 var queueKey = new JobQueueKey(GetClient(client), priority, string.Empty);
                 _jobsManager.PushJob(queueKey,
                                      ownerPrincipal: null,

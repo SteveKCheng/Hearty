@@ -233,6 +233,8 @@ namespace Hearty.Server.Demo
 
                 endpoints.MapPostJob("pricing", async input =>
                 {
+                    MockPricingWorker.ValidateJsonContentType(input.ContentType);
+
                     using var stream = input.PipeReader.AsStream();
 
                     var requestData = await ReadStreamIntoMemorySafelyAsync(stream,
@@ -251,7 +253,8 @@ namespace Hearty.Server.Demo
                         new PromisedWork(request) { 
                             InitialWait = 1000, 
                             Promise = promise,
-                            OutputDeserializer = JsonPayloadTranscoding.JobOutputDeserializer
+                            OutputDeserializer = JsonPayloadTranscoding.JobOutputDeserializer,
+                            DisplayPropertyRetrieval = RequestDisplayProperties.Construct(request)
                         },
                         input.FireAndForget,
                         input.CancellationToken);
@@ -314,7 +317,8 @@ namespace Hearty.Server.Demo
                 return (r, new PromisedWork(d) { 
                     InitialWait = item.MeanWaitTime, 
                     Promise = p,
-                    OutputDeserializer = JsonPayloadTranscoding.JobOutputDeserializer
+                    OutputDeserializer = JsonPayloadTranscoding.JobOutputDeserializer,
+                    DisplayPropertyRetrieval = RequestDisplayProperties.Construct(d)
                 });
             });
 
@@ -329,6 +333,58 @@ namespace Hearty.Server.Demo
                 input.CancellationToken);
 
             return promise.Id;
+        }
+
+        internal class RequestDisplayProperties
+        {
+            private MockPricingInput _input;
+            private volatile bool _isInitialized;
+            private readonly Payload _payload;
+
+            public RequestDisplayProperties(Payload payload)
+                => _payload = payload;
+
+            public object? GetDisplayProperty(string key)
+            {
+                MockPricingInput input;
+
+                if (!_isInitialized)
+                {
+                    input = DeserializeRequestJson<MockPricingInput>(_payload.Body);
+                    _input = input;
+                    _isInitialized = true;
+                }
+                else
+                {
+                    input = _input;
+                }
+
+                if (key == "Instrument")
+                    return input.InstrumentName;
+
+                return null;
+            }
+
+            public static Func<object, Promise?, string, object?> Construct(Payload payload)
+            {
+                var state = new RequestDisplayProperties(payload);
+                return (object _, Promise? _, string key) => state.GetDisplayProperty(key);
+            }
+        }
+
+        private static T DeserializeRequestJson<T>(ReadOnlySequence<byte> data)
+            where T : notnull
+        {
+            var jsonReader = new Utf8JsonReader(data,
+                               new JsonReaderOptions
+                               {
+                                   AllowTrailingCommas = true,
+                                   CommentHandling = JsonCommentHandling.Skip
+                               });
+
+            return JsonSerializer.Deserialize<T>(ref jsonReader)
+                    ?? throw new InvalidDataException(
+                        "The JSON request payload is null, which is not expected. ");
         }
 
         /// <summary>
