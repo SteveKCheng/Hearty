@@ -86,6 +86,12 @@ namespace Hearty.Server.Demo
             services.AddSingleton<PathsDirectory, InMemoryPathsDirectory>();
             services.AddSingleton<JobsManager>();
             services.AddSingleton<TimeoutProvider, SimpleTimeoutProvider>();
+
+            services.AddSingleton(new DisplaySpecialization
+            {
+                JobCustomProperties = new string[] { "Instrument" }
+            });
+
             services.AddSingleton<WorkerDistribution<PromisedWork, PromiseData>>(p =>
             {
                 var d = new WorkerDistribution<PromisedWork, PromiseData>();

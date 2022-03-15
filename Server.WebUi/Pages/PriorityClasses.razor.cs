@@ -1,13 +1,15 @@
 ﻿using Hearty.Common;
+using Microsoft.AspNetCore.Components;
 using System;
 using System.Collections.Generic;
 
 namespace Hearty.Server.WebUi.Pages;
 
-public partial class PriorityClasses : IDisposable
+public sealed partial class PriorityClasses : IDisposable
 {
     private bool _isDisposed;
 
+    /// <inheritdoc />
     protected override void OnInitialized()
     {
         _timeoutProvider.Register(TimeoutBucket.After1Second,
