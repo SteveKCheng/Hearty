@@ -54,6 +54,9 @@ namespace Hearty.Scheduling
         /// <inheritdoc cref="IRunningJob.LaunchStartTime" />
         public long LaunchStartTime { get; private set; }
 
+        /// <inheritdoc cref="IRunningJob.Status" />
+        public JobStatus Status => throw new NotSupportedException();
+
         public JobRetrial(IRunningJob<TInput> originalJob, 
                           CancellationToken cancellationToken)
         {

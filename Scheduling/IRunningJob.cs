@@ -23,6 +23,12 @@ namespace Hearty.Scheduling
         /// measured in the same convention as <see cref="Environment.TickCount64" />.
         /// </summary>
         long LaunchStartTime { get; }
+
+        /// <summary>
+        /// The state of this job, generally for reporting
+        /// to the user.
+        /// </summary>
+        JobStatus Status { get; }
     }
 
     /// <summary>
@@ -94,5 +100,36 @@ namespace Hearty.Scheduling
         /// when the job finishes executing.
         /// </summary>
         Task<TOutput> OutputTask { get; }
+    }
+
+    /// <summary>
+    /// The possible states of a job, generally used for monitoring.
+    /// </summary>
+    public enum JobStatus
+    {
+        /// <summary>
+        /// The job has not been started yet (but is in the queue).
+        /// </summary>
+        NotStarted,
+
+        /// <summary>
+        /// The job is being executed now.
+        /// </summary>
+        Running,
+
+        /// <summary>
+        /// The job has completed and returned a result considered successful.
+        /// </summary>
+        Succeeded,
+
+        /// <summary>
+        /// The job has failed (with an exception).
+        /// </summary>
+        Faulted,
+
+        /// <summary>
+        /// The job was cancelled.
+        /// </summary>
+        Cancelled
     }
 }

@@ -162,6 +162,8 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
 
     PromisedWork IRunningJob<PromisedWork>.Input => _work;
 
+    JobStatus IRunningJob.Status => JobStatus.Running; // FIXME
+
     /// <summary>
     /// If true, the client's request needs to be unregistered 
     /// from <see cref="JobsManager" /> when the macro

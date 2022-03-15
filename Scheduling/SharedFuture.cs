@@ -883,5 +883,23 @@ namespace Hearty.Scheduling
         /// the two method calls.
         /// </remarks>
         private int _recordedInitialCharge;
+
+        /// <inheritdoc cref="IRunningJob.Status" />
+        public JobStatus Status
+        {
+            get
+            {
+                if (_jobLaunched == 0)
+                    return JobStatus.NotStarted;
+
+                return OutputTask.Status switch
+                {
+                    TaskStatus.WaitingForActivation => JobStatus.Running,
+                    TaskStatus.RanToCompletion => JobStatus.Succeeded,
+                    TaskStatus.Canceled => JobStatus.Cancelled,
+                    _ => JobStatus.Faulted
+                };
+            }
+        }
     }
 }
