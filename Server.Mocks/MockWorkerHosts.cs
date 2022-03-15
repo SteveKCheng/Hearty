@@ -14,6 +14,12 @@ namespace Hearty.Server.Mocks
     {
         private readonly ILogger _logger;
 
+        /// <summary>
+        /// Prepare to generate worker hosts.
+        /// </summary>
+        /// <param name="logger">
+        /// Logs whenever worker hosts are started.
+        /// </param>
         public MockWorkerHosts(ILogger<MockWorkerHosts> logger)
         {
             _logger = logger;
