@@ -17,7 +17,7 @@ namespace Hearty.Server.Demo
 
         public bool IsSecure { get; set; }
 
-        public string PathBase { get; set; }
+        public PathString PathBase { get; set; }
 
         public BlazorConnectionInfo()
         {
