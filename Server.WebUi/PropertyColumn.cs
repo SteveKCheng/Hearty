@@ -23,12 +23,21 @@ public class PropertyColumn<TGridItem, TProp> : ColumnBase<TGridItem>
     [Parameter, EditorRequired] 
     public Expression<Func<TGridItem, TProp>> Property { get; set; } = default!;
     
+    /// <summary>
+    /// The format specification to convert <typeparamref name="TProp" /> 
+    /// for displaying in a grid cell.
+    /// </summary>
+    /// <remarks>
+    /// This format string is passed to 
+    /// <see cref="IFormattable.ToString(string?, IFormatProvider?)" />.
+    /// </remarks>
     [Parameter] 
     public string? Format { get; set; }
     
     [Parameter] 
     public EventCallback<TGridItem> OnCellClicked { get; set; }
 
+    /// <inheritdoc />
     protected override void OnParametersSet()
     {
         if (_cachedProperty != Property)
@@ -42,11 +51,11 @@ public class PropertyColumn<TGridItem, TProp> : ColumnBase<TGridItem>
                 if (typeof(IFormattable).IsAssignableFrom(typeof(TProp)))
                 {
                     cellTextFunc = item => ((IFormattable?)_compiledPropertyExpression!(item))?.ToString(Format, null);
-
                 }
                 else
                 {
-                    throw new InvalidOperationException($"A '{nameof(Format)}' parameter was supplied, but the type '{typeof(TProp)}' does not implement '{typeof(IFormattable)}'.");
+                    throw new InvalidOperationException(
+                        $"A '{nameof(Format)}' parameter was supplied, but the type '{typeof(TProp)}' does not implement '{typeof(IFormattable)}'.");
                 }
             }
             else

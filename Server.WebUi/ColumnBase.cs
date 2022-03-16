@@ -39,18 +39,42 @@ public abstract class ColumnBase<TGridItem> : ComponentBase
 {
     private readonly static RenderFragment<TGridItem> EmptyChildContent = _ => builder => { };
 
+    /// <summary>
+    /// The callback established by an instance of 
+    /// <see cref="Grid{TGridItem}" /> for this column to 
+    /// register itself to that instance.
+    /// </summary>
     [CascadingParameter] 
     internal Grid<TGridItem>.AddColumnCallback AddColumn { get; set; } = default!;
 
+    /// <summary>
+    /// The title of the column in the grid, shown in a header cell.
+    /// </summary>
     [Parameter] 
     public string? Title { get; set; }
     
+    /// <summary>
+    /// The CSS class set into each cell for this column in the grid.
+    /// </summary>
     [Parameter] 
     public string? Class { get; set; }
     
+    /// <summary>
+    /// The horizontal alignment of the contents of this column
+    /// in the grid.
+    /// </summary>
     [Parameter] 
     public Align Align { get; set; }
-    
+
+    /// <summary>
+    /// A render fragment to show when the header of the column
+    /// is clicked
+    /// </summary>
+    /// <remarks>
+    /// Such a fragment can contain user-adjustable controls 
+    /// on that column.  If null, the column will not have
+    /// this feature.
+    /// </remarks>
     [Parameter] 
     public RenderFragment? ColumnOptions { get; set; }
 
