@@ -8,6 +8,9 @@ using Microsoft.Extensions.Logging;
 using Hearty.Scheduling;
 using Hearty.Utilities;
 using Hearty.Work;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
+using System.Linq;
 
 namespace Hearty.Server.WebApi
 {
@@ -53,6 +56,27 @@ namespace Hearty.Server.WebApi
                     pattern ?? WorkerHost.WebSocketsDefaultPath,
                     RemoteWorkersWebSocketEndpoint.CreateRequestDelegate(
                         endpoints.ServiceProvider, options));
+        }
+
+        /// <summary>
+        /// Get the default URL to connect to the running HTTP server.
+        /// </summary>
+        /// <param name="server">
+        /// Interface provided by ASP.NET Core that lets the server.
+        /// addresses be queried.  It should be found by dependency
+        /// injection.
+        /// </param>
+        /// <returns>
+        /// Best guess as to the URL of the running HTTP server.
+        /// It will be "https" if supported by the server.
+        /// </returns>
+        public static string GetDefaultHostUrl(this IServer server)
+        {
+            return server.Features
+                         .Get<IServerAddressesFeature>()
+                         ?.Addresses
+                         .FirstOrDefault()
+                    ?? "http://localhost/";
         }
     }
 
