@@ -89,6 +89,8 @@
                 {
                     <th>@name</th>
                 }
+
+                <th>Kill</th>
             </tr>
         </thead>
 
@@ -106,6 +108,13 @@
                         {
                             <td>@job.Input.GetDisplayProperty(name)?.ToString()</td>
                         }
+
+                        <td>
+                            @if (job is IJobCancellation cancellableJob)
+                            {
+                                <button @onclick="() => cancellableJob.Kill(background: true)">🗙</button>
+                            }
+                        </td>
                     </tr>
                 }
             }
