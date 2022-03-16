@@ -1,4 +1,5 @@
 ﻿using Hearty.Common;
+using Hearty.Scheduling;
 using Microsoft.AspNetCore.Components;
 using System;
 using System.Collections.Generic;
@@ -48,6 +49,17 @@ public sealed partial class PriorityClasses : IDisposable
         var q = _queuesToExpand ??= new HashSet<JobQueueKey>();
         q.Add(targetKey);
     }
+
+    private static string GetStatusString(JobStatus status)
+        => status switch
+        {
+            JobStatus.NotStarted => "Queued",
+            JobStatus.Running => "Running",
+            JobStatus.Succeeded => "Succeeded",
+            JobStatus.Faulted => "Failed",
+            JobStatus.Cancelled => "Cancelled",
+            _ => string.Empty
+        };
 
     /// <inheritdoc cref="IDisposable.Dispose" />
     public void Dispose()

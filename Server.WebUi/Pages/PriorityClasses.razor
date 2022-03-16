@@ -71,6 +71,7 @@
         <colgroup>
             <col class="client" />
             <col class="client" />
+            <col class="client" />
 
             @foreach (var name in _displaySpecialization.JobCustomProperties)
             {
@@ -80,6 +81,7 @@
 
         <thead>
             <tr>
+                <th>Status</th>
                 <th>Client</th>
                 <th>ID</th>
 
@@ -96,6 +98,7 @@
                 @foreach (var job in jobs)
                 {
                     <tr>
+                        <td>@GetStatusString(job.Status)</td>
                         <td>@key.Owner</td>
                         <td>@job.Input.Promise?.Id</td>
 
