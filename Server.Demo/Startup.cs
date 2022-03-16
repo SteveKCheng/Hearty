@@ -229,7 +229,7 @@ namespace Hearty.Server.Demo
                         return Task.CompletedTask;
                     });
 
-                    endpoints.MapBlazorHub("/ui/_blazor");
+                    endpoints.MapBlazorHub("/_blazor");
                     endpoints.MapFallbackToPage(pattern: "/ui/{*path:nonfile}", page: "/_Host");
                 }
 
