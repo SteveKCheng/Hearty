@@ -102,6 +102,17 @@ namespace Hearty.Server
         public Promise? Promise { get; init; }
 
         /// <summary>
+        /// The ID of the promise object that originated this
+        /// work.
+        /// </summary>
+        /// <remarks>
+        /// This property is derived from the property
+        /// <see cref="Promise.Id" /> from
+        /// <see cref="Promise" />.
+        /// </remarks>
+        public PromiseId? PromiseId => Promise?.Id;
+
+        /// <summary>
         /// The initial estimate of the amount of time the job
         /// would take, in milliseconds.
         /// </summary>
