@@ -10,7 +10,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Cryptography.KeyDerivation;
 using Microsoft.AspNetCore.Hosting.Server;
-using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,7 +17,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
-namespace Hearty.Server;
+namespace Hearty.Server.WebApi;
 
 /// <summary>
 /// Sets up endpoints for programmatic retrieval of credentials.
@@ -454,11 +453,7 @@ public static class AuthenticationEndpoints
                 typeof(JwtBearerHandler),
                 (JwtBearerOptions options, IServer server) =>
                 {
-                    var actualSiteUrl = server.Features
-                                              .Get<IServerAddressesFeature>()
-                                              ?.Addresses
-                                              .FirstOrDefault()
-                                              ?? "http://localhost/";
+                    var actualSiteUrl = server.GetDefaultHostUrl();
 
                     if (relativeUrl is not null)
                     {
