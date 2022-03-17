@@ -12,7 +12,7 @@ namespace Hearty.Server.WebUi;
 /// <typeparam name="TGridItem">
 /// The type of item to be displayed in each row of the grid.
 /// </typeparam>
-public class TemplateColumn<TGridItem> : ColumnBase<TGridItem>
+public class TemplateColumn<TGridItem> : ColumnDefinition<TGridItem>
 {
     /// <summary>
     /// Renders the cell for this column and the given row.

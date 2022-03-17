@@ -29,7 +29,7 @@ using System.Linq;
 namespace Hearty.Server.WebUi;
 
 /// <summary>
-/// Lets <see cref="ColumnBase{TGridItem}" /> communicate
+/// Lets <see cref="ColumnDefinition{TGridItem}" /> communicate
 /// with the grid that owns it.
 /// </summary>
 /// <typeparam name="TGridItem">
@@ -41,7 +41,7 @@ internal interface IGrid<TGridItem>
     /// Called by the definition of a column to register
     /// itself to the grid.
     /// </summary>
-    void RegisterColumn(ColumnBase<TGridItem> column);
+    void RegisterColumn(ColumnDefinition<TGridItem> column);
 }
 
 /// <summary>
@@ -50,7 +50,7 @@ internal interface IGrid<TGridItem>
 /// <typeparam name="TGridItem">
 /// The type of item to be displayed in each row of the grid.
 /// </typeparam>
-public abstract class ColumnBase<TGridItem> : ComponentBase
+public abstract class ColumnDefinition<TGridItem> : ComponentBase
 {
     /// <summary>
     /// A render fragment for an item that contains nothing,
@@ -110,7 +110,7 @@ public abstract class ColumnBase<TGridItem> : ComponentBase
     /// <summary>
     /// Constructor.
     /// </summary>
-    public ColumnBase()
+    public ColumnDefinition()
     {
         HeaderContent = __builder => __builder.AddContent(0, Title);
     }

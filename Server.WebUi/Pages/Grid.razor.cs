@@ -62,10 +62,10 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
     /// <summary>
     /// The columns to show in this grid, in sequence.
     /// </summary>
-    private readonly List<ColumnBase<TGridItem>> _columns = new();
+    private readonly List<ColumnDefinition<TGridItem>> _columns = new();
 
-    private ColumnBase<TGridItem>? _sortByColumn;
-    private ColumnBase<TGridItem>? _displayOptionsForColumn;
+    private ColumnDefinition<TGridItem>? _sortByColumn;
+    private ColumnDefinition<TGridItem>? _displayOptionsForColumn;
     private bool _checkColumnOptionsPosition;
     private bool _sortByAscending;
     private IQueryable<TGridItem>? _previousItems;
@@ -159,17 +159,17 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
             RenderRow(builder, rowIndex++, item);
     }
 
-    private string AriaSortValue(ColumnBase<TGridItem> column)
+    private string AriaSortValue(ColumnDefinition<TGridItem> column)
         => _sortByColumn == column
             ? (_sortByAscending ? "ascending" : "descending")
             : "none";
 
-    private string? ColumnHeaderClass(ColumnBase<TGridItem> column)
+    private string? ColumnHeaderClass(ColumnDefinition<TGridItem> column)
         => _sortByColumn == column
             ? $"{Grid<TGridItem>.GetCssColumnClass(column)} {(_sortByAscending ? "sorted-asc" : "sorted-desc")}"
             : Grid<TGridItem>.GetCssColumnClass(column);
 
-    private static string? GetCssColumnClass(ColumnBase<TGridItem> column)
+    private static string? GetCssColumnClass(ColumnDefinition<TGridItem> column)
     {
         return column.Align switch
         {
@@ -179,7 +179,7 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
         };
     }
 
-    private async Task OnHeaderClicked(ColumnBase<TGridItem> column)
+    private async Task OnHeaderClicked(ColumnDefinition<TGridItem> column)
     {
         if (column.CanSort)
         {
@@ -198,7 +198,7 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
         }
     }
 
-    private void OnColumnOptionsButtonClicked(ColumnBase<TGridItem> column)
+    private void OnColumnOptionsButtonClicked(ColumnDefinition<TGridItem> column)
     {
         _displayOptionsForColumn = column;
         _checkColumnOptionsPosition = true;
@@ -231,6 +231,6 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
         return result;
     }
 
-    void IGrid<TGridItem>.RegisterColumn(ColumnBase<TGridItem> column)
+    void IGrid<TGridItem>.RegisterColumn(ColumnDefinition<TGridItem> column)
         => _columns.Add(column);
 }

@@ -59,7 +59,7 @@
         }
     }
 
-    private void RenderColumnHeader(RenderTreeBuilder __builder, ColumnBase<TGridItem> col)
+    private void RenderColumnHeader(RenderTreeBuilder __builder, ColumnDefinition<TGridItem> col)
     {
         <th class="@ColumnHeaderClass(col)" aria-sort="@AriaSortValue(col)" @key="@col" scope="col">
             <div class="column-title-flex">

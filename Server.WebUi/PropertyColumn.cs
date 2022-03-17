@@ -15,7 +15,7 @@ namespace Hearty.Server.WebUi;
 /// <typeparam name="TProp">
 /// The type of value returned by the property.
 /// </typeparam>
-public class PropertyColumn<TGridItem, TProp> : ColumnBase<TGridItem>
+public class PropertyColumn<TGridItem, TProp> : ColumnDefinition<TGridItem>
 {
     private Expression<Func<TGridItem, TProp>>? _cachedProperty;
     private Func<TGridItem, TProp>? _compiledPropertyExpression;
