@@ -83,8 +83,6 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
     private IJSObjectReference? _jsEventDisposable;
     private ElementReference _tableReference;
 
-    private const string PackageName = "Hearty.Server.WebUi";
-
     private IEnumerable<TGridItem>? GetSortedItems()
         => (_sortByColumn is null || Items is null) 
             ? Items 
@@ -127,9 +125,11 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
     {
         if (firstRender)
         {
+            string packageName = ContainingPackageAttribute.Instance?.Name ?? string.Empty;
+
             _jsModule = await JS.InvokeAsync<IJSObjectReference>(
                                 "import", 
-                                $"../_content/{PackageName}/Pages/Grid.razor.js");
+                                $"../_content/{packageName}{(packageName != "" ? "/" : "")}Pages/Grid.razor.js");
 
             _jsEventDisposable = await _jsModule.InvokeAsync<IJSObjectReference>(
                                     "init", 

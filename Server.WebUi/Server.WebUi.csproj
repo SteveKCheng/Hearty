@@ -20,8 +20,14 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="6.0.3" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Infrastructure\" />
-  </ItemGroup>
-  
+  <Target Name="AddGitMetadaAssemblyAttributes"
+          BeforeTargets="CoreGenerateAssemblyInfo">
+    <ItemGroup>
+      <AssemblyAttribute Include="Hearty.Server.WebUi.Infrastructure.ContainingPackageAttribute"
+                         Condition="$(PackageId) != ''">
+        <_Parameter1>$(PackageId)</_Parameter1>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+
 </Project>
