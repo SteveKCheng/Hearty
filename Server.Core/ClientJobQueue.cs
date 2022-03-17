@@ -207,11 +207,34 @@ public class ClientJobQueue
         int count = 0;
         var result = new List<IRunningJob<PromisedWork>>(capacity);
 
+        IEnumerable<IRunningJob<PromisedWork>>? pendingMicroJobs = null;
+
         lock (_runningJobs)
         {
             foreach (var job in _runningJobs)
             {
                 result.Add(job);
+                if (++count == limit)
+                    return result;
+
+                // This condition can only be triggered at most once
+                // owing to implementation details of SchedulingQueue.
+                if (job is IEnumerable<IRunningJob<PromisedWork>> moreJobs)
+                    pendingMicroJobs = moreJobs;
+            }
+        }
+
+        // Display micro jobs that come from an active macro job
+        // but that have not been taken out from SchedulingQueue yet.
+        if (pendingMicroJobs is not null)
+        {
+            foreach (var job in pendingMicroJobs)
+            {
+                if (job.Status != JobStatus.NotStarted)
+                    continue;
+
+                result.Add(job);
+
                 if (++count == limit)
                     return result;
             }

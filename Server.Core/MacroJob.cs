@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -37,9 +38,28 @@ using MacroJobLinks = CircularListLinks<MacroJobMessage, MacroJobMessage.ListLin
 /// the messages that are put into the job queue,
 /// to implement job sharing and time accounting.
 /// </para>
+/// <para>
+/// The interface <see cref="IAsyncEnumerable{T}" /> is
+/// consumed by <see cref="SchedulingQueue{T, TOut}" />.
+/// Enumeration has the side effects of enqueuing the jobs,
+/// so this class only supports calling 
+/// <see cref="IAsyncEnumerable{T}.GetAsyncEnumerator" /> at 
+/// most once.
+/// </para>
+/// <para>
+/// The interface <see cref="IEnumerable{T}" /> is used only
+/// for <see cref="ClientJobQueue.GetCurrentJobs" /> to observe
+/// the micro jobs that are about to run;
+/// they are not actually inserted into queue owing to how 
+/// <see cref="SchedulingQueue{T, TOut}" /> works.  
+/// Even though the source may be asynchronous, observation is 
+/// synchronous only, for simplicity.  The enumerator terminates 
+/// early if retrieving the next item would wait. 
+/// </para>
 /// </remarks>
 internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
                                       , IRunningJob<PromisedWork>
+                                      , IEnumerable<IRunningJob<PromisedWork>>
                                       , IJobCancellation
                                       , IDisposable
 {
@@ -572,6 +592,68 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
 
     void IJobCancellation.Kill(bool background)
         => Source.Kill(background);
+
+    #region Observing pending jobs
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2012:Use ValueTasks correctly", 
+        Justification = "ValueTasks are explicitly consumed when returned enumerator exits early. ")]
+    private IEnumerator<IRunningJob<PromisedWork>> GetObservingEnumerator()
+    {
+        // Do not enumerate anything if the job has completed or
+        // has been cancelled.
+        if (Source.ResultBuilder.IsComplete || ClientToken.IsCancellationRequested)
+            yield break;
+
+        var enumerator = Source.Expansion.GetAsyncEnumerator(CancellationToken.None);
+        ValueTask<bool> t = default;
+        try
+        {
+            while ((t = enumerator.MoveNextAsync()).IsCompleted &&
+                    t.GetAwaiter().GetResult() == true)
+            {
+                if (Source.ResultBuilder.IsComplete || ClientToken.IsCancellationRequested)
+                    break;
+
+                var (_, work) = enumerator.Current;
+                yield return new PendingChildJob(work);
+            }
+        }
+        finally
+        {
+            _ = enumerator.FireAndForgetDisposeAsync(t);
+        }
+    }
+
+    IEnumerator<IRunningJob<PromisedWork>> IEnumerable<IRunningJob<PromisedWork>>.GetEnumerator()
+        => GetObservingEnumerator();
+
+    IEnumerator IEnumerable.GetEnumerator() => GetObservingEnumerator();
+
+    /// <summary>
+    /// Representation of a "pending" micro job returned by 
+    /// <see cref="GetObservingEnumerator" />.
+    /// </summary>
+    private sealed class PendingChildJob : IRunningJob<PromisedWork>
+    {
+        PromisedWork IRunningJob<PromisedWork>.Input => _work;
+
+        int IRunningJob.EstimatedWait => _work.InitialWait;
+
+        long IRunningJob.LaunchStartTime => 0;  // FIXME
+
+        // FIXME racy checks of multiple flags
+        JobStatus IRunningJob.Status =>
+            (_work.Promise?.HasAsyncResult == true) ?
+            (_work.Promise!.IsCompleted) ? JobStatus.Succeeded
+                                         : JobStatus.Running
+                                         : JobStatus.NotStarted;
+            
+        private readonly PromisedWork _work;
+
+        public PendingChildJob(PromisedWork work) => _work = work;
+    }
+
+    #endregion
 }
 
 /// <summary>

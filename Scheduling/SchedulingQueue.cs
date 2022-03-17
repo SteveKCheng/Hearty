@@ -197,7 +197,7 @@ namespace Hearty.Scheduling
                 {
                     _currentEnumerator = null;
                     _currentEnumeratorTask = default;
-                    _ = FireAndForgetDisposeAsync(enumerator);
+                    _ = enumerator.FireAndForgetDisposeAsync();
                     DeactivateOnEmptyQueue();
                 }
             }
@@ -213,21 +213,6 @@ namespace Hearty.Scheduling
             }
 
             return false;
-        }
-
-        /// <summary>
-        /// Run <see cref="IAsyncDisposable.DisposeAsync" /> in the background
-        /// and ignore any exceptions.
-        /// </summary>
-        private async Task FireAndForgetDisposeAsync(IAsyncDisposable target)
-        {
-            try
-            {
-                await target.DisposeAsync().ConfigureAwait(false);
-            }
-            catch
-            {
-            }
         }
 
         /// <summary>

@@ -269,6 +269,12 @@ namespace Hearty.Server
         /// </summary>
         private int _hasAsyncResult;
 
+        /// <summary>
+        /// Whether some caller has already set this promise to receive
+        /// a result, or the promise already has the result.
+        /// </summary>
+        public bool HasAsyncResult => _hasAsyncResult != 0;
+
         // Expiry
 
         // List of clients that are watching this promise

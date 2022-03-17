@@ -47,5 +47,43 @@ namespace Hearty.Scheduling
             else
                 source.Cancel();
         }
+
+        /// <summary>
+        /// Run <see cref="IAsyncDisposable.DisposeAsync" /> in the background
+        /// and ignore any exceptions.
+        /// </summary>
+        public static async Task FireAndForgetDisposeAsync(this IAsyncDisposable target)
+        {
+            try
+            {
+                await target.DisposeAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+        }
+
+        /// <summary>
+        /// Run <see cref="IAsyncDisposable.DisposeAsync" /> in the background,
+        /// and ignore the last item plus any exceptions.
+        /// </summary>
+        public static async Task FireAndForgetDisposeAsync(this IAsyncDisposable target, ValueTask<bool> lastItem)
+        {
+            try
+            {
+                await lastItem.ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                await target.DisposeAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+        }
     }
 }
