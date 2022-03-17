@@ -23,14 +23,29 @@
 
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Rendering;
-using Hearty.Server.WebUi.Pages;
 using Hearty.Server.WebUi.Infrastructure;
 using System.Linq;
 
 namespace Hearty.Server.WebUi;
 
 /// <summary>
-/// Describes a column inside <see cref="Grid{TGridItem}" />.
+/// Lets <see cref="ColumnBase{TGridItem}" /> communicate
+/// with the grid that owns it.
+/// </summary>
+/// <typeparam name="TGridItem">
+/// The type of item to be displayed in each row of the grid.
+/// </typeparam>
+internal interface IGrid<TGridItem>
+{
+    /// <summary>
+    /// Called by the definition of a column to register
+    /// itself to the grid.
+    /// </summary>
+    void RegisterColumn(ColumnBase<TGridItem> column);
+}
+
+/// <summary>
+/// Describes a column inside <see cref="IGrid{TGridItem}" />.
 /// </summary>
 /// <typeparam name="TGridItem">
 /// The type of item to be displayed in each row of the grid.
@@ -45,12 +60,10 @@ public abstract class ColumnBase<TGridItem> : ComponentBase
         EmptyChildContent { get; } = _ => builder => { };
 
     /// <summary>
-    /// The callback established by an instance of 
-    /// <see cref="Grid{TGridItem}" /> for this column to 
-    /// register itself to that instance.
+    /// Reference to the grid that owns this column.
     /// </summary>
     [CascadingParameter] 
-    internal Grid<TGridItem>.AddColumnCallback AddColumn { get; set; } = default!;
+    private IGrid<TGridItem> OwningGrid { get; set; } = default!;
 
     /// <summary>
     /// The title of the column in the grid, shown in a header cell.
@@ -113,6 +126,6 @@ public abstract class ColumnBase<TGridItem> : ComponentBase
     /// <inheritdoc />
     protected override void BuildRenderTree(RenderTreeBuilder builder)
     {
-        AddColumn(this);
+        OwningGrid.RegisterColumn(this);
     }
 }

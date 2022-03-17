@@ -9,7 +9,7 @@
     _columns.Clear();
 }
 
-<CascadingValue IsFixed="true" Value="@_addColumnCallback">
+<CascadingValue IsFixed="true" Value="@((IGrid<TGridItem>)this)">
     @ChildContent
     <Defer>
         <table aria-rowcount="@_rowCount" @ref="_tableReference" @onclosecolumnoptions="CloseColumnOptions">

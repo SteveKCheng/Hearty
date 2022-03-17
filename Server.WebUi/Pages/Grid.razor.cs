@@ -17,30 +17,9 @@ namespace Hearty.Server.WebUi.Pages;
 /// The type of item to be displayed in each row of the grid.
 /// </typeparam>
 [CascadingTypeParameter(nameof(TGridItem))]
-public sealed partial class Grid<TGridItem> : IAsyncDisposable
+public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
     where TGridItem : notnull
 {
-    /// <summary>
-    /// Invoked by <see cref="ColumnBase{TGridItem}" />
-    /// to add itself to the list of the columns in this grid
-    /// when it renders.
-    /// </summary>
-    /// <remarks>
-    /// The <see cref="ColumnBase{TGridItem}" /> retrieves this
-    /// delegate through a cascading parameter.
-    /// </remarks>
-    /// <param name="column">
-    /// The column definition to add.
-    /// </param>
-    internal delegate void AddColumnCallback(ColumnBase<TGridItem> column);
-
-    /// <summary>
-    /// Invoked by <see cref="ColumnBase{TGridItem}" />
-    /// to add itself to the list of the columns in this grid
-    /// when it renders.
-    /// </summary>
-    private readonly AddColumnCallback _addColumnCallback;
-
     /// <summary>
     /// The rows to be displayed by this grid.
     /// </summary>
@@ -83,7 +62,7 @@ public sealed partial class Grid<TGridItem> : IAsyncDisposable
     /// <summary>
     /// The columns to show in this grid, in sequence.
     /// </summary>
-    private readonly List<ColumnBase<TGridItem>> _columns;
+    private readonly List<ColumnBase<TGridItem>> _columns = new();
 
     private ColumnBase<TGridItem>? _sortByColumn;
     private ColumnBase<TGridItem>? _displayOptionsForColumn;
@@ -102,10 +81,11 @@ public sealed partial class Grid<TGridItem> : IAsyncDisposable
             ? Items 
             : _sortByColumn.GetSortedItems(Items, _sortByAscending);
 
+    /// <summary>
+    /// Constructor.
+    /// </summary>
     public Grid()
     {
-        _columns = new();
-        _addColumnCallback = _columns.Add;
     }
 
     /// <inheritdoc cref="IAsyncDisposable.DisposeAsync" />
@@ -250,4 +230,7 @@ public sealed partial class Grid<TGridItem> : IAsyncDisposable
 
         return result;
     }
+
+    void IGrid<TGridItem>.RegisterColumn(ColumnBase<TGridItem> column)
+        => _columns.Add(column);
 }
