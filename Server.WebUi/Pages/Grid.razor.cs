@@ -156,13 +156,6 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
                 : Task.CompletedTask;
     }
 
-    private void RenderRows(RenderTreeBuilder builder)
-    {
-        var rowIndex = 2; // aria-rowindex is 1-based, plus the first row is the header
-        foreach (var item in SortedItems ?? Enumerable.Empty<TGridItem>())
-            RenderRow(builder, rowIndex++, item);
-    }
-
     private string AriaSortValue(ColumnDefinition<TGridItem> column)
         => _sortByColumn == column
             ? (_sortByAscending ? "ascending" : "descending")
@@ -206,6 +199,27 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
     {
         _displayOptionsForColumn = column;
         _checkColumnOptionsPosition = true;
+    }
+
+    /// <summary>
+    /// Called from Razor syntax to render the contents of the header
+    /// row of the grid.
+    /// </summary>
+    private void RenderColumnHeaders(RenderTreeBuilder builder)
+    {
+        foreach (var col in _columns)
+            RenderColumnHeader(builder, col);
+    }
+
+    /// <summary>
+    /// Called from Razor syntax to render all the rows of the grid
+    /// when virtualization is disabled.
+    /// </summary>
+    private void RenderRows(RenderTreeBuilder builder)
+    {
+        var rowIndex = 2; // aria-rowindex is 1-based, plus the first row is the header
+        foreach (var item in SortedItems ?? Enumerable.Empty<TGridItem>())
+            RenderRow(builder, rowIndex++, item);
     }
 
     /// <summary>

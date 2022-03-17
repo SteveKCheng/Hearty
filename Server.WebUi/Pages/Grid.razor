@@ -22,10 +22,10 @@
                 @if (Virtualize)
                 {
                     <Virtualize @ref="@_virtualizeComponent"
-                        TItem="KeyValuePair<int, TGridItem>"
-                        ItemSize="@ItemSize"
-                        ItemsProvider="@ProvideVirtualizedItems"
-                        ItemContent="@(item => builder => RenderRow(builder, item.Key, item.Value))" />
+                                TItem="KeyValuePair<int, TGridItem>"
+                                ItemSize="@ItemSize"
+                                ItemsProvider="@ProvideVirtualizedItems"
+                                ItemContent="@(item => builder => RenderRow(builder, item.Key, item.Value))" />
                 }
                 else
                 {
@@ -51,14 +51,9 @@
         </tr>
     }
 
-    private void RenderColumnHeaders(RenderTreeBuilder builder)
-    {
-        foreach (var col in _columns)
-        {
-            RenderColumnHeader(builder, col);
-        }
-    }
-
+    /// <summary>
+    /// Renders the cell for one of the columns in the header row of the grid.
+    /// </summary>
     private void RenderColumnHeader(RenderTreeBuilder __builder, ColumnDefinition<TGridItem> col)
     {
         <th class="@ColumnHeaderClass(col)" aria-sort="@AriaSortValue(col)" @key="@col" scope="col">
