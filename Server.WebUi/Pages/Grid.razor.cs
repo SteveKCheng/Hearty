@@ -21,10 +21,15 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
     where TGridItem : notnull
 {
     /// <summary>
-    /// The rows to be displayed by this grid.
+    /// The sequence of rows to be displayed by this grid.
     /// </summary>
+    /// <remarks>
+    /// If the sequence implements <see cref="IQueryable{T}" />,
+    /// sorting and selection may be delegated to the data source,
+    /// instead of being evaluated "immediately".
+    /// </remarks>
     [Parameter, EditorRequired] 
-    public IQueryable<TGridItem>? Items { get; set; }
+    public IEnumerable<TGridItem>? Items { get; set; }
 
     /// <summary>
     /// Holds the column definitions.
@@ -72,7 +77,7 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
     private ColumnDefinition<TGridItem>? _displayOptionsForColumn;
     private bool _checkColumnOptionsPosition;
     private bool _sortByAscending;
-    private IQueryable<TGridItem>? _previousItems;
+    private IEnumerable<TGridItem>? _previousItems;
     private int _rowCount;
     private IJSObjectReference? _jsModule;
     private IJSObjectReference? _jsEventDisposable;
@@ -80,7 +85,7 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
 
     private const string PackageName = "Hearty.Server.WebUi";
 
-    private IQueryable<TGridItem>? SortedItems
+    private IEnumerable<TGridItem>? GetSortedItems()
         => (_sortByColumn is null || Items is null) 
             ? Items 
             : _sortByColumn.GetSortedItems(Items, _sortByAscending);
@@ -218,7 +223,7 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
     private void RenderRows(RenderTreeBuilder builder)
     {
         var rowIndex = 2; // aria-rowindex is 1-based, plus the first row is the header
-        foreach (var item in SortedItems ?? Enumerable.Empty<TGridItem>())
+        foreach (var item in GetSortedItems() ?? Enumerable.Empty<TGridItem>())
             RenderRow(builder, rowIndex++, item);
     }
 
@@ -238,9 +243,21 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
         if (request.CancellationToken.IsCancellationRequested)
             return default;
 
-        var records = SortedItems!.Skip(request.StartIndex)
-                                  .Take(request.Count)
-                                  .AsEnumerable();
+        IEnumerable<TGridItem> records;
+
+        var source = GetSortedItems();
+        if (source is IQueryable<TGridItem> queryableSource)
+        {
+            // Let the data source do the selection if possible
+            records = queryableSource.Skip(request.StartIndex)
+                                     .Take(request.Count)
+                                     .AsEnumerable();
+        }
+        else
+        {
+            records = source!.Skip(request.StartIndex)
+                             .Take(request.Count);
+        }
 
         var items = records.Select((x, i) => KeyValuePair.Create(i + request.StartIndex + 2, x));
         return new(items, totalItemCount: Items.Count());

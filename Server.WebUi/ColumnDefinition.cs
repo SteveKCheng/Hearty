@@ -25,6 +25,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Rendering;
 using Hearty.Server.WebUi.Infrastructure;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace Hearty.Server.WebUi;
 
@@ -115,16 +116,30 @@ public abstract class ColumnDefinition<TGridItem> : ComponentBase
         HeaderContent = __builder => __builder.AddContent(0, Title);
     }
 
-    internal virtual bool CanSort => false;
+    /// <summary>
+    /// Whether the items can be sorted based on this column.
+    /// </summary>
+    public virtual bool CanSort => false;
 
     /// <summary>
     /// Get the sequence of items after sorting on this column.
     /// </summary>
-    internal virtual IQueryable<TGridItem> 
-        GetSortedItems(IQueryable<TGridItem> source, bool ascending) => source;
+    /// <param name="source">
+    /// The original sequence of items.  Although this argument
+    /// is typed as <see cref="IEnumerable{T}" />,
+    /// if the object implements <see cref="IQueryable{T}" /> also,
+    /// then this method should, if possible, defer the
+    /// sorting to when the sequence is evaluated from the data source.
+    /// </param>
+    /// <param name="ascending">
+    /// Set to true to sort in ascending order.  False to sort in
+    /// descending order.
+    /// </param>
+    public virtual IEnumerable<TGridItem> 
+        GetSortedItems(IEnumerable<TGridItem> source, bool ascending) => source;
 
     /// <inheritdoc />
-    protected override void BuildRenderTree(RenderTreeBuilder builder)
+    protected sealed override void BuildRenderTree(RenderTreeBuilder builder)
     {
         OwningGrid.RegisterColumn(this);
     }

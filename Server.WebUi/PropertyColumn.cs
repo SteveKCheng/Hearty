@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Components;
 using System.Linq.Expressions;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace Hearty.Server.WebUi;
 
@@ -15,7 +16,7 @@ namespace Hearty.Server.WebUi;
 /// <typeparam name="TProp">
 /// The type of value returned by the property.
 /// </typeparam>
-public class PropertyColumn<TGridItem, TProp> : ColumnDefinition<TGridItem>
+public sealed class PropertyColumn<TGridItem, TProp> : ColumnDefinition<TGridItem>
 {
     private Expression<Func<TGridItem, TProp>>? _cachedProperty;
     private Func<TGridItem, TProp>? _compiledPropertyExpression;
@@ -83,9 +84,11 @@ public class PropertyColumn<TGridItem, TProp> : ColumnDefinition<TGridItem>
             Title = memberExpression.Member.Name;
     }
 
-    internal override bool CanSort => true;
+    /// <inheritdoc />
+    public override bool CanSort => true;
 
-    internal override IQueryable<TGridItem> GetSortedItems(IQueryable<TGridItem> source, bool ascending)
-        => ascending ? source.OrderBy(Property) 
-                     : source.OrderByDescending(Property);
+    /// <inheritdoc />
+    public override IEnumerable<TGridItem> GetSortedItems(IEnumerable<TGridItem> source, bool ascending)
+        => ascending ? source.AsQueryable().OrderBy(Property) 
+                     : source.AsQueryable().OrderByDescending(Property);
 }

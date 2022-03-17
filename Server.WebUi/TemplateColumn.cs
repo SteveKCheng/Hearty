@@ -2,6 +2,7 @@
 using System;
 using System.Linq;
 using Hearty.Server.WebUi.Infrastructure;
+using System.Collections.Generic;
 
 namespace Hearty.Server.WebUi;
 
@@ -12,7 +13,7 @@ namespace Hearty.Server.WebUi;
 /// <typeparam name="TGridItem">
 /// The type of item to be displayed in each row of the grid.
 /// </typeparam>
-public class TemplateColumn<TGridItem> : ColumnDefinition<TGridItem>
+public sealed class TemplateColumn<TGridItem> : ColumnDefinition<TGridItem>
 {
     /// <summary>
     /// Renders the cell for this column and the given row.
@@ -29,9 +30,16 @@ public class TemplateColumn<TGridItem> : ColumnDefinition<TGridItem>
         CellContent = ChildContent;
     }
 
-    internal override bool CanSort => SortBy != null;
+    /// <inheritdoc />
+    public override bool CanSort => SortBy is not null;
 
-    internal override IQueryable<TGridItem> GetSortedItems(IQueryable<TGridItem> source, bool ascending)
-        => SortBy == null ? source 
-                          : SortBy(source).Apply(source, ascending);
+    /// <inheritdoc />
+    public override IEnumerable<TGridItem> GetSortedItems(IEnumerable<TGridItem> source, bool ascending)
+    {
+        if (SortBy is null)
+            return source;
+
+        var queryableSource = source.AsQueryable();
+        return SortBy(queryableSource).Apply(queryableSource, ascending);
+    }
 }
