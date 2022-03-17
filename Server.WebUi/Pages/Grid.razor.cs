@@ -44,7 +44,8 @@ public sealed partial class Grid<TGridItem> : IAsyncDisposable
     /// <summary>
     /// The rows to be displayed by this grid.
     /// </summary>
-    [Parameter, EditorRequired] public IQueryable<TGridItem>? Items { get; set; }
+    [Parameter, EditorRequired] 
+    public IQueryable<TGridItem>? Items { get; set; }
 
     /// <summary>
     /// Holds the column definitions.
@@ -53,10 +54,21 @@ public sealed partial class Grid<TGridItem> : IAsyncDisposable
     /// This content is not rendered but lets the columns of the grid
     /// be defined inside the "Grid" element in Blazor syntax.
     /// </remarks>
-    [Parameter] public RenderFragment? ChildContent { get; set; }
-    [Parameter] public bool Virtualize { get; set; }
-    [Parameter] public bool ResizableColumns { get; set; }
-    [Parameter] public float ItemSize { get; set; } = 50;
+    [Parameter] 
+    public RenderFragment? ChildContent { get; set; }
+    
+    [Parameter] 
+    public bool Virtualize { get; set; }
+
+    /// <summary>
+    /// If true, allow the user to change the width of columns
+    /// by dragging the mouse.
+    /// </summary>
+    [Parameter] 
+    public bool ResizableColumns { get; set; }
+
+    [Parameter] 
+    public float ItemSize { get; set; } = 50;
 
     /// <summary>
     /// Derives the key on each row to enable DOM differencing by Blazor.
@@ -86,7 +98,9 @@ public sealed partial class Grid<TGridItem> : IAsyncDisposable
     private const string PackageName = "Hearty.Server.WebUi";
 
     private IQueryable<TGridItem>? SortedItems
-        => _sortByColumn is null || Items is null ? Items : _sortByColumn.GetSortedItems(Items, _sortByAscending);
+        => (_sortByColumn is null || Items is null) 
+            ? Items 
+            : _sortByColumn.GetSortedItems(Items, _sortByAscending);
 
     public Grid()
     {
@@ -150,19 +164,19 @@ public sealed partial class Grid<TGridItem> : IAsyncDisposable
     /// <inheritdoc />
     protected override Task OnParametersSetAsync()
     {
-        _rowCount = (Items?.Count() ?? 0) + 1; // The extra 1 is the header row. This matches the default behavior.
+        // The extra 1 is the header row. This matches the default behavior.
+        _rowCount = (Items?.Count() ?? 0) + 1; 
+
         return _virtualizeComponent is not null && Items != _previousItems
-            ? _virtualizeComponent.RefreshDataAsync()
-            : Task.CompletedTask;
+                ? _virtualizeComponent.RefreshDataAsync()
+                : Task.CompletedTask;
     }
 
     private void RenderRows(RenderTreeBuilder builder)
     {
         var rowIndex = 2; // aria-rowindex is 1-based, plus the first row is the header
         foreach (var item in SortedItems ?? Enumerable.Empty<TGridItem>())
-        {
             RenderRow(builder, rowIndex++, item);
-        }
     }
 
     private string AriaSortValue(ColumnBase<TGridItem> column)
@@ -172,17 +186,17 @@ public sealed partial class Grid<TGridItem> : IAsyncDisposable
 
     private string? ColumnHeaderClass(ColumnBase<TGridItem> column)
         => _sortByColumn == column
-        ? $"{ColumnClass(column)} {(_sortByAscending ? "sorted-asc" : "sorted-desc")}"
-        : ColumnClass(column);
+            ? $"{Grid<TGridItem>.GetCssColumnClass(column)} {(_sortByAscending ? "sorted-asc" : "sorted-desc")}"
+            : Grid<TGridItem>.GetCssColumnClass(column);
 
-    private string? ColumnClass(ColumnBase<TGridItem> column)
+    private static string? GetCssColumnClass(ColumnBase<TGridItem> column)
     {
-        switch (column.Align)
+        return column.Align switch
         {
-            case Align.Center: return $"grid-col-center {column.Class}";
-            case Align.Right: return $"grid-col-right {column.Class}";
-            default: return column.Class;
-        }
+            Align.Center => $"grid-col-center {column.Class}",
+            Align.Right => $"grid-col-right {column.Class}",
+            _ => column.Class,
+        };
     }
 
     private async Task OnHeaderClicked(ColumnBase<TGridItem> column)
@@ -200,9 +214,7 @@ public sealed partial class Grid<TGridItem> : IAsyncDisposable
             }
 
             if (_virtualizeComponent is not null)
-            {
                 await _virtualizeComponent.RefreshDataAsync();
-            }
         }
     }
 
@@ -212,27 +224,30 @@ public sealed partial class Grid<TGridItem> : IAsyncDisposable
         _checkColumnOptionsPosition = true;
     }
 
-    private async ValueTask<ItemsProviderResult<(int, TGridItem)>> ProvideVirtualizedItems(ItemsProviderRequest request)
+    /// <summary>
+    /// Reports rows for display with virtualization, 
+    /// i.e. skipping rendering of rows that are not visible to the client.
+    /// </summary>
+    private async ValueTask<ItemsProviderResult<(int, TGridItem)>> 
+        ProvideVirtualizedItems(ItemsProviderRequest request)
     {
         if (Items is null)
-        {
             return new ItemsProviderResult<(int, TGridItem)>(Enumerable.Empty<(int, TGridItem)>(), 0);
-        }
-        else
-        {
-            // Debounce the requests. This eliminates a lot of redundant queries at the cost of slight lag after interactions.
-            // If you wanted, you could try to make it only debounce on the 2nd-and-later request within a cluster.
-            await Task.Delay(20);
-            if (request.CancellationToken.IsCancellationRequested)
-            {
-                return default;
-            }
 
-            var records = SortedItems!.Skip(request.StartIndex).Take(request.Count).AsEnumerable();
-            var result = new ItemsProviderResult<(int, TGridItem)>(
-                items: records.Select((x, i) => ValueTuple.Create(i + request.StartIndex + 2, x)),
-                totalItemCount: Items.Count());
-            return result;
-        }
+        // Debounce the requests. This eliminates a lot of redundant queries at the cost of slight lag after interactions.
+        // If you wanted, you could try to make it only debounce on the 2nd-and-later request within a cluster.
+        await Task.Delay(20);
+        if (request.CancellationToken.IsCancellationRequested)
+            return default;
+
+        var records = SortedItems!.Skip(request.StartIndex)
+                                  .Take(request.Count)
+                                  .AsEnumerable();
+
+        var result = new ItemsProviderResult<(int, TGridItem)>(
+            items: records.Select((x, i) => (i + request.StartIndex + 2, x)),
+            totalItemCount: Items.Count());
+
+        return result;
     }
 }

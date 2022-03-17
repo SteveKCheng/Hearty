@@ -48,15 +48,15 @@ public class PropertyColumn<TGridItem, TProp> : ColumnBase<TGridItem>
             Func<TGridItem, string?> cellTextFunc;
             if (!string.IsNullOrEmpty(Format))
             {
-                if (typeof(IFormattable).IsAssignableFrom(typeof(TProp)))
-                {
-                    cellTextFunc = item => ((IFormattable?)_compiledPropertyExpression!(item))?.ToString(Format, null);
-                }
-                else
+                Type propertyType = Nullable.GetUnderlyingType(typeof(TProp)) ?? typeof(TProp);
+
+                if (!typeof(IFormattable).IsAssignableFrom(propertyType))
                 {
                     throw new InvalidOperationException(
                         $"A '{nameof(Format)}' parameter was supplied, but the type '{typeof(TProp)}' does not implement '{typeof(IFormattable)}'.");
                 }
+
+                cellTextFunc = item => ((IFormattable?)_compiledPropertyExpression!(item))?.ToString(Format, null);
             }
             else
             {
@@ -80,13 +80,12 @@ public class PropertyColumn<TGridItem, TProp> : ColumnBase<TGridItem>
         }
 
         if (Title is null && _cachedProperty.Body is MemberExpression memberExpression)
-        {
             Title = memberExpression.Member.Name;
-        }
     }
 
     internal override bool CanSort => true;
 
     internal override IQueryable<TGridItem> GetSortedItems(IQueryable<TGridItem> source, bool ascending)
-        => ascending ? source.OrderBy(Property) : source.OrderByDescending(Property);
+        => ascending ? source.OrderBy(Property) 
+                     : source.OrderByDescending(Property);
 }

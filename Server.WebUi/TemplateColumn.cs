@@ -14,14 +14,16 @@ namespace Hearty.Server.WebUi;
 /// </typeparam>
 public class TemplateColumn<TGridItem> : ColumnBase<TGridItem>
 {
-    private readonly static RenderFragment<TGridItem> EmptyChildContent = _ => builder => { };
-
+    /// <summary>
+    /// Renders the cell for this column and the given row.
+    /// </summary>
     [Parameter] 
     public RenderFragment<TGridItem> ChildContent { get; set; } = EmptyChildContent;
     
     [Parameter] 
     public Func<IQueryable<TGridItem>, SortBy<TGridItem>>? SortBy { get; set; }
 
+    /// <inheritdoc />
     protected override void OnParametersSet()
     {
         CellContent = ChildContent;
@@ -30,5 +32,6 @@ public class TemplateColumn<TGridItem> : ColumnBase<TGridItem>
     internal override bool CanSort => SortBy != null;
 
     internal override IQueryable<TGridItem> GetSortedItems(IQueryable<TGridItem> source, bool ascending)
-        => SortBy == null ? source : SortBy(source).Apply(source, ascending);
+        => SortBy == null ? source 
+                          : SortBy(source).Apply(source, ascending);
 }

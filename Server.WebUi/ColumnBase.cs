@@ -37,7 +37,12 @@ namespace Hearty.Server.WebUi;
 /// </typeparam>
 public abstract class ColumnBase<TGridItem> : ComponentBase
 {
-    private readonly static RenderFragment<TGridItem> EmptyChildContent = _ => builder => { };
+    /// <summary>
+    /// A render fragment for an item that contains nothing,
+    /// used as the default value of user-customizable fragments.
+    /// </summary>
+    protected static RenderFragment<TGridItem> 
+        EmptyChildContent { get; } = _ => builder => { };
 
     /// <summary>
     /// The callback established by an instance of 
@@ -67,8 +72,7 @@ public abstract class ColumnBase<TGridItem> : ComponentBase
     public Align Align { get; set; }
 
     /// <summary>
-    /// A render fragment to show when the header of the column
-    /// is clicked
+    /// A fragment to show when the header of the column is clicked.
     /// </summary>
     /// <remarks>
     /// Such a fragment can contain user-adjustable controls 
@@ -78,10 +82,21 @@ public abstract class ColumnBase<TGridItem> : ComponentBase
     [Parameter] 
     public RenderFragment? ColumnOptions { get; set; }
 
+    /// <summary>
+    /// A fragment to show, inside the header for this column.
+    /// </summary>
     internal RenderFragment HeaderContent { get; }
 
-    protected internal RenderFragment<TGridItem> CellContent { get; protected set; } = EmptyChildContent;
+    /// <summary>
+    /// Invoked to render the cell under this column
+    /// for the given item (row).
+    /// </summary>
+    protected internal RenderFragment<TGridItem> 
+        CellContent { get; protected set; } = EmptyChildContent;
 
+    /// <summary>
+    /// Constructor.
+    /// </summary>
     public ColumnBase()
     {
         HeaderContent = __builder => __builder.AddContent(0, Title);
@@ -89,7 +104,11 @@ public abstract class ColumnBase<TGridItem> : ComponentBase
 
     internal virtual bool CanSort => false;
 
-    internal virtual IQueryable<TGridItem> GetSortedItems(IQueryable<TGridItem> source, bool ascending) => source;
+    /// <summary>
+    /// Get the sequence of items after sorting on this column.
+    /// </summary>
+    internal virtual IQueryable<TGridItem> 
+        GetSortedItems(IQueryable<TGridItem> source, bool ascending) => source;
 
     /// <inheritdoc />
     protected override void BuildRenderTree(RenderTreeBuilder builder)

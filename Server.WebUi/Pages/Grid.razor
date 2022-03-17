@@ -38,12 +38,15 @@
 
 @code {
 
+    /// <summary>
+    /// Renders one row in the grid whenever it is requested by display virtualization.
+    /// </summary>
     private void RenderRow(RenderTreeBuilder __builder, int rowIndex, TGridItem item)
     {
         <tr @key="@(ItemKey(item))" aria-rowindex="@rowIndex">
             @foreach (var col in _columns)
             {
-                <td class="@ColumnClass(col)" @key="@col">@col.CellContent(item)</td>
+                <td class="@GetCssColumnClass(col)" @key="@col">@col.CellContent(item)</td>
             }
         </tr>
     }
