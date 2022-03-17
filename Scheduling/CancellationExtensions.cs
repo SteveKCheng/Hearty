@@ -67,7 +67,7 @@ namespace Hearty.Scheduling
         /// Run <see cref="IAsyncDisposable.DisposeAsync" /> in the background,
         /// and ignore the last item plus any exceptions.
         /// </summary>
-        public static async Task FireAndForgetDisposeAsync(this IAsyncDisposable target, ValueTask<bool> lastItem)
+        public static async Task FireAndForgetDisposeAsync<T>(this IAsyncDisposable target, ValueTask<T> lastItem)
         {
             try
             {

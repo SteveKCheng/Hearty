@@ -608,10 +608,15 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
         ValueTask<bool> t = default;
         try
         {
-            while ((t = enumerator.MoveNextAsync()).IsCompleted &&
-                    t.GetAwaiter().GetResult() == true)
+            while ((t = enumerator.MoveNextAsync()).IsCompleted)
             {
                 if (Source.ResultBuilder.IsComplete || ClientToken.IsCancellationRequested)
+                    break;
+
+                // Consume ValueTask only once
+                var u = t;
+                t = default;
+                if (u.GetAwaiter().GetResult() == false)
                     break;
 
                 var (_, work) = enumerator.Current;
