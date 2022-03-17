@@ -1,11 +1,14 @@
 ﻿using Hearty.Common;
 using Hearty.Scheduling;
-using Microsoft.AspNetCore.Components;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Hearty.Server.WebUi.Pages;
 
+/// <summary>
+/// Blazor component to display the queues on the job server.
+/// </summary>
 public sealed partial class PriorityClasses : IDisposable
 {
     private bool _isDisposed;
@@ -65,5 +68,37 @@ public sealed partial class PriorityClasses : IDisposable
     public void Dispose()
     {
         _isDisposed = true;
+    }
+}
+
+/// <summary>
+/// Represents a job item in the display dashboard.
+/// </summary>
+internal struct DisplayedJob
+{
+    /// <summary>
+    /// The key for the queue where this job comes from.
+    /// </summary>
+    public JobQueueKey Queue { get; }
+
+    /// <summary>
+    /// The sequence number of this job from its queue,
+    /// 0 referring to the front of the queue.
+    /// </summary>
+    public int Ordinal { get; }
+
+    /// <summary>
+    /// Details about the job.
+    /// </summary>
+    public IRunningJob<PromisedWork> Job { get; }
+
+    /// <summary>
+    /// Constructor.
+    /// </summary>
+    public DisplayedJob(JobQueueKey queue, int ordinal, IRunningJob<PromisedWork> job)
+    {
+        Queue = queue;
+        Ordinal = ordinal;
+        Job = job;
     }
 }

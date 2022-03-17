@@ -9,8 +9,7 @@
 <h1>Priority classes</h1>
 
 @{
-    List<KeyValuePair<JobQueueKey, 
-                      IReadOnlyList<IRunningJob<PromisedWork>>>>? displayedQueues = null;
+    List<DisplayedJob>? displayedJobs = null;
 }
 
 <table class="job-queue">
@@ -48,8 +47,11 @@
 
                 if (jobs is not null)
                 {
-                    displayedQueues ??= new();
-                    displayedQueues.Add(KeyValuePair.Create(key, jobs));
+                    displayedJobs ??= new();
+                    displayedJobs.EnsureCapacity(displayedJobs.Count + jobsCount);
+                    
+                    for (int ordinal = 0; ordinal < jobsCount; ++ordinal)
+                        displayedJobs.Add(new DisplayedJob(key, ordinal, jobs[ordinal]));
                 }
 
                 <tr class="job-queue">
@@ -65,60 +67,35 @@
     }
 </table>
 
-@if (displayedQueues is not null)
+@if (displayedJobs is not null)
 {
-    <table class="job-queue">
-        <colgroup>
-            <col class="client" />
-            <col class="client" />
-            <col class="client" />
+    <Grid TGridItem="DisplayedJob"
+          ItemKey="@(item => item.Job)"
+          Items="@displayedJobs"
+          Virtualize="false">
 
-            @foreach (var name in _displaySpecialization.JobCustomProperties)
+        <PropertyColumn Title="Status" 
+                        Property="@(item => GetStatusString(item.Job.Status))" 
+                        Class="col-name" />
+        <PropertyColumn Title="Client" 
+                        Property="@(item => item.Queue.Owner)" 
+                        Class="col-name" />
+        <PropertyColumn Title="ID"
+                        Property="@(item => item.Job.Input.PromiseId)"
+                        Class="col-name" />
+
+        @foreach (var name in _displaySpecialization.JobCustomProperties)
+        {
+            <PropertyColumn Title="@name"
+                            Property="@(item => item.Job.Input.GetDisplayProperty(name))"
+                            Class="col-name" />
+        }
+
+        <TemplateColumn Title="Kill">
+            @if (@context.Job is IJobCancellation cancellableJob)
             {
-                <col class="client" />
+                <button @onclick="() => cancellableJob.Kill(background: true)">🗙</button>
             }
-        </colgroup>
-
-        <thead>
-            <tr>
-                <th>Status</th>
-                <th>Client</th>
-                <th>ID</th>
-
-                @foreach (var name in _displaySpecialization.JobCustomProperties)
-                {
-                    <th>@name</th>
-                }
-
-                <th>Kill</th>
-            </tr>
-        </thead>
-
-        <tbody>
-            @foreach (var (key, jobs) in displayedQueues)
-            {
-                @foreach (var job in jobs)
-                {
-                    <tr>
-                        <td>@GetStatusString(job.Status)</td>
-                        <td>@key.Owner</td>
-                        <td>@job.Input.Promise?.Id</td>
-
-                        @foreach (var name in _displaySpecialization.JobCustomProperties)
-                        {
-                            <td>@job.Input.GetDisplayProperty(name)?.ToString()</td>
-                        }
-
-                        <td>
-                            @if (job is IJobCancellation cancellableJob)
-                            {
-                                <button @onclick="() => cancellableJob.Kill(background: true)">🗙</button>
-                            }
-                        </td>
-                    </tr>
-                }
-            }
-        </tbody>
-    </table>
+        </TemplateColumn>
+    </Grid>
 }
-

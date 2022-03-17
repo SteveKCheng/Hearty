@@ -190,10 +190,12 @@ public class ClientJobQueue
     /// <param name="limit">
     /// If non-negative, return at most this number of items.
     /// </param>
-    /// <remarks>
+    /// <returns>
     /// The list of jobs.  Those jobs that are currently running 
     /// or are closest to the head of the queue take precedence.
-    /// </remarks>
+    /// This method does not return an enumerator or enumerable
+    /// because it needs to take locks to observe the current jobs.
+    /// </returns>
     public IReadOnlyList<IRunningJob<PromisedWork>> GetCurrentJobs(int limit = -1)
     {
         if (limit == 0)
