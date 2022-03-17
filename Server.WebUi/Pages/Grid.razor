@@ -22,10 +22,10 @@
                 @if (Virtualize)
                 {
                     <Virtualize @ref="@_virtualizeComponent"
-                        TItem="(int RowIndex, TGridItem Data)"
+                        TItem="KeyValuePair<int, TGridItem>"
                         ItemSize="@ItemSize"
                         ItemsProvider="@ProvideVirtualizedItems"
-                        ItemContent="@(item => builder => RenderRow(builder, item.RowIndex, item.Data))" />
+                        ItemContent="@(item => builder => RenderRow(builder, item.Key, item.Value))" />
                 }
                 else
                 {

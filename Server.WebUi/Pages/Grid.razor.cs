@@ -57,7 +57,11 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
     /// </remarks>
     [Parameter] public Func<TGridItem, object> ItemKey { get; set; } = x => x;
 
-    private Virtualize<(int, TGridItem)>? _virtualizeComponent;
+    /// <summary>
+    /// Manages the virtualization of the display of rows.
+    /// Initialized from Razor syntax.
+    /// </summary>
+    private Virtualize<KeyValuePair<int, TGridItem>>? _virtualizeComponent;
 
     /// <summary>
     /// The columns to show in this grid, in sequence.
@@ -208,11 +212,11 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
     /// Reports rows for display with virtualization, 
     /// i.e. skipping rendering of rows that are not visible to the client.
     /// </summary>
-    private async ValueTask<ItemsProviderResult<(int, TGridItem)>> 
+    private async ValueTask<ItemsProviderResult<KeyValuePair<int, TGridItem>>> 
         ProvideVirtualizedItems(ItemsProviderRequest request)
     {
         if (Items is null)
-            return new ItemsProviderResult<(int, TGridItem)>(Enumerable.Empty<(int, TGridItem)>(), 0);
+            return new(Enumerable.Empty<KeyValuePair<int, TGridItem>>(), 0);
 
         // Debounce the requests. This eliminates a lot of redundant queries at the cost of slight lag after interactions.
         // If you wanted, you could try to make it only debounce on the 2nd-and-later request within a cluster.
@@ -224,11 +228,8 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
                                   .Take(request.Count)
                                   .AsEnumerable();
 
-        var result = new ItemsProviderResult<(int, TGridItem)>(
-            items: records.Select((x, i) => (i + request.StartIndex + 2, x)),
-            totalItemCount: Items.Count());
-
-        return result;
+        var items = records.Select((x, i) => KeyValuePair.Create(i + request.StartIndex + 2, x));
+        return new(items, totalItemCount: Items.Count());
     }
 
     void IGrid<TGridItem>.RegisterColumn(ColumnDefinition<TGridItem> column)
