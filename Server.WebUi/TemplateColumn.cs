@@ -7,8 +7,7 @@ using System.Collections.Generic;
 namespace Hearty.Server.WebUi;
 
 /// <summary>
-/// Shows a column in <see cref="Hearty.Server.WebUi.Pages.Grid{TGridItem}" />
-/// with arbitrarily customizable content.
+/// Shows a column inside a grid with arbitrarily customizable content.
 /// </summary>
 /// <typeparam name="TGridItem">
 /// The type of item to be displayed in each row of the grid.

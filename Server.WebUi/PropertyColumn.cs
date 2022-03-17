@@ -1,14 +1,12 @@
 ﻿using System;
 using Microsoft.AspNetCore.Components;
-using System.Linq.Expressions;
 using System.Linq;
 using System.Collections.Generic;
 
 namespace Hearty.Server.WebUi;
 
 /// <summary>
-/// Shows a column in <see cref="Hearty.Server.WebUi.Pages.Grid{TGridItem}" />
-/// where a property of the item is displayed.
+/// Shows a column inside a grid where a property of the item is displayed.
 /// </summary>
 /// <typeparam name="TGridItem">
 /// The type of item to be displayed in each row of the grid.
@@ -18,11 +16,13 @@ namespace Hearty.Server.WebUi;
 /// </typeparam>
 public sealed class PropertyColumn<TGridItem, TProp> : ColumnDefinition<TGridItem>
 {
-    private Expression<Func<TGridItem, TProp>>? _cachedProperty;
-    private Func<TGridItem, TProp>? _compiledPropertyExpression;
+    private object? _cachedProperty;
 
+    /// <summary>
+    /// Projects an item (row) into a value to display in this column.
+    /// </summary>
     [Parameter, EditorRequired] 
-    public Expression<Func<TGridItem, TProp>> Property { get; set; } = default!;
+    public Func<TGridItem, TProp> Property { get; set; } = default!;
     
     /// <summary>
     /// The format specification to convert <typeparamref name="TProp" /> 
@@ -41,12 +41,11 @@ public sealed class PropertyColumn<TGridItem, TProp> : ColumnDefinition<TGridIte
     /// <inheritdoc />
     protected override void OnParametersSet()
     {
-        if (_cachedProperty != Property)
+        if (!object.ReferenceEquals(_cachedProperty, Property))
         {
             _cachedProperty = Property;
-            _compiledPropertyExpression = Property.Compile();
 
-            Func<TGridItem, string?> cellTextFunc;
+            Func<TGridItem, string> cellTextFunc;
             if (!string.IsNullOrEmpty(Format))
             {
                 Type propertyType = Nullable.GetUnderlyingType(typeof(TProp)) ?? typeof(TProp);
@@ -57,11 +56,11 @@ public sealed class PropertyColumn<TGridItem, TProp> : ColumnDefinition<TGridIte
                         $"A '{nameof(Format)}' parameter was supplied, but the type '{typeof(TProp)}' does not implement '{typeof(IFormattable)}'.");
                 }
 
-                cellTextFunc = item => ((IFormattable?)_compiledPropertyExpression!(item))?.ToString(Format, null);
+                cellTextFunc = item => ((IFormattable?)Property.Invoke(item))?.ToString(Format, null) ?? string.Empty;
             }
             else
             {
-                cellTextFunc = item => _compiledPropertyExpression!(item)?.ToString();
+                cellTextFunc = item => Property.Invoke(item)?.ToString() ?? string.Empty;
             }
 
             if (OnCellClicked.HasDelegate)
@@ -79,9 +78,6 @@ public sealed class PropertyColumn<TGridItem, TProp> : ColumnDefinition<TGridIte
                 CellContent = item => builder => builder.AddContent(0, cellTextFunc(item));
             }
         }
-
-        if (Title is null && _cachedProperty.Body is MemberExpression memberExpression)
-            Title = memberExpression.Member.Name;
     }
 
     /// <inheritdoc />
@@ -89,6 +85,8 @@ public sealed class PropertyColumn<TGridItem, TProp> : ColumnDefinition<TGridIte
 
     /// <inheritdoc />
     public override IEnumerable<TGridItem> GetSortedItems(IEnumerable<TGridItem> source, bool ascending)
-        => ascending ? source.AsQueryable().OrderBy(Property) 
-                     : source.AsQueryable().OrderByDescending(Property);
+    {
+        return ascending ? source.OrderBy(Property)
+                         : source.OrderByDescending(Property);
+    }
 }
