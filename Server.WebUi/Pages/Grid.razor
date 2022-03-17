@@ -12,8 +12,7 @@
 <CascadingValue IsFixed="true" Value="@_addColumnCallback">
     @ChildContent
     <Defer>
-        <!--  @onclosecolumnoptions="CloseColumnOptions" -->
-        <table aria-rowcount="@_rowCount" @ref="_tableReference">
+        <table aria-rowcount="@_rowCount" @ref="_tableReference" @onclosecolumnoptions="CloseColumnOptions">
             <thead>
                 <tr>
                     @RenderColumnHeaders

@@ -7,6 +7,6 @@ namespace Hearty.Server.WebUi.Infrastructure;
 /// Defines custom event handlers for Blazor.
 /// </summary>
 [EventHandler("onclosecolumnoptions", typeof(EventArgs), enableStopPropagation: true, enablePreventDefault: true)]
-internal static class EventHandlers
+public static class EventHandlers
 {
 }
