@@ -67,35 +67,44 @@
     }
 </table>
 
-@if (displayedJobs is not null)
-{
+<div>
+    <h2>Jobs</h2>
+
     <Grid TGridItem="DisplayedJob"
           ItemKey="@(item => item.Job)"
           Items="@displayedJobs"
+          ResizableColumns="@true"
           Virtualize="false">
+
+        <PropertyColumn Title="#"
+                        Property="@(item => item.Ordinal)"
+                        Class="job-ordinal" />
 
         <PropertyColumn Title="Status" 
                         Property="@(item => GetStatusString(item.Job.Status))" 
-                        Class="col-name" />
+                        Class="job-status" />
+
         <PropertyColumn Title="Client" 
                         Property="@(item => item.Queue.Owner)" 
-                        Class="col-name" />
+                        Class="job-client" />
+
         <PropertyColumn Title="ID"
                         Property="@(item => item.Job.Input.PromiseId)"
-                        Class="col-name" />
+                        Class="job-id" />
 
         @foreach (var name in _displaySpecialization.JobCustomProperties)
         {
             <PropertyColumn Title="@name"
-                            Property="@(item => item.Job.Input.GetDisplayProperty(name))"
-                            Class="col-name" />
+                            Property="@(item => item.Job.Input.GetDisplayProperty(name))" />
         }
 
-        <TemplateColumn Title="Kill">
+        <TemplateColumn Title="Kill"
+                        Class="job-kill">
             @if (@context.Job is IJobCancellation cancellableJob)
             {
                 <button @onclick="() => cancellableJob.Kill(background: true)">🗙</button>
             }
         </TemplateColumn>
     </Grid>
-}
+
+</div>

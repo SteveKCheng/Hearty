@@ -59,15 +59,15 @@
             <div class="column-title-flex">
                 @if (col.CanSort)
                 {
-                    <button class="column-title sortable" @onclick="@(() => OnHeaderClicked(col))">
+                    <div class="column-title sortable" @onclick="@(() => OnHeaderClicked(col))">
+                        <span class="title-text">@col.HeaderContent</span>
                         <span class="sort-indicator" aria-hidden="true"></span>
-                        <div class="title-text">@col.HeaderContent</div>
-                    </button>
+                    </div>
                 }
                 else
                 {
                     <div class="column-title">
-                        <div class="title-text">@col.HeaderContent</div>
+                        <span class="title-text">@col.HeaderContent</span>
                     </div>
                 }
 

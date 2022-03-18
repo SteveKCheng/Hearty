@@ -28,3 +28,27 @@ table.job-queue {
 table.job-queue col.client {
     width: 10em;
 }
+
+/*
+ * Styles to be inherited by the child Grid component
+ */
+
+::deep .job-ordinal {
+    width: 4em;
+}
+
+::deep .job-client {
+    width: 10em;
+}
+
+::deep .job-status {
+    width: 8em;
+}
+
+::deep .job-id {
+    width: 12em;
+}
+
+::deep .job-kill {
+    width: 4em;
+}
