@@ -38,17 +38,21 @@ table.job-queue col.client {
 }
 
 ::deep .job-client {
-    width: 10em;
-}
-
-::deep .job-status {
     width: 8em;
 }
 
+::deep .job-status {
+    width: 6em;
+}
+
 ::deep .job-id {
-    width: 12em;
+    width: 10em;
 }
 
 ::deep .job-kill {
     width: 4em;
+}
+
+div.jobs ::deep table {
+    font-size: 90%;
 }
