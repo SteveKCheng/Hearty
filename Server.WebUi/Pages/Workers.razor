@@ -1,8 +1,8 @@
 ﻿@page "/ui/workers"
 @using Hearty.Scheduling
 
+@inherits TimedRefreshComponent
 @inject WorkerDistribution<PromisedWork, PromiseData> _workerDistribution
-@inject TimeoutProvider _timeoutProvider
 
 <h1>Workers</h1>
 
@@ -26,3 +26,8 @@
 
 </div>
 
+@code{
+    /// <inheritdoc />
+    protected override void OnInitialized()
+        => StartRefreshing(TimeoutBucket.After5Seconds);
+}
