@@ -356,6 +356,10 @@ namespace Hearty.Utilities
             if ((uint)index >= (uint)_count)
                 throw new ArgumentOutOfRangeException(nameof(index));
 
+            //
+            // Blank out the entry to be deleted
+            //
+
             ref int keySlot = ref keys[index];
             ref TValue valueSlot = ref _values[index];
 
@@ -365,8 +369,13 @@ namespace Hearty.Utilities
             keySlot = int.MinValue;
             valueSlot = default!;
 
+            //
+            // Swap with the last entry, unless the entry to
+            // be deleted is itself the last.
+            //
+
             int lastIndex = --_count;
-            if (lastIndex > 0)
+            if (lastIndex != index)
             {
                 SwapEntries(ref keySlot, ref keys[lastIndex], index, lastIndex);
 
