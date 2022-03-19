@@ -18,7 +18,9 @@ namespace Hearty.Server.WebUi.Pages;
 /// </typeparam>
 [CascadingTypeParameter(nameof(TGridItem))]
 public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
-    where TGridItem : notnull
+    // Cannot set this constraint because of a bug in Razor's source generator
+    // https://github.com/dotnet/aspnetcore/issues/38041
+    /* where TGridItem : notnull */
 {
     /// <summary>
     /// The sequence of rows to be displayed by this grid.

@@ -7,27 +7,16 @@
 <h1>Workers</h1>
 
 <div class="content">
-<table class="job-queue">
-    <colgroup>
-        <col class="client" />
-        <col class="count" />
-    </colgroup>
 
-    <thead>
-        <tr>
-            <th>Client</th>
-            <th>Job Count</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var (name, worker) in _workerDistribution)
-        {
-            <tr>
-                <td>@name</td>
-                <td>@worker.AvailableResources</td>
-            </tr>
-        }
-    </tbody>
-</table>
+    <Grid Items="@_workerDistribution.Values">
+
+        <PropertyColumn Title="Worker Name"
+                        Property="@(worker => worker.Name)" />
+
+        <PropertyColumn Title="Capacity"
+                        Property="@(worker => worker.AvailableResources)" />
+
+    </Grid>
+
 </div>
 
