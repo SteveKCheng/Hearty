@@ -159,7 +159,7 @@ namespace Hearty.Scheduling
             if (!_allWorkers.TryRemove(name, out var worker))
                 return false;
 
-            worker.Dispose();
+            worker.DisposeInBackground();
             return true;
         }
 

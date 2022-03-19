@@ -45,11 +45,41 @@ namespace Hearty.Server
         public ValueTask<PromiseData> ExecuteJobAsync(uint executionId,
                                                       IRunningJob<PromisedWork> runningJob,
                                                       CancellationToken cancellationToken)
-            => RemoteWorkerProxy.ForwardExecuteJobAsync(_impl, 
-                                                        executionId, 
-                                                        runningJob, 
-                                                        cancellationToken);
-        
+            => RemoteWorkerProxy.ForwardExecuteJobAsync(_impl,
+                                                        executionId,
+                                                        runningJob,
+                                                        cancellationToken,
+                                                        _cancellationSource.Token);
+
+        /// <summary>
+        /// Triggered to stop all jobs on disposal.
+        /// </summary>
+        private readonly CancellationTokenSource _cancellationSource = new();
+
+        ValueTask IAsyncDisposable.DisposeAsync()
+        {
+            // Only emit the event the first time this method is invoked.
+            if (Interlocked.Exchange(ref _isDisposed, 1) == 0)
+            {
+                try
+                {
+                    OnEvent?.Invoke(this, new WorkerEventArgs
+                    {
+                        Kind = WorkerEventKind.Shutdown
+                    });
+                }
+                catch 
+                { 
+                }
+
+                _cancellationSource.Cancel();
+            }
+            
+            return ValueTask.CompletedTask;
+        }
+
+        private int _isDisposed;
+
         private readonly IJobSubmission _impl;
 
         /// <summary>

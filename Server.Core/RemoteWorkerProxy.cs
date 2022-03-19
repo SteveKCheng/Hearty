@@ -142,6 +142,17 @@ namespace Hearty.Server
                                       runningJob, 
                                       cancellationToken);
 
+        /// <summary>
+        /// Shuts down the RPC connection.
+        /// </summary>
+        /// <remarks>
+        /// The other side of the connection is assumed to cancel
+        /// any jobs it is still running.  
+        /// The C# implementation in Hearty, 
+        /// <see cref="WorkerHost" />, does so.
+        /// </remarks>
+        ValueTask IAsyncDisposable.DisposeAsync() => _rpc.DisposeAsync();
+
         public RemoteWorkerProxy(string name, RpcConnection rpc)
         {
             Name = name;

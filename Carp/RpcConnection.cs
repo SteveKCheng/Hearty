@@ -259,6 +259,9 @@ namespace Hearty.Carp
         /// Terminates the connection and waits for it to close,
         /// synchronously.
         /// </summary>
+        /// <remarks>
+        /// Any open requests will get cancelled.
+        /// </remarks>
         public void Dispose()
         {
             DisposeImpl(isDisposing: true);
@@ -269,6 +272,9 @@ namespace Hearty.Carp
         /// Terminates the connection and waits for it to close,
         /// asynchronously.
         /// </summary>
+        /// <remarks>
+        /// Any open requests will get cancelled.
+        /// </remarks>
         public abstract ValueTask DisposeAsync();
     }
 }

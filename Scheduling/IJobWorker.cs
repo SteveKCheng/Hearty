@@ -7,6 +7,10 @@ namespace Hearty.Scheduling
     /// <summary>
     /// Represents an abstract worker that can execute (queued) jobs.
     /// </summary>
+    /// <remarks>
+    /// Disposal of a worker is defined to cancel any jobs that are
+    /// currently running on it.
+    /// </remarks>
     /// <typeparam name="TInput">
     /// The inputs to execute a job.
     /// </typeparam>
@@ -14,6 +18,7 @@ namespace Hearty.Scheduling
     /// The outputs from executing a job.
     /// </typeparam>
     public interface IJobWorker<in TInput, TOutput> : IWorkerNotification
+                                                    , IAsyncDisposable
     {
         /// <summary>
         /// Execute a (de-queued) job.

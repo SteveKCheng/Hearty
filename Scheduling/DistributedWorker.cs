@@ -196,9 +196,10 @@ namespace Hearty.Scheduling
             {
                 lock (_currentJobs)
                 {
+                    ThrowIfAlreadyDisposed();
                     _currentJobs.Add(executionId, runningJob);
                 }
-
+                    
                 try
                 {
                     return await _executor.ExecuteJobAsync(executionId, runningJob, cancellationToken)
@@ -265,10 +266,67 @@ namespace Hearty.Scheduling
             _currentJobs = new Dictionary<uint, IRunningJob<TInput>>(_resourceTotal * 2);
         }
 
-        public void Dispose()
+        /// <summary>
+        /// Dispose of the job executor, in the background, after
+        /// this worker has been unregistered.
+        /// </summary>
+        public void DisposeInBackground()
         {
-            // FIXME cancel in transient manner all jobs being processed by the worker
-            LeaveParent();
+            _ = this.FireAndForgetDisposeAsync();
+        }
+
+        /// <summary>
+        /// Prevent scheduling any more jobs on this worker and 
+        /// dispose the job executor.
+        /// </summary>
+        /// <remarks>
+        /// The job executor should, in turn, cancel all jobs
+        /// that are still running.
+        /// </remarks>
+        public ValueTask DisposeAsync()
+        {
+            bool alreadyDisposed;
+
+            lock (_currentJobs)
+            {
+                alreadyDisposed = _isDisposed;
+                _isDisposed = true;
+            }
+
+            if (!alreadyDisposed)
+                LeaveParent();
+
+            return _executor.DisposeAsync();
+        }
+
+        /// <summary>
+        /// Whether <see cref="DisposeAsync" /> has been called.
+        /// </summary>
+        private bool _isDisposed;
+
+        /// <summary>
+        /// Throw an exception for an operation that is not allowed
+        /// once this object has started disposing itself.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Methods and properties that merely observe this object
+        /// should not throw this exception, so that continuously-updating
+        /// user interfaces do not break when this object is 
+        /// (asynchronously) disposed.  
+        /// </para>
+        /// <para>
+        /// This method should be called after locking 
+        /// <see cref="_currentJobs" />.
+        /// </para>
+        /// </remarks>
+        private void ThrowIfAlreadyDisposed()
+        {
+            if (_isDisposed)
+            {
+                throw new ObjectDisposedException(nameof(IDistributedWorker),
+                                                  "Worker has already been disposed. ");
+            }
         }
 
         /// <summary>
