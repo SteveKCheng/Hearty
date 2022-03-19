@@ -2,8 +2,9 @@
 @using Hearty.Common
 @using Hearty.Scheduling
 
+@inherits TimedRefreshComponent
+
 @inject IJobQueueSystem _jobQueues
-@inject TimeoutProvider _timeoutProvider
 @inject DisplaySpecialization _displaySpecialization
 
 <h1>Priority classes</h1>

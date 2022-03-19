@@ -2,43 +2,17 @@
 using Hearty.Scheduling;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace Hearty.Server.WebUi.Pages;
 
 /// <summary>
 /// Blazor component to display the queues on the job server.
 /// </summary>
-public sealed partial class PriorityClasses : IDisposable
+public sealed partial class PriorityClasses : TimedRefreshComponent
 {
-    private bool _isDisposed;
-
     /// <inheritdoc />
-    protected override void OnInitialized()
-    {
-        _timeoutProvider.Register(TimeoutBucket.After1Second,
-            (_, _) =>
-            {
-                // TimeoutProvider does not provide cancellation, so
-                // keep polling until the page is disposed.  False
-                // positives can occur when this check races with
-                // disposal, but they are harmless.
-                if (_isDisposed)
-                    return false;
-
-                InvokeAsync(() =>
-                {
-                    // Definitely check this flag again after we
-                    // enter the page's synchronization context to
-                    // avoid races, assuming disposal also happens
-                    // in the same synchronization context.
-                    if (!_isDisposed)
-                        StateHasChanged();
-                });
-
-                return true;
-            }, null);
-    }
+    protected override void OnInitialized() 
+        => StartRefreshing(TimeoutBucket.After1Second);
 
     private HashSet<JobQueueKey>? _queuesToExpand;
 
@@ -63,12 +37,6 @@ public sealed partial class PriorityClasses : IDisposable
             JobStatus.Cancelled => "Cancelled",
             _ => string.Empty
         };
-
-    /// <inheritdoc cref="IDisposable.Dispose" />
-    public void Dispose()
-    {
-        _isDisposed = true;
-    }
 }
 
 /// <summary>
