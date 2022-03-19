@@ -66,17 +66,30 @@ namespace Hearty.Server.WebApi
         /// addresses be queried.  It should be found by dependency
         /// injection.
         /// </param>
+        /// <param name="path">
+        /// Suffix to the path for the hosting server.
+        /// This should typically be the same as "PathBase" set in the
+        /// application's middleware.  It should be URL-escaped already.
+        /// </param>
         /// <returns>
         /// Best guess as to the URL of the running HTTP server.
         /// It will be "https" if supported by the server.
         /// </returns>
-        public static string GetDefaultHostUrl(this IServer server)
+        public static string GetDefaultHostUrl(this IServer server, string? path = null)
         {
-            return server.Features
-                         .Get<IServerAddressesFeature>()
-                         ?.Addresses
-                         .FirstOrDefault()
-                    ?? "http://localhost/";
+            string siteUrl = server.Features
+                                   .Get<IServerAddressesFeature>()
+                                   ?.Addresses
+                                   .FirstOrDefault()
+                                ?? "http://localhost/";
+
+            if (string.IsNullOrEmpty(path))
+                return siteUrl;
+
+            string separator = (siteUrl.EndsWith('/') || path.StartsWith('/'))
+                                ? string.Empty : "/";
+            string finalUrl = string.Concat(siteUrl, separator, path);
+            return finalUrl;
         }
     }
 

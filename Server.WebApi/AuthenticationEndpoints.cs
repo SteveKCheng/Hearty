@@ -452,24 +452,14 @@ public static class AuthenticationEndpoints
                 displayName,
                 typeof(JwtBearerHandler),
                 (JwtBearerOptions options, IServer server) =>
-                {
-                    var actualSiteUrl = server.GetDefaultHostUrl();
-
-                    if (relativeUrl is not null)
-                    {
-                        bool needSlash = !actualSiteUrl.EndsWith('/') && !relativeUrl.StartsWith('/');
-                        actualSiteUrl = actualSiteUrl + (needSlash ? "/" : string.Empty) + relativeUrl;
-                    }
-
-                    SetJwtBearerOptions(options, signingKey, actualSiteUrl);
-                });
+                    SetJwtBearerOptions(options, 
+                                        signingKey, 
+                                        server.GetDefaultHostUrl(relativeUrl)));
         }
         else
         {
-            authBuilder.AddJwtBearer(authenticationScheme, displayName, options =>
-            {
-                SetJwtBearerOptions(options, signingKey, siteUrl);
-            });
+            authBuilder.AddJwtBearer(authenticationScheme, displayName,
+                options => SetJwtBearerOptions(options, signingKey, siteUrl));
         }
 
         return authBuilder;

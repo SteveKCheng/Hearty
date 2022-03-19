@@ -123,7 +123,7 @@ namespace Hearty.Server.Demo
                                 JwtBearerDefaults.AuthenticationScheme);
 
             var jwtPassphrase = Configuration.GetValue<string?>("JsonWebToken:Passphrase");
-            authBuilder.AddSelfIssuedJwtBearer(jwtPassphrase, siteUrl: PathBase);
+            authBuilder.AddSelfIssuedJwtBearer(jwtPassphrase, siteUrl: PathBase.ToUriComponent());
 
             authBuilder.AddBasic(options =>
             {
