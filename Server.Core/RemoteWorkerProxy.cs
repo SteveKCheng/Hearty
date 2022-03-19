@@ -4,6 +4,7 @@ using Hearty.Work;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Hearty.Utilities;
 
 namespace Hearty.Server
 {
@@ -59,8 +60,13 @@ namespace Hearty.Server
         /// and contains the inputs to be serialized
         /// for <see cref="IJobSubmission.RunJobAsync" />.
         /// </param>
-        /// <param name="cancellationToken">
-        /// Used by the caller to cancel the job.
+        /// <param name="jobCancellationToken">
+        /// Cancellation token specific to the job, that may
+        /// get triggered from the user.
+        /// </param>
+        /// <param name="workerCancellationToken">
+        /// Cancellation token for the worker, that may be
+        /// triggered when the worker is forcibly stopped.
         /// </param>
         /// <returns>
         /// Asynchronous task that completes with the output from 
@@ -70,29 +76,60 @@ namespace Hearty.Server
             ForwardExecuteJobAsync<TImpl>(TImpl impl,
                                    uint executionId,
                                    IRunningJob<PromisedWork> runningJob,
-                                   CancellationToken cancellationToken)
+                                   CancellationToken jobCancellationToken,
+                                   CancellationToken workerCancellationToken = default)
                 where TImpl : IJobSubmission
         {
-            var input = await runningJob.Input
-                                        .InputSerializer(runningJob.Input.Data)
-                                        .ConfigureAwait(false);      
+            CancellationToken cancellationToken;
+            CancellationSourcePool.Use combinedCancellation = default;
+            CancellationTokenRegistration jobCancellationReg = default;
+            CancellationTokenRegistration workerCancellationReg = default;
 
-            var reply = await impl.RunJobAsync(new JobRequestMessage
+            try
             {
-                Route = runningJob.Input.Route,
-                ContentType = input.ContentType,
-                EstimatedWait = runningJob.EstimatedWait,
-                ExecutionId = executionId,
-                Data = input.Body,
-            }, cancellationToken).ConfigureAwait(false);
+                if (workerCancellationToken.CanBeCanceled && jobCancellationToken.CanBeCanceled)
+                {
+                    combinedCancellation = CancellationSourcePool.Rent();
+                    jobCancellationReg = combinedCancellation.Source!.LinkOtherToken(jobCancellationToken);
+                    workerCancellationReg = combinedCancellation.Source!.LinkOtherToken(workerCancellationToken);
+                    cancellationToken = combinedCancellation.Token;
+                }
+                else
+                {
+                    cancellationToken = workerCancellationToken.CanBeCanceled
+                                            ? workerCancellationToken
+                                            : jobCancellationToken;
+                }
 
-            var output = await runningJob.Input
-                                         .OutputDeserializer
-                                         .Invoke(runningJob.Input.Data,
-                                                 new(reply.ContentType,
-                                                     reply.Data))
-                                         .ConfigureAwait(false);
-            return output;
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var input = await runningJob.Input
+                                            .InputSerializer(runningJob.Input.Data)
+                                            .ConfigureAwait(false);
+
+                var reply = await impl.RunJobAsync(new JobRequestMessage
+                {
+                    Route = runningJob.Input.Route,
+                    ContentType = input.ContentType,
+                    EstimatedWait = runningJob.EstimatedWait,
+                    ExecutionId = executionId,
+                    Data = input.Body,
+                }, cancellationToken).ConfigureAwait(false);
+
+                var output = await runningJob.Input
+                                             .OutputDeserializer
+                                             .Invoke(runningJob.Input.Data,
+                                                     new(reply.ContentType,
+                                                         reply.Data))
+                                             .ConfigureAwait(false);
+                return output;
+            }
+            finally
+            {
+                jobCancellationReg.Dispose();
+                workerCancellationReg.Dispose();
+                combinedCancellation.Dispose();
+            }
         }
 
         ValueTask<PromiseData>
