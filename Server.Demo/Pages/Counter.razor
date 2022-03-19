@@ -1,10 +1,12 @@
 @page "/ui/counter"
 
 @using Hearty.Server.Mocks
+@using Hearty.Server.WebUi
 @using Hearty.Work
 @using Microsoft.Extensions.Logging
 @inject MockWorkerHosts _mockWorkerHosts
 @inject ILogger<MockPricingWorker> _workerLogger
+@inject DisplaySpecialization _displaySpecialization;
 
 @code {
     [CascadingParameter]
@@ -14,16 +16,11 @@
 <h1>Counter</h1>
 <div class="content">
 
-<p>Current count: @currentCount</p>
-
 <p>Server host: @ConnectionInfo.ServerHost</p>
 <p>Server port: @ConnectionInfo.ServerPort</p>
 <p>User agent: @ConnectionInfo.UserAgent</p>
 <p>IP address: @ConnectionInfo.IpAddress</p>
-
-<p>
-<button class="btn btn-primary" @onclick="IncrementCount">Click me</button>
-</p>
+<p>WebSocket URL: @_displaySpecialization.WorkersWebSocketsUrl</p>
 
 <p>
 <button class="btn btn-primary" @onclick="MakeFakeRemoteWorkersAsync">Make fake remote workers</button>
@@ -31,20 +28,13 @@
 </div>
 
 @code {
-    private int currentCount = 0;
-
-    private void IncrementCount()
-    {
-        currentCount++;
-    }
-
     private Task MakeFakeRemoteWorkersAsync()
     {
+        var url = _displaySpecialization.WorkersWebSocketsUrl
+                    ?? throw new InvalidOperationException("WebSockets URL is not configured. ");
+
         return _mockWorkerHosts.CreateFakeWorkersAsync(
-            host: ConnectionInfo.ServerHost,
-            port: ConnectionInfo.ServerPort,
-            secure: ConnectionInfo.IsSecure,
-            path: ConnectionInfo.PathBase + WorkerHost.WebSocketsDefaultPath,
+            url,
             count: 10,
             concurrency: 10,
             namePrefix: "remote-worker-",
