@@ -22,5 +22,17 @@ namespace Hearty.Server.WebUi
         /// List of custom properties to display when job details are expanded.
         /// </summary>
         public IReadOnlyList<string> JobCustomProperties { get; init; } = Array.Empty<string>();
+
+        /// <summary>
+        /// The HTTP or HTTPS URL for the job server, including
+        /// any "PathBase" suffix.
+        /// </summary>
+        public string ServerUrl { get; init; } = "http://localhost/";
+
+        /// <summary>
+        /// The URL for workers to connect to the job server 
+        /// via WebSockets.
+        /// </summary>
+        public Uri? WorkersWebSocketsUrl { get; init; }
     }
 }

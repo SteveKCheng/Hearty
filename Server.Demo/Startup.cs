@@ -23,6 +23,7 @@ using System.Security.Claims;
 using Hearty.Server.WebUi;
 using System.Diagnostics.Metrics;
 using OpenTelemetry.Metrics;
+using Microsoft.AspNetCore.Hosting.Server;
 
 namespace Hearty.Server.Demo
 {
@@ -87,9 +88,17 @@ namespace Hearty.Server.Demo
             services.AddSingleton<JobsManager>();
             services.AddSingleton<TimeoutProvider, SimpleTimeoutProvider>();
 
-            services.AddSingleton(new DisplaySpecialization
+            services.AddSingleton(p =>
             {
-                JobCustomProperties = new string[] { "Instrument" }
+                var serverUrl = p.GetRequiredService<IServer>()
+                                 .GetDefaultHostUrl(PathBase.ToUriComponent());
+
+                return new DisplaySpecialization
+                {
+                    JobCustomProperties = new string[] { "Instrument" },
+                    ServerUrl = serverUrl,
+                    WorkersWebSocketsUrl = RemoteWorkersEndpoints.DeriveWebSocketUrl(serverUrl)
+                };
             });
 
             services.AddSingleton<WorkerDistribution<PromisedWork, PromiseData>>(p =>
