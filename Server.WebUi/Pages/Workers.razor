@@ -16,6 +16,12 @@
         <PropertyColumn Title="Capacity"
                         Property="@(worker => worker.AvailableResources)" />
 
+        <TemplateColumn Title="Disconnect">
+            @if (@context is IAsyncDisposable disposable)
+            {
+                <button @onclick="() => disposable.DisposeAsync()">🗙</button>    
+            }
+        </TemplateColumn>
     </Grid>
 
 </div>
