@@ -151,17 +151,38 @@ namespace Hearty.Server
         /// The C# implementation in Hearty, 
         /// <see cref="WorkerHost" />, does so.
         /// </remarks>
-        ValueTask IAsyncDisposable.DisposeAsync() => _rpc.DisposeAsync();
+        ValueTask IAsyncDisposable.DisposeAsync()
+        {
+            // Send shutdown event as soon as this method is called,
+            // without waiting for the RPC connection to close.
+            SendShutdownEvent();
+
+            return _rpc.DisposeAsync();
+        }
+
+        private int _hasSentShutdownEvent;
+
+        /// <summary>
+        /// Emit the event for this worker shutting down, but
+        /// only for the first time this method is called.
+        /// </summary>
+        private void SendShutdownEvent()
+        {
+            if (Interlocked.Exchange(ref _hasSentShutdownEvent, 1) == 0)
+            {
+                OnEvent?.Invoke(this, new WorkerEventArgs
+                {
+                    Kind = WorkerEventKind.Shutdown
+                });
+            }
+        }
 
         public RemoteWorkerProxy(string name, RpcConnection rpc)
         {
             Name = name;
             _rpc = rpc;
 
-            rpc.OnClose += (o, e) => OnEvent?.Invoke(this, new WorkerEventArgs
-            {
-                Kind = WorkerEventKind.Shutdown
-            });
+            rpc.OnClose += (o, e) => SendShutdownEvent();
         }
 
         private readonly RpcConnection _rpc;
