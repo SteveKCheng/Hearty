@@ -1,5 +1,11 @@
 GET https://localhost:5001/server/jobs/v1/id/00000000/1
 Accept: multipart/parallel
+Accept-Item: application/json
+
+
+###
+GET https://localhost:5001/server/jobs/v1/id/00000000/2
+Accept: application/msgpack
 
 ###
 POST https://localhost:5001/server/jobs/v1/id/00000000/1?action=cancel
@@ -7,13 +13,28 @@ POST https://localhost:5001/server/jobs/v1/id/00000000/1?action=cancel
 ###
 # @name jwt
 GET https://localhost:5001/server/auth/token
-Accept: application/jwt
-Authorization: Basic steve:steve
+Accept: application/json
+Authorization: Basic admin:admin
+
+###
+GET https://localhost:5001/server/auth/token
+Accept: application/jwt+json
+Authorization: Basic admin:admin
 
 ###
 GET https://localhost:5001/server/auth/token
 Accept: application/json
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoic3RldmUiLCJuYmYiOjE2NDU2NDcxMzksImV4cCI6MTY3NzE4MzEzOSwiaXNzIjoiaHR0cHM6Ly9sb2NhbGhvc3Q6NTAwMS8iLCJhdWQiOiJodHRwczovL2xvY2FsaG9zdDo1MDAxLyJ9.4OfWYu7E2xGEx1P18wJUC3lz_DQNzd2Kik_dJ-jVZCA
+
+###
+DELETE https://localhost:5001/server/jobs/v1/id/00000000/52
+Accept: application/json
+Authorization: Bearer {{jwt.response.body.token}}
+
+###
+DELETE https://localhost:5001/server/jobs/v1/admin/id/00000000/23
+Accept: application/json
+Authorization: Bearer {{jwt.response.body.token}}
 
 ###
 GET https://localhost:5001/server/auth/cookie
@@ -36,7 +57,8 @@ Authorization: Bearer {{jwt.response.body.token}}
     "S": 97.75,
     "K": 100,
     "c": true,
-    "u": 1
+    "u": 1,
+    "w": 30000
   },
   {
     "name": "Call-95.77-25.02-45m",
@@ -48,7 +70,7 @@ Authorization: Bearer {{jwt.response.body.token}}
     "S": 95.77,
     "K": 100,
     "c": true,
-    "u": 1
+    "u": 25000
   },
   {
     "name": "Call-81.45-24.06-3m",
@@ -60,7 +82,7 @@ Authorization: Bearer {{jwt.response.body.token}}
     "S": 81.45,
     "K": 100,
     "c": true,
-    "u": 1
+    "u": 13000
   },
   {
     "name": "Call-98.29-27.27-30m",
@@ -72,7 +94,7 @@ Authorization: Bearer {{jwt.response.body.token}}
     "S": 98.29,
     "K": 100,
     "c": true,
-    "u": 1
+    "u": 5000
   },
   {
     "name": "Call-107.56-39.08-48m",
@@ -84,7 +106,7 @@ Authorization: Bearer {{jwt.response.body.token}}
     "S": 107.56,
     "K": 100,
     "c": true,
-    "u": 1
+    "u": 8000
   },
   {
     "name": "Call-95.14-33.47-6m",
@@ -96,7 +118,7 @@ Authorization: Bearer {{jwt.response.body.token}}
     "S": 95.14,
     "K": 100,
     "c": true,
-    "u": 1
+    "u": 8000
   },
   {
     "name": "Call-87.16-37.96-12m",
@@ -108,7 +130,7 @@ Authorization: Bearer {{jwt.response.body.token}}
     "S": 87.16,
     "K": 100,
     "c": true,
-    "u": 1
+    "u": 8000
   },
   {
     "name": "Call-90.19-43.22-57m",
@@ -120,7 +142,7 @@ Authorization: Bearer {{jwt.response.body.token}}
     "S": 90.19,
     "K": 100,
     "c": true,
-    "u": 1
+    "u": 8000
   },
   {
     "name": "Call-83.80-35.77-54m",
@@ -132,7 +154,7 @@ Authorization: Bearer {{jwt.response.body.token}}
     "S": 83.8,
     "K": 100,
     "c": true,
-    "u": 1
+    "u": 8000
   },
   {
     "name": "Call-89.58-16.69-54m",
@@ -144,7 +166,7 @@ Authorization: Bearer {{jwt.response.body.token}}
     "S": 89.58,
     "K": 100,
     "c": true,
-    "u": 1
+    "u": 8000
   },
   {
     "name": "Call-109.63-25.42-18m",
@@ -156,7 +178,7 @@ Authorization: Bearer {{jwt.response.body.token}}
     "S": 109.63,
     "K": 100,
     "c": true,
-    "u": 1
+    "u": 8000
   },
   {
     "name": "Call-100.34-8.66-60m",
