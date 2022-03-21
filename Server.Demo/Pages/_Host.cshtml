@@ -1,6 +1,5 @@
 ﻿@page "/ui/"
 @namespace Hearty.Server.Demo.Pages
-@model Hearty.Server.Demo.Pages.HostPageModel
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 @{
     Layout = null;
@@ -19,8 +18,7 @@
 </head>
 <body>
     <component type="typeof(App)" 
-               render-mode="ServerPrerendered" 
-               param-ConnectionInfo="@Model.ConnectionInfo" />
+               render-mode="ServerPrerendered" />
 
     <div id="blazor-error-ui">
         <environment include="Staging,Production">
