@@ -1,0 +1,48 @@
+@page "/ui"
+@using System.Runtime.InteropServices
+@inject DisplaySpecialization _displaySpecialization
+
+<h1>Status</h1>
+
+<div class="content">
+
+    <p>
+        This web site is the dashboard for the job server implemented
+        using the Hearty framework.
+    </p>
+
+
+    <table>
+        <tr>
+            <th>Hearty version</th>
+            <td>@GitVersionInformation.FullSemVer @GitVersionInformation.CommitDate</td>
+        </tr>
+
+        <tr>
+            <th>.NET version</th>
+            <td>@RuntimeInformation.FrameworkDescription</td>
+        </tr>
+
+        <tr>
+            <th>Operating system</th>
+            <td>@RuntimeInformation.OSDescription</td>
+        </tr>
+
+        <tr>
+            <th>Processor architecture</th>
+            <td>@RuntimeInformation.ProcessArchitecture</td>
+        </tr>
+
+        <tr>
+            <th>URL for dashboards</th>
+            <td>@_displaySpecialization.ServerUrl</td>
+        </tr>
+
+        <tr>
+            <th>WebSockets URL for workers</th>
+            <td>@_displaySpecialization.WorkersWebSocketsUrl</td>
+        </tr>
+
+    </table>
+
+</div>

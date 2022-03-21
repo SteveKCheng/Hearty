@@ -1,0 +1,13 @@
+﻿table {
+    table-layout: fixed;
+}
+
+table th {
+    width: 16em;
+    font-weight: inherit;
+    background-color: lightgrey;
+}
+
+table td {
+    padding-left: 0.5em;
+}
