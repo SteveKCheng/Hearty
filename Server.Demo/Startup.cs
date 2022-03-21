@@ -123,8 +123,6 @@ namespace Hearty.Server.Demo
             services.AddSingleton<IRemoteJobCancellation>(p => p.GetRequiredService<JobsManager>());
             services.AddSingleton<PromiseExceptionTranslator>(BasicExceptionTranslator.Instance);
 
-            services.AddSingleton<MockWorkerHosts>();
-
             services.AddSingleton<JobQueueOwnerRetriever>((ClaimsPrincipal? principal, string? id) =>
             {
                 var name = principal?.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anonymous";
