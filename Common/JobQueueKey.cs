@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 
 namespace Hearty.Common;
@@ -17,6 +18,7 @@ namespace Hearty.Common;
 /// A default-constructed instance leaves all three parts unspecified.
 /// </para>
 /// </remarks>
+[DebuggerDisplay($"{{{nameof(Priority)}}}; {{{nameof(Owner)}}}: {{{nameof(Cohort)}}}")]
 public readonly struct JobQueueKey : IComparable<JobQueueKey>
                                    , IEquatable<JobQueueKey>
 {
