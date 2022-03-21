@@ -1,7 +1,10 @@
 ﻿@page "/ui/workers"
 @using Hearty.Scheduling
+@using Microsoft.Extensions.Logging
 
 @inherits TimedRefreshComponent
+@inject ILogger<Workers> _logger
+@inject DisplaySpecialization _displaySpecialization
 @inject WorkerDistribution<PromisedWork, PromiseData> _workerDistribution
 
 <h1>Workers</h1>
@@ -24,10 +27,31 @@
         </TemplateColumn>
     </Grid>
 
-</div>
+    @if (IsHostCreationEnabled)
+    {
+        <div class="create-workers">
 
-@code{
-    /// <inheritdoc />
-    protected override void OnInitialized()
-        => StartRefreshing(TimeoutBucket.After5Seconds);
-}
+            <table>
+                <tr>
+                    <th>Number of workers</th>
+                    <td><input type="number" id="concurrency" min="1" max="50" step="1"
+                               @bind="@InputNumberOfWorkers" /></td>
+                </tr>
+                <tr>
+                    <th>Degree of concurrency</th>
+                    <td><input type="number" id="concurrency" min="1" max="50" step="1"
+                               @bind="@InputConcurrency" /></td>
+                </tr>
+            </table>
+
+            <p>
+                <button class="btn btn-primary" @onclick="GenerateWorkersAsync">
+                    Generate new workers
+                </button>
+            </p>
+
+        </div>
+    }
+
+
+</div>

@@ -93,11 +93,14 @@ namespace Hearty.Server.Demo
                 var serverUrl = p.GetRequiredService<IServer>()
                                  .GetDefaultHostUrl(PathBase.ToUriComponent());
 
+                var workersLogger = p.GetRequiredService<ILogger<MockPricingWorker>>();
+
                 return new DisplaySpecialization
                 {
                     JobCustomProperties = new string[] { "Instrument" },
                     ServerUrl = serverUrl,
-                    WorkersWebSocketsUrl = RemoteWorkersEndpoints.DeriveWebSocketUrl(serverUrl)
+                    WorkersWebSocketsUrl = RemoteWorkersEndpoints.DeriveWebSocketUrl(serverUrl),
+                    WorkerFactory = r => new MockPricingWorker(workersLogger, r.Name)
                 };
             });
 

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Hearty.Work;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -34,5 +35,15 @@ namespace Hearty.Server.WebUi
         /// via WebSockets.
         /// </summary>
         public Uri? WorkersWebSocketsUrl { get; init; }
+
+        /// <summary>
+        /// Generates the implementation object for a mock worker host.
+        /// </summary>
+        /// <remarks>
+        /// Setting this delegate (to non-null) causes a button to
+        /// appear under the "workers" page to create new hosts.
+        /// This feature is meant for testing.
+        /// </remarks>
+        public Func<RegisterWorkerRequestMessage, IJobSubmission>? WorkerFactory { get; init; }
     }
 }

@@ -1,30 +1,23 @@
-﻿tr.priority-class {
-    background-color: yellow;
-    font-size: 0.8em;
+﻿div.create-workers > table {
+    table-layout: fixed;
+    width: 18em;
 }
 
-tr.job-queue th {
-    padding: 2px;
+div.create-workers > table th {
+    width: 12em;
+    font-weight: inherit;
 }
 
-table.job-queue thead tr {
-    border-top: none;
+div.create-workers > p {
+    padding: 0.5em;
+    margin-left: 2em;
 }
 
-table.job-queue tr {
-    border-top: 1px dashed grey;
-}
-
-table.job-queue tr.job-queue td:first-child {
-    padding-left: 1em;
-}
-
-table.job-queue {
-    width: 100%;
-    color: #212529;
-    border-collapse: collapse;
-}
-
-table.job-queue col.client {
-    width: 10em;
+div.create-workers {
+    margin-top: 1.5em;
+    padding-top: 1em;
+    border-top: 1px dashed black;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
 }
