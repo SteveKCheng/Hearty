@@ -1,4 +1,4 @@
-﻿@page "/ui/priority-classes"
+﻿@page "/ui/queues"
 @using Hearty.Common
 @using Hearty.Scheduling
 
@@ -7,7 +7,7 @@
 @inject IJobQueueSystem _jobQueues
 @inject DisplaySpecialization _displaySpecialization
 
-<h1>Priority classes</h1>
+<h1>Job queues</h1>
 
 @{
     List<DisplayedJob>? displayedJobs = null;
