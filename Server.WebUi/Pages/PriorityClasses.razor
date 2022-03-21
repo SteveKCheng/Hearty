@@ -18,6 +18,7 @@
 <table class="job-queue">
     <colgroup>
         <col class="client" />
+        <col class="cohort" />
         <col class="count" />
         <col class="time" />
     </colgroup>
@@ -25,6 +26,7 @@
     <thead>
         <tr>
             <th>Client</th>
+            <th>Cohort</th>
             <th>Job Count</th>
             <th>Time Taken (s)</th>
         </tr>
@@ -34,7 +36,7 @@
     {
         <tbody>
             <tr class="priority-class">
-                <th>Priority Class @(i-1)</th>
+                <th colspan="2">Priority Class @(i-1)</th>
                 <th>Weight @_jobQueues.GetPriorityClassWeight(i-1)</th>
                 <th><i>(label)</i></th>
             </tr>
@@ -59,6 +61,7 @@
 
                 <tr class="job-queue">
                     <td>@key.Owner</td>
+                    <td>@key.Cohort</td>
                     <td>@jobsCount</td>
                     <td>
                         @seconds.ToString("F3")
