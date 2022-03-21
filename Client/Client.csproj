@@ -16,6 +16,7 @@
   <ItemGroup>
     <Compile Include="EnumerableExtensions.cs" />
     <Compile Include="HeartyHttpClient.cs" />
+    <Compile Include="HeartyHttpClient.Streaming.cs" />
     <Compile Include="IHeartyClient.cs" />
     <Compile Include="PayloadReader.cs" />
     <Compile Include="PayloadWriter.cs" />
