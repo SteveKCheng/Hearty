@@ -1,10 +1,14 @@
 ﻿tr.priority-class {
     background-color: yellow;
-    font-size: 0.8em;
+    font-size: 80%;
 }
 
 tr.job-queue th {
     padding: 2px;
+}
+
+table.job-queue td, table.job-queue th {
+    vertical-align: middle;
 }
 
 table.job-queue thead tr {
@@ -31,6 +35,17 @@ table.job-queue col.checkbox {
 
 table.job-queue col.client {
     width: 9em;
+}
+
+div.jobs {
+    margin-top: 1.5em;
+    padding-top: 1em;
+    border-top: 1px dashed black;
+}
+
+div.jobs > h2 {
+    font-size: 110%;
+    font-weight: inherit;
 }
 
 /*

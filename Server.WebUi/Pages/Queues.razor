@@ -47,7 +47,7 @@
                 </td>
                 <th colspan="2">Priority Class @(i-1)</th>
                 <th>Weight @_jobQueues.GetPriorityClassWeight(i-1)</th>
-                <th><i>(label)</i></th>
+                <th></th>
             </tr>
 
             @foreach (var (key, queue) in _jobQueues.GetClientQueues(i-1)
@@ -87,46 +87,50 @@
     }
 </table>
 
-<div class="jobs">
-    <h2>Jobs</h2>
+@if (@displayedJobs is not null)
+{
+    <div class="jobs">
+        <h2>Jobs</h2>
 
-    <Grid TGridItem="DisplayedJob"
-          ItemKey="@(item => item.Job)"
-          Items="@displayedJobs"
-          ResizableColumns="@true"
-          Virtualize="false">
+        <Grid TGridItem="DisplayedJob"
+              ItemKey="@(item => item.Job)"
+              Items="@displayedJobs"
+              ResizableColumns="@true"
+              Virtualize="false">
 
-        <PropertyColumn Title="#"
-                        Property="@(item => item.Ordinal)"
-                        Class="job-ordinal" />
+            <PropertyColumn Title="#"
+                            Property="@(item => item.Ordinal)"
+                            Class="job-ordinal" />
 
-        <PropertyColumn Title="Status" 
-                        Property="@(item => GetStatusString(item.Job.Status))" 
-                        Class="job-status" />
+            <PropertyColumn Title="Status" 
+                            Property="@(item => GetStatusString(item.Job.Status))" 
+                            Class="job-status" />
 
-        <PropertyColumn Title="Client" 
-                        Property="@(item => item.Queue.Owner)" 
-                        Class="job-client" />
+            <PropertyColumn Title="Client" 
+                            Property="@(item => item.Queue.Owner)" 
+                            Class="job-client" />
 
-        <PropertyColumn Title="ID"
-                        Property="@(item => item.Job.Input.PromiseId)"
-                        Class="job-id" />
+            <PropertyColumn Title="ID"
+                            Property="@(item => item.Job.Input.PromiseId)"
+                            Class="job-id" />
 
-        @foreach (var name in _displaySpecialization.JobCustomProperties)
-        {
-            <PropertyColumn Title="@name"
-                            Property="@(item => item.Job.Input.GetDisplayProperty(name))" />
-        }
-
-        <TemplateColumn Title="Kill"
-                        Class="job-kill">
-            @if (@context.Job is IJobCancellation cancellableJob)
+            @foreach (var name in _displaySpecialization.JobCustomProperties)
             {
-                <button @onclick="() => cancellableJob.Kill(background: true)">🗙</button>
+                <PropertyColumn Title="@name"
+                                Property="@(item => item.Job.Input.GetDisplayProperty(name))" />
             }
-        </TemplateColumn>
-    </Grid>
 
-</div>
+            <TemplateColumn Title="Kill"
+                            Class="job-kill">
+                @if (@context.Job is IJobCancellation cancellableJob)
+                {
+                    <button @onclick="() => cancellableJob.Kill(background: true)">🗙</button>
+                }
+            </TemplateColumn>
+        </Grid>
+
+    </div>
+}
+
 
 </div>
