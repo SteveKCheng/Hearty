@@ -139,4 +139,16 @@ public readonly struct JobQueueKey : IComparable<JobQueueKey>
     /// </summary>
     public static bool operator !=(JobQueueKey left, JobQueueKey right)
         => !left.Equals(right);
+
+    /// <summary>
+    /// Get this key with the cohort erased (left unspecified).
+    /// </summary>
+    public JobQueueKey GetKeyForOwnerAndPriority()
+        => new JobQueueKey(Owner, Priority, null);
+
+    /// <summary>
+    /// Get this key with the owner and cohort erased (left unspecified).
+    /// </summary>
+    public JobQueueKey GetKeyForPriority()
+        => new JobQueueKey(null, Priority, null);
 }

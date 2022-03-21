@@ -2,6 +2,7 @@
 using Hearty.Scheduling;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Hearty.Server.WebUi.Pages;
 
@@ -14,19 +15,79 @@ public sealed partial class PriorityClasses : TimedRefreshComponent
     protected override void OnInitialized() 
         => StartRefreshing(TimeoutBucket.After1Second);
 
-    private HashSet<JobQueueKey>? _queuesToExpand;
+    private Dictionary<JobQueueKey, bool>? _queuesToExpand;
 
-    private bool ShouldDisplayInDetail(in JobQueueKey targetKey)
-        => _queuesToExpand?.Contains(targetKey) == true;
-
-    private void SetDetailDisplay(in JobQueueKey targetKey, bool enable)
+    private void SetForDetailDisplay(in JobQueueKey targetKey, bool enable)
     {
-        var q = _queuesToExpand ??= new HashSet<JobQueueKey>();
+        var q = _queuesToExpand ??= new Dictionary<JobQueueKey, bool>();
 
-        if (enable)
-            q.Add(targetKey);
-        else
-            q.Remove(targetKey);
+        // When a group key is toggled then all child keys should
+        // inherit the new setting.  Implement by dropping all the
+        // child keys.
+        if (targetKey.Cohort is null)
+        {
+            bool noOwner = (targetKey.Owner is null);
+
+            if (noOwner && targetKey.Priority is null)
+            {
+                q.Clear();
+            }
+
+            else
+            {
+                List<JobQueueKey>? keysToErase = null;
+                foreach (var (key, _) in q)
+                {
+                    var groupKey = noOwner ? key.GetKeyForPriority()
+                                           : key.GetKeyForOwnerAndPriority();
+                    if (groupKey == targetKey && key != targetKey)
+                    {
+                        keysToErase ??= new();
+                        keysToErase.Add(key);
+                    }
+                }
+
+                if (keysToErase is not null)
+                {
+                    foreach (var key in keysToErase)
+                        q.Remove(key);
+                }
+            }
+        }
+
+        q[targetKey] = enable;
+    }
+
+    private bool IsForDetailDisplay(in JobQueueKey targetKey)
+    {
+        var q = _queuesToExpand;
+        if (q is null)
+            return false;
+
+        bool value;
+        if (q.TryGetValue(targetKey, out value))
+            return value;
+
+        if (targetKey.Cohort is not null)
+        {
+            if (q.TryGetValue(targetKey.GetKeyForOwnerAndPriority(), out value))
+                return value;
+
+            if (targetKey.Owner is not null)
+            {
+                var t = targetKey.GetKeyForPriority();
+                if (q.TryGetValue(targetKey.GetKeyForPriority(), out value))
+                    return value;
+
+                if (targetKey.Priority is not null)
+                {
+                    if (q.TryGetValue(new(), out value))
+                        return value;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static string GetStatusString(JobStatus status)

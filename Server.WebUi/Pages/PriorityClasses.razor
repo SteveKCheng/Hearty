@@ -36,9 +36,14 @@
 
     @for (int i = _jobQueues.PriorityClassesCount; i > 0; --i)
     {
+        var prioClassKey = new JobQueueKey(null, i-1, null);
+
         <tbody>
             <tr class="priority-class" @key="@(i-1)">
                 <td>
+                    <input type="checkbox" 
+                           checked="@IsForDetailDisplay(prioClassKey)"
+                           @onchange="e => SetForDetailDisplay(prioClassKey, (bool)e.Value)" />
                 </td>
                 <th colspan="2">Priority Class @(i-1)</th>
                 <th>Weight @_jobQueues.GetPriorityClassWeight(i-1)</th>
@@ -51,7 +56,8 @@
                 var stats = queue.CompletionStatistics;
                 var seconds = (double)stats.CumulativeCharge / 1000.0;
 
-                var jobs = ShouldDisplayInDetail(key) ? queue.GetCurrentJobs() : null;
+                bool showDetails = IsForDetailDisplay(key);
+                var jobs = showDetails ? queue.GetCurrentJobs() : null;
                 var jobsCount = jobs?.Count ?? queue.Count;
 
                 if (jobs is not null)
@@ -65,7 +71,9 @@
 
                 <tr class="job-queue" @key="@queue">
                     <td>
-                        <input type="checkbox" @onchange="e => SetDetailDisplay(key, (bool)e.Value)" />
+                        <input type="checkbox" 
+                               checked="@showDetails"
+                               @onchange="e => SetForDetailDisplay(key, (bool)e.Value)" />
                     </td>
                     <td>@key.Owner</td>
                     <td>@key.Cohort</td>
