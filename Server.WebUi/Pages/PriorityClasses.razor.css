@@ -25,6 +25,10 @@ table.job-queue {
     border-collapse: collapse;
 }
 
+table.job-queue col.checkbox {
+    width: 2em;
+}
+
 table.job-queue col.client {
     width: 9em;
 }

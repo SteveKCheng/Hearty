@@ -17,6 +17,7 @@
 
 <table class="job-queue">
     <colgroup>
+        <col class="checkbox" />
         <col class="client" />
         <col class="cohort" />
         <col class="count" />
@@ -25,6 +26,7 @@
 
     <thead>
         <tr>
+            <th><span class="oi oi-list" title="Show details"></span></th>
             <th>Client</th>
             <th>Cohort</th>
             <th>Job Count</th>
@@ -35,7 +37,9 @@
     @for (int i = _jobQueues.PriorityClassesCount; i > 0; --i)
     {
         <tbody>
-            <tr class="priority-class">
+            <tr class="priority-class" @key="@(i-1)">
+                <td>
+                </td>
                 <th colspan="2">Priority Class @(i-1)</th>
                 <th>Weight @_jobQueues.GetPriorityClassWeight(i-1)</th>
                 <th><i>(label)</i></th>
@@ -59,13 +63,15 @@
                         displayedJobs.Add(new DisplayedJob(key, ordinal, jobs[ordinal]));
                 }
 
-                <tr class="job-queue">
+                <tr class="job-queue" @key="@queue">
+                    <td>
+                        <input type="checkbox" @onchange="e => SetDetailDisplay(key, (bool)e.Value)" />
+                    </td>
                     <td>@key.Owner</td>
                     <td>@key.Cohort</td>
                     <td>@jobsCount</td>
                     <td>
                         @seconds.ToString("F3")
-                        <a @onclick="() => AddToDetailDisplay(key)">(+)</a>
                     </td>
                 </tr>
             }

@@ -17,14 +17,16 @@ public sealed partial class PriorityClasses : TimedRefreshComponent
     private HashSet<JobQueueKey>? _queuesToExpand;
 
     private bool ShouldDisplayInDetail(in JobQueueKey targetKey)
-    {
-        return _queuesToExpand?.Contains(targetKey) == true;
-    }
+        => _queuesToExpand?.Contains(targetKey) == true;
 
-    private void AddToDetailDisplay(in JobQueueKey targetKey)
+    private void SetDetailDisplay(in JobQueueKey targetKey, bool enable)
     {
         var q = _queuesToExpand ??= new HashSet<JobQueueKey>();
-        q.Add(targetKey);
+
+        if (enable)
+            q.Add(targetKey);
+        else
+            q.Remove(targetKey);
     }
 
     private static string GetStatusString(JobStatus status)
