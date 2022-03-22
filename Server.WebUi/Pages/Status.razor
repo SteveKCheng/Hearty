@@ -1,5 +1,6 @@
 @page "/ui"
 @using System.Runtime.InteropServices
+@using Hearty.Work
 @inject DisplaySpecialization _displaySpecialization
 @inject NavigationManager _navigationManager
 
@@ -36,14 +37,23 @@
 
         <tr>
             <th>URL for dashboards</th>
-            <td>@(_displaySpecialization.ServerUrl ?? _navigationManager.BaseUri)</td>
+            <td>@ServerUrl</td>
         </tr>
 
         <tr>
             <th>WebSockets URL for workers</th>
-            <td>@_displaySpecialization.WorkersWebSocketsUrl</td>
+            <td>@WebSocketUrl?.ToString()</td>
         </tr>
 
     </table>
 
 </div>
+
+@code {
+    private string ServerUrl =>
+        _displaySpecialization.ServerUrl ?? _navigationManager.BaseUri;
+
+    private Uri WebSocketUrl =>
+        _displaySpecialization.WorkersWebSocketsUrl ??
+        WorkerHost.DeriveWebSocketUrl(ServerUrl);
+}

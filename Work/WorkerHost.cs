@@ -261,5 +261,60 @@ namespace Hearty.Work
 
             await _impl.DisposeAsync().ConfigureAwait(false);
         }
+
+        /// <summary>
+        /// Derive the WebSocket URL 
+        /// from the URL for the hosting Hearty Web server.
+        /// </summary>
+        /// <param name="siteUrl">
+        /// Absolute URL with the "http" or "https" scheme, plus
+        /// the appropriate path base appended.
+        /// </param>
+        /// <returns>
+        /// The WebSocket URL, with the "ws" or "wss" scheme.
+        /// </returns>
+        public static Uri DeriveWebSocketUrl(string siteUrl)
+            => DeriveWebSocketUrl(new Uri(siteUrl));
+
+        /// <summary>
+        /// Derive the WebSocket URL 
+        /// from the URL for the hosting Hearty Web server.
+        /// </summary>
+        /// <param name="siteUrl">
+        /// Absolute URL with the "http" or "https" scheme, plus
+        /// the appropriate path base appended.
+        /// </param>
+        /// <returns>
+        /// The WebSocket URL, with the "ws" or "wss" scheme.
+        /// </returns>
+        public static Uri DeriveWebSocketUrl(Uri siteUrl)
+        {
+            if (!siteUrl.IsAbsoluteUri)
+                throw new ArgumentException("URL must be absolute, but is not. ", nameof(siteUrl));
+
+            bool secure;
+            if (string.Equals(siteUrl.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+                secure = true;
+            else if (string.Equals(siteUrl.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase))
+                secure = false;
+            else
+                throw new ArgumentException("URL must have the 'http' or 'https' scheme, but does not. ", nameof(siteUrl));
+
+            var builder = new UriBuilder(siteUrl);
+
+#if NET6_0_OR_GREATER
+            builder.Scheme = secure ? Uri.UriSchemeWss : Uri.UriSchemeNews;
+#else
+            builder.Scheme = secure ? "wss" : "ws";
+#endif
+
+            ReadOnlySpan<char> subpath = builder.Path.EndsWith('/')
+                                            ? WorkerHost.WebSocketsDefaultPath[1..]
+                                            : WorkerHost.WebSocketsDefaultPath;
+
+            builder.Path = string.Concat(builder.Path, subpath);
+
+            return builder.Uri;
+        }
     }
 }

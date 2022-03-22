@@ -108,15 +108,11 @@ public class Startup
 
         services.AddSingleton(p =>
         {
-            var serverUrl = p.GetRequiredService<IServer>()
-                             .GetDefaultHostUrl(PathBase.ToUriComponent());
-
             var workersLogger = p.GetRequiredService<ILogger<MockPricingWorker>>();
 
             return new DisplaySpecialization
             {
                 JobCustomProperties = new string[] { "Instrument" },
-                WorkersWebSocketsUrl = RemoteWorkersEndpoints.DeriveWebSocketUrl(serverUrl),
                 WorkerFactory = r => new MockPricingWorker(workersLogger, r.Name)
             };
         });

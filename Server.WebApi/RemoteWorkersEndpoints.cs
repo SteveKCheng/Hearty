@@ -59,51 +59,6 @@ namespace Hearty.Server.WebApi
         }
 
         /// <summary>
-        /// Derive the WebSocket URL 
-        /// from the URL for the hosting Web server.
-        /// </summary>
-        /// <param name="siteUrl">
-        /// Absolute URL with the "http" or "https" scheme, plus
-        /// the appropriate path base appended.
-        /// </param>
-        /// <returns>
-        /// The WebSocket URL, with the "ws" or "wss" scheme.
-        /// </returns>
-        public static Uri DeriveWebSocketUrl(string siteUrl)
-            => DeriveWebSocketUrl(new Uri(siteUrl));
-
-        /// <summary>
-        /// Derive the WebSocket URL 
-        /// from the URL for the hosting Web server.
-        /// </summary>
-        /// <param name="siteUrl">
-        /// Absolute URL with the "http" or "https" scheme, plus
-        /// the appropriate path base appended.
-        /// </param>
-        /// <returns>
-        /// The WebSocket URL, with the "ws" or "wss" scheme.
-        /// </returns>
-        public static Uri DeriveWebSocketUrl(Uri siteUrl)
-        {
-            if (!siteUrl.IsAbsoluteUri)
-                throw new ArgumentException("URL must be absolute, but is not. ", nameof(siteUrl));
-
-            bool secure;
-            if (string.Equals(siteUrl.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
-                secure = true;
-            else if (string.Equals(siteUrl.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase))
-                secure = false;
-            else
-                throw new ArgumentException("URL must have the 'http' or 'https' scheme, but does not. ", nameof(siteUrl));
-
-            var builder = new UriBuilder(siteUrl);
-            builder.Scheme = secure ? Uri.UriSchemeWss : Uri.UriSchemeWs;
-            builder.Path = string.Concat(builder.Path, WorkerHost.WebSocketsDefaultPath);
-
-            return builder.Uri;
-        }
-
-        /// <summary>
         /// Get the default URL to connect to the running HTTP server.
         /// </summary>
         /// <param name="server">
