@@ -47,7 +47,6 @@ public partial class Workers
     /// hosts should be enabled.
     /// </summary>
     private bool IsHostCreationEnabled =>
-        _displaySpecialization.WorkersWebSocketsUrl is not null &&
         _displaySpecialization.WorkerFactory is not null;
 
     /// <summary>
@@ -56,7 +55,7 @@ public partial class Workers
     /// </summary>
     private async Task GenerateWorkersAsync()
     {
-        var url = _displaySpecialization.WorkersWebSocketsUrl;
+        var url = WebSocketUrl;
         var workFactory = _displaySpecialization.WorkerFactory;
 
         if (url is null || workFactory is null)
@@ -107,4 +106,11 @@ public partial class Workers
             }
         }
     }
+
+    private string ServerUrl =>
+        _displaySpecialization.ServerUrl ?? _navigationManager.BaseUri;
+
+    private Uri WebSocketUrl =>
+        _displaySpecialization.WorkersWebSocketsUrl ??
+        WorkerHost.DeriveWebSocketUrl(ServerUrl);
 }
