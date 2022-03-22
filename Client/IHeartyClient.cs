@@ -168,10 +168,6 @@ public interface IHeartyClient : IDisposable
     /// De-serializes the payload of each item into the desired
     /// object of type <typeparamref name="T" />.
     /// </param>
-    /// <param name="cancellationToken">
-    /// Can be triggered to cancel the entire downloading
-    /// operation.
-    /// </param>
     /// <returns>
     /// Asynchronous stream of items, which are downloaded
     /// incrementally.  The server may be producing
@@ -182,8 +178,7 @@ public interface IHeartyClient : IDisposable
     /// </returns>
     IAsyncEnumerable<KeyValuePair<int, T>> GetResultStreamAsync<T>(
         PromiseId promiseId,
-        PayloadReader<T> reader,
-        CancellationToken cancellationToken = default);
+        PayloadReader<T> reader);
 
     /// <summary>
     /// Queue up a job for the Hearty server, and return a
@@ -220,9 +215,8 @@ public interface IHeartyClient : IDisposable
     /// are downloaded incrementally and may be produced
     /// by the server incrementally.  The job is submitted
     /// upon the first time the stream is enumerated.  
-    /// Subsequent enumerations may re-submit the job,
-    /// depending on the implementation and whether the
-    /// job results get cached by the server.
+    /// Subsequent enumerations will not re-submit the job,
+    /// but may entail re-downloading results from the server.
     /// </returns>
     IAsyncEnumerable<KeyValuePair<int, T>> RunJobStreamAsync<T>(
         string route,
