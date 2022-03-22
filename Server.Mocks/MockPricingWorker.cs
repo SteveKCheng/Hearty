@@ -17,6 +17,8 @@ namespace Hearty.Server.Mocks
     /// </summary>
     public class MockPricingWorker : IJobSubmission 
     {
+        ValueTask IAsyncDisposable.DisposeAsync() => ValueTask.CompletedTask;
+
         /// <summary>
         /// The most specific IANA media type for the JSON format
         /// accepted for mock pricing jobs.

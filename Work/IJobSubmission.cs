@@ -1,4 +1,5 @@
-﻿using System.Buffers;
+﻿using System;
+using System.Buffers;
 using System.Threading;
 using System.Threading.Tasks;
 using MessagePack;
@@ -9,7 +10,12 @@ namespace Hearty.Work
     /// Interface to execute jobs, suitable to expose as 
     /// remote procedure calls (RPC) over a network.
     /// </summary>
-    public interface IJobSubmission
+    /// <remarks>
+    /// <see cref="IAsyncDisposable" /> is part of this interface
+    /// as many implementations are expected to be heavy "services"
+    /// that want explicit disposal.
+    /// </remarks>
+    public interface IJobSubmission : IAsyncDisposable
     {
         /// <summary>
         /// Execute one job asynchronously, 

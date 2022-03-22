@@ -207,6 +207,8 @@ namespace Hearty.Server
                                                        JobReplyMessage>(
                     WorkerHost.TypeCode_RunJob, request, cancellationToken);
             }
+
+            ValueTask IAsyncDisposable.DisposeAsync() => ValueTask.CompletedTask;
         }
     }
 }

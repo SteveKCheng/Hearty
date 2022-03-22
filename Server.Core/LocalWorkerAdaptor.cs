@@ -56,7 +56,10 @@ namespace Hearty.Server
         /// </summary>
         private readonly CancellationTokenSource _cancellationSource = new();
 
-        ValueTask IAsyncDisposable.DisposeAsync()
+        /// <summary>
+        /// Cancel all pending requests and tear down the worker.
+        /// </summary>
+        public async ValueTask DisposeAsync()
         {
             // Only emit the event the first time this method is invoked.
             if (Interlocked.Exchange(ref _isDisposed, 1) == 0)
@@ -73,9 +76,11 @@ namespace Hearty.Server
                 }
 
                 _cancellationSource.Cancel();
+
+                await _impl.DisposeAsync().ConfigureAwait(false);
+
+                GC.SuppressFinalize(this);
             }
-            
-            return ValueTask.CompletedTask;
         }
 
         private int _isDisposed;

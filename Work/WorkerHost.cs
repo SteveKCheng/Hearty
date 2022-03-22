@@ -241,10 +241,25 @@ namespace Hearty.Work
                                     webSocketOptionsSetter,
                                     cancellationToken);
 
-        /// <inheritdoc cref="RpcConnection.Dispose" />
-        public void Dispose() => _rpc.Dispose();
+        /// <summary>
+        /// Cancel all pending requests and tear down the worker.
+        /// </summary>
+        public void Dispose()
+        {
+            DisposeAsync().AsTask().Wait();
+        }
 
-        /// <inheritdoc cref="RpcConnection.DisposeAsync" />
-        public ValueTask DisposeAsync() => _rpc.DisposeAsync();
+        /// <summary>
+        /// Cancel all pending requests and tear down the worker.
+        /// </summary>
+        public async ValueTask DisposeAsync()
+        {
+            // RpcConnection will cancel all pending requests
+            // when it is disposed, through the CancellationToken
+            // passed to RunJobImplAsync.
+            await _rpc.DisposeAsync().ConfigureAwait(false);
+
+            await _impl.DisposeAsync().ConfigureAwait(false);
+        }
     }
 }
