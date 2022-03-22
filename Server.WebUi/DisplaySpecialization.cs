@@ -1,4 +1,5 @@
 ﻿using Hearty.Work;
+using Microsoft.AspNetCore.Components;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -28,7 +29,15 @@ namespace Hearty.Server.WebUi
         /// The HTTP or HTTPS URL for the job server, including
         /// any "PathBase" suffix.
         /// </summary>
-        public string ServerUrl { get; init; } = "http://localhost/";
+        /// <remarks>
+        /// This URL may be displayed on status pages.  
+        /// If this property is null (default),
+        /// then the URL will be obtained from 
+        /// <see cref="NavigationManager.BaseUri" />;
+        /// this may not be correct if the server is running behind
+        /// an ingress or proxy.
+        /// </remarks>
+        public string? ServerUrl { get; init; }
 
         /// <summary>
         /// The URL for workers to connect to the job server 

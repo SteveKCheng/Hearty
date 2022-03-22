@@ -98,7 +98,6 @@ namespace Hearty.Server.Demo
                 return new DisplaySpecialization
                 {
                     JobCustomProperties = new string[] { "Instrument" },
-                    ServerUrl = serverUrl,
                     WorkersWebSocketsUrl = RemoteWorkersEndpoints.DeriveWebSocketUrl(serverUrl),
                     WorkerFactory = r => new MockPricingWorker(workersLogger, r.Name)
                 };
