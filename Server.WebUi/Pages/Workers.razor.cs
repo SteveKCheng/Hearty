@@ -55,7 +55,7 @@ public partial class Workers
     /// </summary>
     private async Task GenerateWorkersAsync()
     {
-        var url = WebSocketUrl;
+        var url = _displaySpecialization.GetWorkersWebSocketsUrl(_navigationManager);
         var workFactory = _displaySpecialization.WorkerFactory;
 
         if (url is null || workFactory is null)
@@ -106,11 +106,4 @@ public partial class Workers
             }
         }
     }
-
-    private string ServerUrl =>
-        _displaySpecialization.ServerUrl ?? _navigationManager.BaseUri;
-
-    private Uri WebSocketUrl =>
-        _displaySpecialization.WorkersWebSocketsUrl ??
-        WorkerHost.DeriveWebSocketUrl(ServerUrl);
 }

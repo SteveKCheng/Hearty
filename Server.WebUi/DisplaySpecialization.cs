@@ -54,5 +54,18 @@ namespace Hearty.Server.WebUi
         /// This feature is meant for testing.
         /// </remarks>
         public Func<RegisterWorkerRequestMessage, IJobSubmission>? WorkerFactory { get; init; }
+
+        /// <summary>
+        /// Get <see cref="ServerUrl" /> with defaulting if it has not been set.
+        /// </summary>
+        internal string GetServerUrl(NavigationManager navigationManager)
+            => ServerUrl ?? navigationManager.BaseUri;
+
+        /// <summary>
+        /// Get <see cref="WorkersWebSocketsUrl" /> with defaulting if it has not been set.
+        /// </summary>
+        internal Uri GetWorkersWebSocketsUrl(NavigationManager navigationManager)
+            => WorkersWebSocketsUrl 
+            ?? WorkerHost.DeriveWebSocketUrl(GetServerUrl(navigationManager));
     }
 }
