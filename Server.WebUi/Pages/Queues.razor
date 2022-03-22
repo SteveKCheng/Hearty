@@ -124,7 +124,8 @@
                             Class="job-kill">
                 @if (@context.Job is IJobCancellation cancellableJob)
                 {
-                    <button @onclick="() => cancellableJob.Kill(background: true)">🗙</button>
+                    <button @onclick="() => cancellableJob.Kill(background: true)"
+                            disabled="@cancellableJob.KillingHasBeenRequested">🗙</button>
                 }
             </TemplateColumn>
         </Grid>

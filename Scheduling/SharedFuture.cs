@@ -543,6 +543,9 @@ namespace Hearty.Scheduling
             cancellationSource?.CancelMaybeInBackground(background);
         }
 
+        /// <inheritdoc cref="IJobCancellation.KillingHasBeenRequested" />
+        public bool KillingHasBeenRequested => _activeCount <= 0;
+
         /// <summary>
         /// Called to complete <see cref="OutputTask" /> and perform
         /// all clean-up if this future is cancelled before it

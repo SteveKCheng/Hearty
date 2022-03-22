@@ -114,5 +114,15 @@ namespace Hearty.Scheduling
         /// cancellation on a thread pool.
         /// </param>
         void Kill(bool background);
+
+        /// <summary>
+        /// Whether the job has already been requested to be killed.
+        /// </summary>
+        /// <remarks>
+        /// This property is useful for user interfaces to disable
+        /// the control to kill a job when the request is already 
+        /// being processed.
+        /// </remarks>
+        bool KillingHasBeenRequested { get; }
     }
 }

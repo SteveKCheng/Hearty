@@ -593,6 +593,9 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
     void IJobCancellation.Kill(bool background)
         => Source.Kill(background);
 
+    bool IJobCancellation.KillingHasBeenRequested
+        => Source.KillingHasBeenRequested;
+
     #region Observing pending jobs
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2012:Use ValueTasks correctly", 
@@ -738,6 +741,7 @@ internal sealed class MacroJob : IJobCancellation
 
         lock (this)
         {
+            KillingHasBeenRequested = true;
             var p = q = _participants;
 
             while (q is not null)
@@ -752,6 +756,9 @@ internal sealed class MacroJob : IJobCancellation
             }
         }
     }
+
+    /// <inheritdoc cref="IJobCancellation.KillingHasBeenRequested" />
+    public bool KillingHasBeenRequested { get; private set; }
 
     /// <summary>
     /// Register a participant from this (shared) macro job.
