@@ -1,9 +1,9 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using FASTER.core;
 
 namespace Hearty.Server.FasterKV;
@@ -37,13 +37,16 @@ namespace Hearty.Server.FasterKV;
 /// <typeparam name="TValue">
 /// The data type for the values in the dictionary.
 /// </typeparam>
-public class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue>, IDisposable
+public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue>, IDisposable
     where TKey : unmanaged
     where TValue : struct
 {
     private readonly FunctionsImpl _functions = new();
     private readonly FasterKV<TKey, TValue> _storage;
     private bool _isDisposed;
+
+    // FIXME need to restore this count when reading a file
+    private long _itemsCount;
 
     private struct DbInput
     {
@@ -140,7 +143,12 @@ public class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue>, IDisp
             throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
 
         storedValue = output.Value;
-        return status == Status.NOTFOUND;
+
+        bool hasAdded = (status == Status.NOTFOUND);
+        if (hasAdded)
+            Interlocked.Increment(ref _itemsCount);
+
+        return hasAdded;
     }
 
     public bool TryAdd(in TKey key, in TValue value)
@@ -165,16 +173,55 @@ public class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue>, IDisp
             throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
 
         storedValue = output.Value;
-        return status == Status.NOTFOUND;
+
+        bool hasAdded = (status == Status.NOTFOUND);
+        if (hasAdded)
+            Interlocked.Increment(ref _itemsCount);
+
+        return hasAdded;
     }
 
     public TValue this[TKey key] { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 
-    public ICollection<TKey> Keys => throw new NotImplementedException();
+    /// <inheritdoc cref="IDictionary{TKey, TValue}.Keys" />
+    public ICollection<TKey> Keys => new KeysCollection(this);
 
-    public ICollection<TValue> Values => throw new NotImplementedException();
+    /// <inheritdoc cref="IDictionary{TKey, TValue}.Values" />
+    public ICollection<TValue> Values => new ValuesCollection(this);
 
-    public int Count => throw new NotImplementedException();
+    /// <summary>
+    /// Get the number of items stored in this database.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This count is necessarily a snapshot; concurrent operations may 
+    /// change it.
+    /// </para>
+    /// <para>
+    /// If the database has more than <see cref="int.MaxValue" />,
+    /// the value returned by this property is capped.
+    /// Consult <see cref="LongCount" /> for the uncapped value.
+    /// </para>
+    /// </remarks>
+    public int Count
+    {
+        get
+        {
+            var count = _itemsCount;
+            return count <= int.MaxValue ? (int)count : int.MaxValue;
+        }
+    }
+
+    /// <summary>
+    /// Get the number of items stored in this database.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This count is necessarily a snapshot; concurrent operations may 
+    /// change it.
+    /// </para>
+    /// </remarks>
+    public long LongCount => _itemsCount;
 
     /// <inheritdoc cref="ICollection{T}.IsReadOnly" />
     public bool IsReadOnly => false;
@@ -187,9 +234,7 @@ public class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue>, IDisp
     }
 
     void ICollection<KeyValuePair<TKey, TValue>>.Add(KeyValuePair<TKey, TValue> item)
-    {
-        throw new NotImplementedException();
-    }
+        => Add(item.Key, item.Value);
 
     public void Clear()
     {
@@ -207,16 +252,6 @@ public class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue>, IDisp
         return TryGetValue(key, out _);
     }
 
-    void ICollection<KeyValuePair<TKey, TValue>>.CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
-    {
-        throw new NotImplementedException();
-    }
-
-    public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
-    {
-        throw new NotImplementedException();
-    }
-
     /// <inheritdoc cref="IDictionary{TKey, TValue}.Remove" />
     public bool Remove(TKey key)
     {
@@ -229,7 +264,11 @@ public class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue>, IDisp
         if (status == Status.ERROR)
             throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
 
-        return status == Status.OK;
+        bool hasDeleted = (status == Status.OK);
+        if (hasDeleted)
+            Interlocked.Decrement(ref _itemsCount);
+
+        return hasDeleted;
     }
 
     bool ICollection<KeyValuePair<TKey, TValue>>.Remove(KeyValuePair<TKey, TValue> item)
@@ -261,11 +300,6 @@ public class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue>, IDisp
 
     bool IDictionary<TKey, TValue>.TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value)
         => TryGetValue(key, out value);
-
-    IEnumerator IEnumerable.GetEnumerator()
-    {
-        throw new NotImplementedException();
-    }
 
     protected virtual void DisposeImpl(bool disposing)
     {

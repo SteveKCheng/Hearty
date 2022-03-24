@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <Compile Include="FasterDbDictionary.cs" />
+    <Compile Include="FasterDbDictionary.Iteration.cs" />
     <Compile Include="FasterDbFileOptions.cs" />
   </ItemGroup>
 
