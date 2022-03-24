@@ -24,21 +24,13 @@ internal struct ThreadLocalObjectPool<T, THooks>
     {
         _hooks = hooks;
         _linkedList = new LinkedList<T>();
-        _forCurrentThread = new();
+        _forCurrentThread = new ThreadLocal<LinkedListNode<T>?>(trackAllValues: false);
     }
 
     public struct Use : IDisposable
     {
         private readonly IThreadLocalObjectPoolHooks<T, THooks> _hooks;
         private readonly LinkedListNode<T>? _node;
-
-        internal Use(IThreadLocalObjectPoolHooks<T, THooks> hooks,
-                     LinkedListNode<T> node)
-        {
-            _hooks = hooks;
-            _node = node;
-            Target = node.Value;
-        }
 
         internal Use(IThreadLocalObjectPoolHooks<T, THooks> hooks,
                      T target)
@@ -48,28 +40,29 @@ internal struct ThreadLocalObjectPool<T, THooks>
             Target = target;
         }
 
+        internal Use(IThreadLocalObjectPoolHooks<T, THooks> hooks,
+                     LinkedListNode<T> node)
+        {
+            _hooks = hooks;
+            _node = node;
+            Target = node.Value;
+        }
+
         public T Target { get; }
 
         public void Dispose()
         {
             var root = _hooks.Root;
-            var oldNode = root._forCurrentThread.Value;
 
-            if (oldNode is not null)
+            var node = _node;
+            if (node is null)
             {
-                Target.Dispose();
-            }
-            else
-            {
-                var newNode = _node;
-                if (newNode is null)
-                    newNode = new LinkedListNode<T>(Target);
-
+                node = new LinkedListNode<T>(Target);
                 lock (root._linkedList)
-                    root._linkedList.AddLast(newNode);
-
-                root._forCurrentThread.Value = newNode;
+                    root._linkedList.AddLast(node);
             }
+
+            root._forCurrentThread.Value = node;
         }
     }
 
@@ -82,9 +75,6 @@ internal struct ThreadLocalObjectPool<T, THooks>
         if (node is not null)
         {
             _forCurrentThread.Value = null;
-            lock (_linkedList)
-                _linkedList.Remove(node);
-
             return new Use(_hooks, node);
         }
         else
