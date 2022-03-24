@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Hearty.Server.FasterKV</RootNamespace>
+    <AssemblyName>Hearty.Server.FasterKV</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultContentItems>false</EnableDefaultContentItems>
+    <Description>Stores promises for a Hearty server with the FASTER key-value database library</Description>
+  </PropertyGroup>
+
+  <Import Project="..\Packaging.props" />
+
+  <ItemGroup>
+    <Compile Include="FasterDbDictionary.cs" />
+    <Compile Include="FasterDbFileOptions.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.FASTER.Core" Version="1.9.16" />
+  </ItemGroup>
+
+</Project>
