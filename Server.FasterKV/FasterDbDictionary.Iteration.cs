@@ -89,8 +89,8 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
     /// </returns>
     public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
     {
-        using var session = _storage.For(_functions).NewSession<FunctionsImpl>();
-        using var iterator = session.Iterate();
+        using var pooledSession = _sessionPool.GetForCurrentThread();
+        using var iterator = pooledSession.Target.Iterate();
 
         while (true)
         {
@@ -112,8 +112,8 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
 
     void ICollection<KeyValuePair<TKey, TValue>>.CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
     {
-        using var session = _storage.For(_functions).NewSession<FunctionsImpl>();
-        using var iterator = session.Iterate();
+        using var pooledSession = _sessionPool.GetForCurrentThread();
+        using var iterator = pooledSession.Target.Iterate();
 
         while (arrayIndex < array.Length && iterator.GetNext(out var recordInfo))
         {

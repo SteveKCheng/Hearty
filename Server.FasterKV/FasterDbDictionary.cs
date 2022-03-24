@@ -66,7 +66,8 @@ public delegate TValue DictionaryItemFactory<TState, TKey, TValue>(ref TState st
 /// <typeparam name="TValue">
 /// The data type for the values in the dictionary.
 /// </typeparam>
-public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue>, IDisposable
+public partial class FasterDbDictionary<TKey, TValue> 
+    : IDictionary<TKey, TValue>, IDisposable
     where TKey : unmanaged
     where TValue : struct
 {
@@ -166,6 +167,8 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
                     serializerSettings: null,
                     comparer: comparer,
                     variableLengthStructSettings: varLenSettings);
+
+        _sessionPool = new(new SessionPoolHooks(this));
     }
 
     /// <summary>
@@ -228,7 +231,8 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
             Invoker = &InvokerImpl<TState>
         };
 
-        using var session = _storage.For(_functions).NewSession<FunctionsImpl>();
+        using var pooledSession = _sessionPool.GetForCurrentThread();
+        var session = pooledSession.Target;
 
         var output = new DbOutput();
 
@@ -259,7 +263,8 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
 
     public bool TryAdd(in TKey key, in TValue value, out TValue storedValue)
     {
-        using var session = _storage.For(_functions).NewSession<FunctionsImpl>();
+        using var pooledSession = _sessionPool.GetForCurrentThread();
+        var session = pooledSession.Target;
 
         var input = new DbInput
         {
@@ -358,7 +363,8 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
     /// <inheritdoc cref="IDictionary{TKey, TValue}.Remove" />
     public bool Remove(TKey key)
     {
-        using var session = _storage.For(_functions).NewSession<FunctionsImpl>();
+        using var pooledSession = _sessionPool.GetForCurrentThread();
+        var session = pooledSession.Target;
 
         Status status;
         while ((status = session.Delete(ref key)) == Status.PENDING)
@@ -381,7 +387,8 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
 
     public bool TryGetValue(in TKey key, [MaybeNullWhen(false)] out TValue value)
     {
-        using var session = _storage.For(_functions).NewSession<FunctionsImpl>();
+        using var pooledSession = _sessionPool.GetForCurrentThread();
+        var session = pooledSession.Target;
 
         Status status;
         value = default;
@@ -409,6 +416,7 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
         if (!_isDisposed)
         {
             _isDisposed = true;
+            _sessionPool.Dispose();
             _storage.Dispose();
         }
     }
@@ -418,5 +426,28 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
     {
         DisposeImpl(disposing: true);
         GC.SuppressFinalize(this);
+    }
+
+    private ThreadLocalObjectPool<
+                ClientSession<TKey, TValue, DbInput, DbOutput, Empty, FunctionsImpl>,
+                SessionPoolHooks> _sessionPool;
+
+    private struct SessionPoolHooks : IThreadLocalObjectPoolHooks<
+        ClientSession<TKey, TValue, DbInput, DbOutput, Empty, FunctionsImpl>, SessionPoolHooks>
+    {
+        private readonly FasterDbDictionary<TKey, TValue> _parent;
+
+        public ref ThreadLocalObjectPool<ClientSession<TKey, TValue, DbInput, DbOutput, Empty, FunctionsImpl>, 
+                                         SessionPoolHooks> 
+            Root => ref _parent._sessionPool;
+
+        public ClientSession<TKey, TValue, DbInput, DbOutput, Empty, FunctionsImpl> 
+            InstantiateObject()
+        {
+            return _parent._storage.For(_parent._functions).NewSession<FunctionsImpl>();
+        }
+
+        public SessionPoolHooks(FasterDbDictionary<TKey, TValue> parent)
+            => _parent = parent;
     }
 }

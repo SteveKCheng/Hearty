@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
@@ -17,6 +17,7 @@
     <Compile Include="FasterDbDictionary.cs" />
     <Compile Include="FasterDbDictionary.Iteration.cs" />
     <Compile Include="FasterDbFileOptions.cs" />
+    <Compile Include="ThreadLocalObjectPool.cs" />
   </ItemGroup>
 
   <ItemGroup>
