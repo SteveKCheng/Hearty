@@ -28,6 +28,7 @@
     <Compile Include="AsyncBarrier.cs" />
     <Compile Include="BTreeTests.cs" />
     <Compile Include="ContentNegotiationTests.cs" />
+    <Compile Include="FasterKVTests.cs" />
     <Compile Include="PriorityHeapTests.cs" />
     <Compile Include="SchedulingTests.Exact.cs" />
     <Compile Include="SchedulingTests.Parallel.cs" />
@@ -38,6 +39,7 @@
     <ProjectReference Include="..\Scheduling\Scheduling.csproj" />
     <ProjectReference Include="..\Server.Core\Server.Core.csproj" />
     <ProjectReference Include="..\Carp\Carp.csproj" />
+    <ProjectReference Include="..\Server.FasterKV\Server.FasterKV.csproj" />
     <ProjectReference Include="..\Work\Work.csproj" />
   </ItemGroup>
 
