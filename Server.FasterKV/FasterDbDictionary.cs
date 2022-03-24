@@ -13,6 +13,35 @@ namespace Hearty.Server.FasterKV;
 #pragma warning disable CS1591
 
 /// <summary>
+/// A function that produces a desired value to add 
+/// into <see cref="FasterDbDictionary{TKey, TValue}" />.
+/// </summary>
+/// <remarks>
+/// Such a function is used to avoid the inefficiency in 
+/// re-materializing the value when the key already exists
+/// in the dictionary.
+/// </remarks>
+/// <typeparam name="TState">
+/// Arbitrary state that the factory function can read from and write to.
+/// </typeparam>
+/// <typeparam name="TKey">
+/// The data type for the key of an item in the dictionary.
+/// </typeparam>
+/// <typeparam name="TValue">
+/// The data type for the associated value of an item in the dictionary.
+/// </typeparam>
+/// <param name="state">
+/// Reference to the state for the factory function.
+/// </param>
+/// <param name="key">
+/// The key for the item to be produced.
+/// </param>
+/// <returns>
+/// The desired value for the item.
+/// </returns>
+public delegate TValue DictionaryItemFactory<TState, TKey, TValue>(ref TState state, in TKey key);
+
+/// <summary>
 /// Concurrent dictionary implemented in a FASTER KV database.
 /// </summary>
 /// <remarks>
@@ -48,9 +77,24 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
     // FIXME need to restore this count when reading a file
     private long _itemsCount;
 
-    private struct DbInput
+    private unsafe struct DbInput
     {
-        public Func<TKey, TValue>? Factory;
+        /// <summary>
+        /// Instance of <see cref="DictionaryItemFactory{TState, TKey, TValue}" />
+        /// that been type-erased.
+        /// </summary>
+        public object? Factory;
+
+        /// <summary>
+        /// Pinned pointer to the state object for the factory.
+        /// </summary>
+        public void* State;
+
+        /// <summary>
+        /// Address of an instantiation of <see cref="InvokerImpl{TState}" />.
+        /// </summary>
+        public delegate*<ref DbInput, in TKey, TValue> Invoker;
+
         public TValue Value;
     }
 
@@ -78,10 +122,10 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
         public override bool NeedCopyUpdate(ref TKey key, ref DbInput input, ref TValue oldValue, ref DbOutput output)
             => false;
 
-        public override void InitialUpdater(ref TKey key, ref DbInput input, ref TValue value, ref DbOutput output)
+        public override unsafe void InitialUpdater(ref TKey key, ref DbInput input, ref TValue value, ref DbOutput output)
         {
-            var result = input.Factory is not null ? input.Factory(key)
-                                                   : input.Value;
+            var result = input.Invoker != null ? input.Invoker(ref input, key)
+                                               : input.Value;
             value = result;
             output.Value = result;
         }
@@ -124,31 +168,90 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
                     variableLengthStructSettings: varLenSettings);
     }
 
-    public bool TryAdd(in TKey key, Func<TKey, TValue> factory, out TValue storedValue)
+    /// <summary>
+    /// Invokes the user's factory function, for FASTER KV's RMW operation,
+    /// after (unsafe) casting from the type-erased pointer of the state back 
+    /// to a type-correct reference.
+    /// </summary>
+    /// <typeparam name="TState">
+    /// The state object of the user's factory function.
+    /// </typeparam>
+    /// <param name="input">
+    /// Internal input to FASTER KV for adding a new item
+    /// along with the user's factory function after type erasure.
+    /// </param>
+    /// <param name="key">
+    /// The key for the new item.
+    /// </param>
+    /// <returns>
+    /// The value for the item produced by the user's factory function.
+    /// </returns>
+    private static unsafe TValue InvokerImpl<TState>(ref DbInput input, in TKey key)
     {
-        using var session = _storage.For(_functions).NewSession<FunctionsImpl>();
+        return Unsafe.As<DictionaryItemFactory<TState, TKey, TValue>>(input.Factory!)
+                     .Invoke(ref Unsafe.AsRef<TState>(input.State), key);
+    }
+
+    /// <summary>
+    /// Add an item where the value is produced by the factory only
+    /// if the key for the item does not already exist.
+    /// </summary>
+    /// <typeparam name="TState">
+    /// Arbitrary state that the factory function can read from and write to.
+    /// </typeparam>
+    /// <param name="state">
+    /// Reference to the state for the factory function.
+    /// </param>
+    /// <param name="key">
+    /// The key for the item to add into the database.
+    /// </param>
+    /// <param name="factory">
+    /// Function that is invoked to produce the item's value when
+    /// the key does not already exist in the database.
+    /// </param>
+    /// <returns>
+    /// Whether the item has been added by the factory function.
+    /// </returns>
+    public unsafe bool TryAdd<TState>(ref TState state, 
+                                      in TKey key, 
+                                      DictionaryItemFactory<TState, TKey, TValue> factory)
+    {
+        // C# does not allow pinning an arbitrary TState, so we
+        // have to make a copy on the stack to ensure the garbage
+        // collector can never move it, then call Unsafe.AsPointer below.
+        var stateCopy = state;
 
         var input = new DbInput
         {
-            Factory = factory
+            Factory = factory ?? throw new ArgumentNullException(nameof(factory)),
+            State = Unsafe.AsPointer(ref stateCopy),
+            Invoker = &InvokerImpl<TState>
         };
+
+        using var session = _storage.For(_functions).NewSession<FunctionsImpl>();
 
         var output = new DbOutput();
 
-        Status status;
-        while ((status = session.RMW(ref Unsafe.AsRef(key), ref input, ref output)) == Status.PENDING)
-            session.CompletePending();
+        try
+        {
+            Status status;
+            while ((status = session.RMW(ref Unsafe.AsRef(key), ref input, ref output)) == Status.PENDING)
+                session.CompletePending();
 
-        if (status == Status.ERROR)
-            throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
+            if (status == Status.ERROR)
+                throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
 
-        storedValue = output.Value;
+            bool hasAdded = (status == Status.NOTFOUND);
+            if (hasAdded)
+                Interlocked.Increment(ref _itemsCount);
 
-        bool hasAdded = (status == Status.NOTFOUND);
-        if (hasAdded)
-            Interlocked.Increment(ref _itemsCount);
-
-        return hasAdded;
+            return hasAdded;
+        }
+        finally
+        {
+            // Propagate changes on stateCopy back to caller
+            state = stateCopy;
+        }
     }
 
     public bool TryAdd(in TKey key, in TValue value)
