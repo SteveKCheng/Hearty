@@ -212,12 +212,17 @@ public partial class FasterDbDictionary<TKey, TValue>
     /// Function that is invoked to produce the item's value when
     /// the key does not already exist in the database.
     /// </param>
+    /// <param name="storedValue">
+    /// The value produced by the factory, or the existing one
+    /// if the item with the same key already exists.
+    /// </param>
     /// <returns>
     /// Whether the item has been added by the factory function.
     /// </returns>
-    public unsafe bool TryAdd<TState>(ref TState state, 
-                                      in TKey key, 
-                                      DictionaryItemFactory<TState, TKey, TValue> factory)
+    public unsafe bool TryAdd<TState>(in TKey key,
+                                      ref TState state,
+                                      DictionaryItemFactory<TState, TKey, TValue> factory,
+                                      out TValue storedValue)
     {
         // C# does not allow pinning an arbitrary TState, so we
         // have to make a copy on the stack to ensure the garbage
@@ -249,6 +254,7 @@ public partial class FasterDbDictionary<TKey, TValue>
             if (hasAdded)
                 Interlocked.Increment(ref _itemsCount);
 
+            storedValue = output.Value;
             return hasAdded;
         }
         finally

@@ -56,15 +56,16 @@ public class FasterKVTests
 
         var state = (random: new Random(Seed: 89), value: double.NaN);
 
-        db.TryAdd(ref state, key, (ref (Random random, double value) s, in PromiseId k) =>
+        db.TryAdd(key, ref state, (ref (Random random, double value) s, in PromiseId k) =>
         {
             s.value = s.random.NextDouble();
             return s.value;
-        });
+        }, out var storedValue);
 
         Assert.True(db.ContainsKey(key));
         Assert.True(db.TryGetValue(key, out var retrievedValue));
         Assert.Equal(state.value, retrievedValue);
+        Assert.Equal(storedValue, retrievedValue);
         Assert.InRange(state.value, 0.0, 1.0);
     }
 }
