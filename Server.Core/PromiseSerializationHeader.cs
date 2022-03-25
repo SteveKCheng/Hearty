@@ -1,17 +1,18 @@
 ﻿using System;
+using System.Buffers.Binary;
+using System.Runtime.InteropServices;
 
 namespace Hearty.Server;
 
 /// <summary>
 /// The header fields for the serialized representation of a promise.
 /// </summary>
+[StructLayout(LayoutKind.Sequential)]
 internal struct PromiseSerializationHeader
 {
-    public uint FormatVersion;
+    public uint HeaderLength;
 
-    public uint TotalLength;
-
-    public PromiseId PromiseId;
+    public uint Reserved;
 
     public uint InputLength;
 
@@ -21,9 +22,37 @@ internal struct PromiseSerializationHeader
 
     public uint OutputSchemaCode;
 
+    public PromiseId PromiseId;
+
     public ulong CreationTime;
 
     public ulong CompletionTime;
+
+    public static PromiseSerializationHeader Deserialize(ReadOnlySpan<byte> buffer)
+    {
+        var result = new PromiseSerializationHeader();
+
+        result.HeaderLength = BinaryPrimitives.ReadUInt32LittleEndian(buffer); buffer = buffer.Slice(sizeof(uint));
+        result.Reserved = BinaryPrimitives.ReadUInt32LittleEndian(buffer); buffer = buffer.Slice(sizeof(uint));
+        result.InputLength = BinaryPrimitives.ReadUInt32LittleEndian(buffer); buffer = buffer.Slice(sizeof(uint));
+        result.OutputLength = BinaryPrimitives.ReadUInt32LittleEndian(buffer); buffer = buffer.Slice(sizeof(uint));
+        result.InputSchemaCode = BinaryPrimitives.ReadUInt32LittleEndian(buffer); buffer = buffer.Slice(sizeof(uint));
+        result.OutputSchemaCode = BinaryPrimitives.ReadUInt32LittleEndian(buffer); buffer = buffer.Slice(sizeof(uint));
+        result.PromiseId = new PromiseId(BinaryPrimitives.ReadUInt64LittleEndian(buffer)); buffer = buffer.Slice(sizeof(ulong));
+
+        return result;
+    }
+
+    public void Serialize(Span<byte> buffer)
+    {
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer, this.HeaderLength); buffer = buffer.Slice(sizeof(uint));
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer, this.Reserved); buffer = buffer.Slice(sizeof(uint));
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer, this.InputLength); buffer = buffer.Slice(sizeof(uint));
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer, this.OutputLength); buffer = buffer.Slice(sizeof(uint));
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer, this.InputSchemaCode); buffer = buffer.Slice(sizeof(uint));
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer, this.OutputSchemaCode); buffer = buffer.Slice(sizeof(uint));
+        BinaryPrimitives.WriteUInt64LittleEndian(buffer, this.PromiseId.RawInteger); buffer = buffer.Slice(sizeof(ulong));
+    }
 }
 
 /// <summary>
