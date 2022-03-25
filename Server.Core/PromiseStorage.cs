@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Hearty.Server
@@ -20,11 +21,36 @@ namespace Hearty.Server
     /// </remarks>
     public abstract class PromiseStorage
     {
+        private ulong _currentId;
+
         /// <summary>
         /// Create a promise object with the specified input.
         /// </summary>
         public abstract Promise CreatePromise(PromiseData? input,
                                               PromiseData? output = null);
+
+        /// <summary>
+        /// Instantiate an object of type <see cref="Promise" />,
+        /// used to implement <see cref="CreatePromise" />.
+        /// </summary>
+        /// <param name="input">
+        /// Input data to initialize the promise with.  
+        /// </param>
+        /// <param name="output">
+        /// Output data to initialize the promise with, if synchronously
+        /// available.
+        /// </param>
+        /// <returns>
+        /// Promise object with a unique ID.
+        /// </returns>
+        protected Promise CreatePromiseObject(PromiseData? input,
+                                              PromiseData? output)
+        {
+            var newId = new PromiseId(Interlocked.Increment(ref _currentId));
+            var currentTime = DateTime.UtcNow;
+            var promise = new Promise(currentTime, newId, input, output);
+            return promise;
+        }
 
         /// <summary>
         /// Retrieve the promise object that had been assigned

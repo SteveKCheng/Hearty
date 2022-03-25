@@ -16,8 +16,6 @@ namespace Hearty.Server
         private readonly ConcurrentDictionary<PromiseId, Promise>
             _promisesById = new();
 
-        private ulong _currentId;
-
         private readonly ExpiryQueue<Promise> _expiryQueue;
 
         private class PromiseComparer : IComparer<Promise>
@@ -34,7 +32,6 @@ namespace Hearty.Server
         /// </summary>
         public BasicPromiseStorage()
         {
-            _currentId = 0;
             _expiryQueue = new ExpiryQueue<Promise>(new PromiseComparer(), this.ExpirePromise);
         }
 
@@ -52,16 +49,13 @@ namespace Hearty.Server
         public override Promise CreatePromise(PromiseData? input,
                                               PromiseData? output = null)
         {
-            var newId = new PromiseId(Interlocked.Increment(ref _currentId));
+            var promise = CreatePromiseObject(input, output);
+            var expiryTime = GetDefaultPromiseExpiryTime(promise.CreationTime);
 
-            var currentTime = DateTime.UtcNow;
-            var promise = new Promise(currentTime, newId, input, output);
-            var expiryTime = GetDefaultPromiseExpiryTime(currentTime);
-
-            if (!_promisesById.TryAdd(newId, promise))
+            if (!_promisesById.TryAdd(promise.Id, promise))
                 throw new InvalidOperationException("The promise with the newly generated ID already exists.  This should not happen. ");
 
-            InvokeOnStorageEvent(new EventArgs { Type = OperationType.Create, PromiseId = newId });
+            InvokeOnStorageEvent(new EventArgs { Type = OperationType.Create, PromiseId = promise.Id });
 
             _expiryQueue.ChangeExpiry(promise, expiryTime, SetPromiseExpiryDelegate);
 

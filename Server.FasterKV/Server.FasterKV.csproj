@@ -17,6 +17,7 @@
     <Compile Include="FasterDbDictionary.cs" />
     <Compile Include="FasterDbDictionary.Iteration.cs" />
     <Compile Include="FasterDbFileOptions.cs" />
+    <Compile Include="FasterDbPromiseStorage.cs" />
     <Compile Include="ThreadLocalObjectPool.cs" />
   </ItemGroup>
 
@@ -24,6 +25,10 @@
     <PackageReference Include="GitVersion.MsBuild" Version="5.8.3" PrivateAssets="all" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="all" />
     <PackageReference Include="Microsoft.FASTER.Core" Version="1.9.16" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Server.Core\Server.Core.csproj" />
   </ItemGroup>
 
 </Project>
