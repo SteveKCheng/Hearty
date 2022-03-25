@@ -341,6 +341,33 @@ namespace Hearty.Server
         /// false if its data is partial.
         /// </summary>
         public virtual bool IsComplete => true;
+
+        /// <summary>
+        /// Get the basic information required to start serializing
+        /// this instance (to external storage).
+        /// </summary>
+        /// <exception cref="InvalidOperationException">
+        /// This instance does not have its complete contents, 
+        /// e.g. the contents are still being incrementally by a running job.
+        /// </exception>
+        public virtual PromiseDataSerializationInfo GetSerializationInfo()
+        {
+            throw new NotSupportedException();
+        }
+
+        /// <summary>
+        /// Serialize this instance into a sequence of bytes.
+        /// </summary>
+        /// <param name="destination">
+        /// The bytes of the "payload" should be written to here.
+        /// The number of bytes written by this method should be 
+        /// exactly <see cref="PromiseDataSerializationInfo.PayloadLength" />
+        /// as returned by <see cref="GetSerializationInfo" />.
+        /// </param>
+        public virtual void Serialize(IBufferWriter<byte> destination)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     /// <summary>
