@@ -347,13 +347,22 @@ public abstract class PromiseData
     /// Get the basic information required to start serializing
     /// this instance (to external storage).
     /// </summary>
+    /// <param name="info">
+    /// If this method returns true, then this structure is filled
+    /// in with information on the payload about to be serialized.
+    /// Otherwise the parameter is set to its default value.
+    /// </param>
     /// <exception cref="InvalidOperationException">
     /// This instance does not have its complete contents, 
     /// e.g. the contents are still being incrementally by a running job.
     /// </exception>
-    public virtual PromiseDataSerializationInfo GetSerializationInfo()
+    /// <returns>
+    /// Whether this instance can be serialized.
+    /// </returns>
+    public virtual bool TryGetSerializationInfo(out PromiseDataSerializationInfo info)
     {
-        throw new NotSupportedException();
+        info = default;
+        return false;
     }
 
     /// <summary>
@@ -363,8 +372,12 @@ public abstract class PromiseData
     /// The bytes of the "payload" should be written to here.
     /// This buffer is sized according to 
     /// <see cref="PromiseDataSerializationInfo.PayloadLength" />
-    /// as returned by <see cref="GetSerializationInfo" />.
+    /// as reported by <see cref="TryGetSerializationInfo" />.
     /// </param>
+    /// <exception cref="NotSupportedException">
+    /// Serialization is not supported for this instance, i.e. 
+    /// when <see cref="TryGetSerializationInfo" /> returns false.
+    /// </exception>
     public virtual void Serialize(Span<byte> buffer)
     {
         throw new NotSupportedException();

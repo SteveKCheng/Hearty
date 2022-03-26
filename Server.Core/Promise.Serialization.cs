@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Buffers;
-using System.IO.Pipelines;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -15,27 +13,46 @@ public partial class Promise
     /// The header provides the length of the serialized representation
     /// which is often required for pre-allocating buffers.
     /// </remarks>
+    /// <param name="header">
+    /// Set to the header information for the current state of this promise,
+    /// if this method returns true.
+    /// </param>
     /// <returns>
-    /// The header information for the current state of this promise.
+    /// True if this promise in its current state supports serialization,
+    /// false otherwise.
     /// </returns>
-    public PromiseSerializationHeader GetSerializationHeader()
+    public bool TryGetSerializationHeader(out PromiseSerializationHeader header)
     {
         var input = RequestOutput;
         var output = ResultOutput;
 
-        var inputSerializationInfo = input?.GetSerializationInfo();
-        var outputSerializationInfo = output?.GetSerializationInfo();
+        PromiseDataSerializationInfo inputInfo = default;
+        PromiseDataSerializationInfo outputInfo = default;
 
-        return new PromiseSerializationHeader
+        if (input is not null && !input.TryGetSerializationInfo(out inputInfo))
+        {
+            header = default;
+            return false;
+        }
+            
+        if (output is not null && !output.TryGetSerializationInfo(out outputInfo))
+        {
+            header = default;
+            return false;
+        }
+
+        header = new PromiseSerializationHeader
         {
             HeaderLength = PromiseSerializationHeader.Size,
-            InputSchemaCode = inputSerializationInfo?.SchemaCode ?? 0,
-            OutputSchemaCode = outputSerializationInfo?.SchemaCode ?? 0,
+            InputSchemaCode = input is not null ? inputInfo.SchemaCode : (ushort)0,
+            OutputSchemaCode = output is not null ? outputInfo.SchemaCode : (ushort)0,
             Reserved = 0,
-            InputLength = inputSerializationInfo?.PayloadLength ?? 0,
-            OutputLength = outputSerializationInfo?.PayloadLength ?? 0,
+            InputLength = input is not null ? inputInfo.PayloadLength : 0,
+            OutputLength = output is not null ? outputInfo.PayloadLength : 0,
             Id = Id
         };
+
+        return true;
     }
 
     /// <summary>
@@ -46,7 +63,7 @@ public partial class Promise
     /// of .NET's GC-managed memory.
     /// </remarks>
     /// <param name="header">
-    /// The header obtained from <see cref="GetSerializationHeader" />.
+    /// The header obtained from <see cref="TryGetSerializationHeader" />.
     /// This argument is needed because the current object may see
     /// (concurrent) updates, in particular, completion of data, which 
     /// may affect the length of its serialization.  The header is re-read
