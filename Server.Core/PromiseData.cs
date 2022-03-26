@@ -359,13 +359,13 @@ public abstract class PromiseData
     /// <summary>
     /// Serialize this instance into a sequence of bytes.
     /// </summary>
-    /// <param name="destination">
+    /// <param name="buffer">
     /// The bytes of the "payload" should be written to here.
-    /// The number of bytes written by this method should be 
-    /// exactly <see cref="PromiseDataSerializationInfo.PayloadLength" />
+    /// This buffer is sized according to 
+    /// <see cref="PromiseDataSerializationInfo.PayloadLength" />
     /// as returned by <see cref="GetSerializationInfo" />.
     /// </param>
-    public virtual void Serialize(IBufferWriter<byte> destination)
+    public virtual void Serialize(Span<byte> buffer)
     {
         throw new NotSupportedException();
     }

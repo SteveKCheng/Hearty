@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
-using System.IO.Pipelines;
 
 namespace Hearty.Server;
 
@@ -80,21 +79,38 @@ public sealed class PromiseDataSchemas : IReadOnlyDictionary<ushort, PromiseData
 /// <summary>
 /// Materializes promise data from a sequence of bytes, i.e. de-serializes.
 /// </summary>
-/// <param name="info">
-/// Basic information about the payload as reported by 
-/// <see cref="PromiseData.GetSerializationInfo" />.
-/// </param>
-/// <param name="pipeReader">
+/// <param name="buffer">
 /// Where the payload for the serialized promise data should be read from.
-/// On success, this function should read exactly the number of bytes
-/// reported by <see cref="PromiseDataSerializationInfo.PayloadLength" />.
 /// </param>
+/// <remarks>
+/// <para>
+/// De-serialization needs to be optimized for data that comes 
+/// from a database.  Many database APIs provide only "blob" values as one
+/// contiguous buffer.  In the case of memory-mapped databases (e.g. LMDB),
+/// the buffer might even point to the database storage area, which this
+/// function could directly load from.  Of course, the database storage area
+/// is likely subject to compaction, so the materialized <see cref="PromiseData" />
+/// must still copy the data once, but this function is designed so data
+/// is not copied twice.  
+/// </para>
+/// <para>
+/// In principle, promise data could be received over the network.  Do note
+/// that this serialization feature would only used for multiple job servers
+/// to synchronize the promises they store, for resilience and scalability.
+/// This feature is not for (remote) clients of job servers.
+/// </para>
+/// <para>
+/// For such applications, the serialized payload is expected to be stored
+/// in some (local) database anyway.  Thus there is no occasion to call
+/// this function to read directly from a network source.  Accordingly,
+/// this function is not asynchronous, and the length of the serialized data
+/// must be known upfront.
+/// </para>
+/// </remarks>
 /// <returns>
 /// The re-materialized instance of <see cref="PromiseData" />.
 /// </returns>
-public delegate PromiseData PromiseDataDeserializer(in PromiseDataSerializationInfo info,
-                                                    PipeReader pipeReader);
-
+public delegate PromiseData PromiseDataDeserializer(ReadOnlySpan<byte> buffer);
 
 /// <summary>
 /// Basic information about an instance of <see cref="PromiseData" /> 

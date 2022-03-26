@@ -53,21 +53,28 @@ public partial class Promise
     /// to cap the length of the serialization to when the "snapshot"
     /// of this object was taken.
     /// </param>
-    /// <param name="dest">
-    /// The buffer to write to.  This method shall write
-    /// exactly the number of bytes implied by <paramref name="header" />.
+    /// <param name="buffer">
+    /// The buffer to write to.  This buffer is sized
+    /// to <see cref="PromiseSerializationHeader.TotalLength" />
+    /// as reported in <paramref name="header" />, and this method
+    /// shall write exactly that many bytes.
     /// </param>
-    public void Serialize(in PromiseSerializationHeader header, IBufferWriter<byte> dest)
+    public void Serialize(in PromiseSerializationHeader header, Span<byte> buffer)
     {
         var headerLength = (int)header.HeaderLength;
-        header.WriteTo(dest.GetSpan(headerLength));
-        dest.Advance(headerLength);
+        header.WriteTo(buffer[0..headerLength]);
+        buffer = buffer[headerLength..];
 
         if (header.InputLength != 0)
-            RequestOutput!.Serialize(dest);
-
+        {
+            RequestOutput!.Serialize(buffer[0..(int)header.InputLength]);
+            buffer = buffer[(int)header.InputLength..];
+        }
+            
         if (header.OutputLength != 0)
-            ResultOutput!.Serialize(dest);
+        {
+            ResultOutput!.Serialize(buffer[0..(int)header.OutputLength]);
+        }
     }
 
     /// <summary>
@@ -95,26 +102,15 @@ public partial class Promise
 
         if (header.InputSchemaCode != 0)
         {
-            var info = new PromiseDataSerializationInfo
-            {
-                SchemaCode = header.InputSchemaCode,
-                PayloadLength = header.InputLength
-            };
-
-            var reader = PipeReader.Create(new ReadOnlySequence<byte>(data));
-            inputData = schemas[info.SchemaCode].Invoke(info, reader);
+            var deserializer = schemas[header.InputSchemaCode];
+            inputData = deserializer.Invoke(data[0 .. (int)header.InputLength].Span);
+            data = data[(int)header.InputLength..];
         }
 
         if (header.OutputSchemaCode != 0)
         {
-            var info = new PromiseDataSerializationInfo
-            {
-                SchemaCode = header.OutputSchemaCode,
-                PayloadLength = header.OutputLength
-            };
-
-            var reader = PipeReader.Create(new ReadOnlySequence<byte>(data));
-            outputData = schemas[info.SchemaCode].Invoke(info, reader);
+            var deserializer = schemas[header.OutputSchemaCode];
+            outputData = deserializer.Invoke(data[0..(int)header.OutputLength].Span);
         }
 
         return new Promise(DateTime.UtcNow, header.Id, inputData, outputData);
