@@ -60,8 +60,25 @@ public static class PipeExtensions
     /// <returns>
     /// The number of bytes written.  
     /// </returns>
-    public static long WriteUtf8String(this IBufferWriter<byte> destination, string text)
+    public static long WriteUtf8String(this IBufferWriter<byte> destination, 
+                                       ReadOnlySpan<char> text)
         => Encoding.UTF8.GetBytes(text, destination);
+
+    /// <summary>
+    /// Write text in ASCII encoding.
+    /// </summary>
+    /// <param name="destination">The output destination. 
+    /// It is advanced by the number of bytes written.
+    /// </param>
+    /// <param name="text">The text to write.  It should
+    /// be short, as there is no way this method can
+    /// flush buffers to re-use them. </param>
+    /// <returns>
+    /// The number of bytes written.  
+    /// </returns>
+    public static long WriteAsciiString(this IBufferWriter<byte> destination, 
+                                        ReadOnlySpan<char> text)
+        => Encoding.ASCII.GetBytes(text, destination);
 
     /// <summary>
     /// Write the CR-LF (Carriage Return; Line Feed) sequence
