@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Buffers;
+using System.Buffers.Binary;
 using System.IO;
 using System.IO.Pipelines;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Hearty.Common;
@@ -124,4 +126,91 @@ public sealed class Payload : PromiseData
                                     .ConfigureAwait(false);
         return new(contentType, body);
     }
+
+    private enum Flags : int
+    {
+        Normal = 0,
+        IsFailure = 1
+    }
+
+    /// <inheritdoc />
+    public override bool TryGetSerializationInfo(out PromiseDataSerializationInfo info)
+    {
+        var payloadLength = sizeof(int) + (uint)_contentType.Input.Length
+                            + sizeof(Flags)
+                            + sizeof(int) + (ulong)Body.Length;
+
+        if (payloadLength > Int32.MaxValue)
+        {
+            info = default;
+            return false;
+        }
+
+        info = new PromiseDataSerializationInfo
+        {
+            PayloadLength = (int)payloadLength,
+            SchemaCode = SchemaCode
+        };
+
+        return true;
+    }
+
+    /// <inheritdoc />
+    public override void Serialize(Span<byte> buffer)
+    {
+        BinaryPrimitives.WriteInt32LittleEndian(buffer, _contentType.Input.Length);
+        buffer = buffer[sizeof(int)..];
+
+        Encoding.ASCII.GetBytes(_contentType.Input, buffer);
+        buffer = buffer[_contentType.Input.Length..];
+
+        var flags = IsFailure ? Flags.IsFailure : Flags.Normal;
+        BinaryPrimitives.WriteInt32LittleEndian(buffer, (int)flags);
+
+        BinaryPrimitives.WriteInt32LittleEndian(buffer, (int)Body.Length);
+        buffer = buffer[sizeof(int)..];
+
+        Body.CopyTo(buffer);
+    }
+
+    /// <summary>
+    /// De-serialize an instance of <see cref="Payload" />
+    /// from its serialization created from <see cref="Serialize" />.
+    /// </summary>
+    /// <param name="buffer">
+    /// The buffer of bytes to de-serialize from.
+    /// </param>
+    public static Payload Deserialize(ReadOnlySpan<byte> buffer)
+    {
+        int contentTypeStringLength = BinaryPrimitives.ReadInt32BigEndian(buffer);
+        buffer = buffer[sizeof(int)..];
+
+        var contentTypeString = Encoding.ASCII.GetString(buffer[0..contentTypeStringLength]);
+        buffer = buffer[contentTypeStringLength..];
+
+        var flags = (Flags)BinaryPrimitives.ReadInt32LittleEndian(buffer);
+        buffer = buffer[sizeof(int)..];
+
+        var bodyLength = BinaryPrimitives.ReadInt32LittleEndian(buffer);
+        buffer = buffer[sizeof(int)..];
+
+        var body = new byte[bodyLength];
+        buffer[0..bodyLength].CopyTo(body);
+
+        bool isFailure = flags switch
+        {
+            Flags.Normal => false,
+            Flags.IsFailure => true,
+            _ => throw new InvalidDataException()
+        };
+
+        return new Payload(new ParsedContentType(contentTypeString),
+                           new ReadOnlySequence<byte>(body),
+                           isFailure);
+    }
+
+    /// <summary>
+    /// Schema code for serialization.
+    /// </summary>
+    public const ushort SchemaCode = (byte)'P' | ((byte)'a' << 8);
 }
