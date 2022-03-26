@@ -123,12 +123,20 @@ public readonly struct PromiseDataSerializationInfo
     /// <see cref="PromiseData" /> serializes.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This length must be known upfront.  It is populated
     /// into the header for the serialization of the 
     /// containing promise, and may be consulted to pre-allocate
     /// buffers.
+    /// </para>
+    /// <para>
+    /// The length is limited to the capacity of <see cref="Int32" />,
+    /// since <see cref="Span{T}" /> has the same limitation.
+    /// The serialization system is likely to have smaller limits,
+    /// e.g. databases are unlikely to support blobs as large as 2GB.
+    /// </para>
     /// </remarks>
-    public uint PayloadLength { get; init; }
+    public int PayloadLength { get; init; }
 
     /// <summary>
     /// An internal code indicating how to de-serialize the payload.

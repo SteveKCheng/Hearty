@@ -175,20 +175,26 @@ public struct PromiseSerializationHeader
     /// input <see cref="PromiseData" />.  
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This field is zero if no completed input has been stored
-    /// in the <see cref="Promise" /> object.
+    /// in the <see cref="Promise" /> object.  Otherwise it
+    /// is populated from <see cref="PromiseDataSerializationInfo.PayloadLength" />.
+    /// </para>
     /// </remarks>
-    internal uint InputLength;
+    internal int InputLength;
 
     /// <summary>
     /// The length in bytes of the serialization of the
     /// output <see cref="PromiseData" />.  
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This field is zero if no completed output has been stored
-    /// in the <see cref="Promise" /> object.
+    /// in the <see cref="Promise" /> object.  Otherwise it
+    /// is populated from <see cref="PromiseDataSerializationInfo.PayloadLength" />.
+    /// </para>
     /// </remarks>
-    internal uint OutputLength;
+    internal int OutputLength;
 
     internal ulong CreationTime;
 
