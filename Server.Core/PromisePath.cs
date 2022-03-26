@@ -2,201 +2,200 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 
-namespace Hearty.Server
+namespace Hearty.Server;
+
+/// <summary>
+/// A filesystem-like path to a promise.
+/// </summary>
+/// <remarks>
+/// <para>
+/// How promises are stored is analogous to how
+/// Unix filesystems work at a high level. 
+/// Each promise is a file, and 
+/// <see cref="PromiseId" /> is its "inode" number.
+/// There may be any number of named paths to the
+/// same inode, that can be added or removed at
+/// anytime even though the promise results stay
+/// immutable.  
+/// </para>
+/// <para>
+/// The paths are treated as "hard links".
+/// The same promise may be made available at multiple paths.
+/// The paths can be queried in path-comparison order, 
+/// which means they can be used to implement secondary indices
+/// (like in SQL databases) on promises (which would be analogous
+/// to rows in a database table).  A folder can name
+/// the secondary index, and sub-paths within it are the
+/// string- or integer-valued entries in the secondary index.
+/// </para>
+/// <para>
+/// The file name component is split from the folder path so 
+/// that it can be number, and also to effect a weak form of 
+/// prefix compression.  Full prefix compression is not done
+/// as most paths are expected to be fairly short, so that 
+/// replacing parts of paths with object references (which require
+/// 8 bytes on 64-bit environments) would not save much and
+/// would slow down comparisons when this type is used as a 
+/// look-up key.
+/// </para>
+/// </remarks>
+public readonly struct PromisePath : IComparable<PromisePath>
+                                   , IEquatable<PromisePath>
 {
     /// <summary>
-    /// A filesystem-like path to a promise.
+    /// An integer assigned as the "file name" of the promise
+    /// within its containing folder. 
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// How promises are stored is analogous to how
-    /// Unix filesystems work at a high level. 
-    /// Each promise is a file, and 
-    /// <see cref="PromiseId" /> is its "inode" number.
-    /// There may be any number of named paths to the
-    /// same inode, that can be added or removed at
-    /// anytime even though the promise results stay
-    /// immutable.  
-    /// </para>
-    /// <para>
-    /// The paths are treated as "hard links".
-    /// The same promise may be made available at multiple paths.
-    /// The paths can be queried in path-comparison order, 
-    /// which means they can be used to implement secondary indices
-    /// (like in SQL databases) on promises (which would be analogous
-    /// to rows in a database table).  A folder can name
-    /// the secondary index, and sub-paths within it are the
-    /// string- or integer-valued entries in the secondary index.
-    /// </para>
-    /// <para>
-    /// The file name component is split from the folder path so 
-    /// that it can be number, and also to effect a weak form of 
-    /// prefix compression.  Full prefix compression is not done
-    /// as most paths are expected to be fairly short, so that 
-    /// replacing parts of paths with object references (which require
-    /// 8 bytes on 64-bit environments) would not save much and
-    /// would slow down comparisons when this type is used as a 
-    /// look-up key.
-    /// </para>
+    /// This integer is analogous to the auto-incrementing
+    /// row ID in SQL databases.  If the file name is to be
+    /// a string instead, this number shall be assigned as zero.
     /// </remarks>
-    public readonly struct PromisePath : IComparable<PromisePath>
-                                       , IEquatable<PromisePath>
+    public uint Number { get; }
+
+    /// <summary>
+    /// The path to the folder ("directories" in the traditional
+    /// terminology of filesystems).
+    /// </summary>
+    /// <remarks>
+    /// Component names in nested folders are separated by a slash ('/').
+    /// The string is compared case-sensitively.  To ensure unique
+    /// representation, there may be no leading, trailing, or consecutively
+    /// repeated slashes.  The root folder is represented by the empty string.
+    /// </remarks>
+    public string Folder { get; }
+
+    /// <summary>
+    /// The name of the file within its containing folder.
+    /// </summary>
+    /// <remarks>
+    /// This string is null only when the file name
+    /// should be an (auto-incrementing) integer: see
+    /// <see cref="Number" />).  A folder is represented
+    /// by its string path in <see cref="Folder" /> while
+    /// this member must be set to the empty string.
+    /// The name of a file cannot be blank.
+    /// </remarks>
+    public string? Name { get; }
+
+    private PromisePath(uint number, string folder, string? name)
     {
-        /// <summary>
-        /// An integer assigned as the "file name" of the promise
-        /// within its containing folder. 
-        /// </summary>
-        /// <remarks>
-        /// This integer is analogous to the auto-incrementing
-        /// row ID in SQL databases.  If the file name is to be
-        /// a string instead, this number shall be assigned as zero.
-        /// </remarks>
-        public uint Number { get; }
+        Number = number;
+        Folder = folder;
+        Name = name;
+    }
 
-        /// <summary>
-        /// The path to the folder ("directories" in the traditional
-        /// terminology of filesystems).
-        /// </summary>
-        /// <remarks>
-        /// Component names in nested folders are separated by a slash ('/').
-        /// The string is compared case-sensitively.  To ensure unique
-        /// representation, there may be no leading, trailing, or consecutively
-        /// repeated slashes.  The root folder is represented by the empty string.
-        /// </remarks>
-        public string Folder { get; }
+    /// <summary>
+    /// Construct the path for a folder itself.
+    /// </summary>
+    public static PromisePath ForFolder(string folder)
+        => new PromisePath(0, folder, string.Empty);
 
-        /// <summary>
-        /// The name of the file within its containing folder.
-        /// </summary>
-        /// <remarks>
-        /// This string is null only when the file name
-        /// should be an (auto-incrementing) integer: see
-        /// <see cref="Number" />).  A folder is represented
-        /// by its string path in <see cref="Folder" /> while
-        /// this member must be set to the empty string.
-        /// The name of a file cannot be blank.
-        /// </remarks>
-        public string? Name { get; }
+    /// <summary>
+    /// Construct the path for a named file.
+    /// </summary>
+    public static PromisePath ForNamedFile(string folder, string name)
+        => new PromisePath(0, folder, name);
 
-        private PromisePath(uint number, string folder, string? name)
-        {
-            Number = number;
-            Folder = folder;
-            Name = name;
-        }
+    /// <summary>
+    /// Construct the path for a numbered file.
+    /// </summary>
+    public static PromisePath ForNumberedFile(string folder, uint number)
+        => new PromisePath(number, folder, null);
 
-        /// <summary>
-        /// Construct the path for a folder itself.
-        /// </summary>
-        public static PromisePath ForFolder(string folder)
-            => new PromisePath(0, folder, string.Empty);
+    /// <inheritdoc cref="IComparable{T}.CompareTo(T)" />
+    public int CompareTo(PromisePath other)
+    {
+        int c = Folder.CompareTo(other.Folder);
+        if (c != 0)
+            return c;
 
-        /// <summary>
-        /// Construct the path for a named file.
-        /// </summary>
-        public static PromisePath ForNamedFile(string folder, string name)
-            => new PromisePath(0, folder, name);
+        c = Number.CompareTo(other.Number);
+        if (c != 0)
+            return c;
 
-        /// <summary>
-        /// Construct the path for a numbered file.
-        /// </summary>
-        public static PromisePath ForNumberedFile(string folder, uint number)
-            => new PromisePath(number, folder, null);
+        return Name!.CompareTo(other.Name);
+    }
 
-        /// <inheritdoc cref="IComparable{T}.CompareTo(T)" />
-        public int CompareTo(PromisePath other)
-        {
-            int c = Folder.CompareTo(other.Folder);
-            if (c != 0)
-                return c;
+    /// <inheritdoc cref="IEquatable{T}.Equals(T)" />
+    public bool Equals(PromisePath other)
+        => CompareTo(other) == 0;
 
-            c = Number.CompareTo(other.Number);
-            if (c != 0)
-                return c;
+    /// <inheritdoc cref="object.Equals(object?)" />
+    public override bool Equals([NotNullWhen(true)] object? obj)
+        => obj is PromisePath other && Equals(other);
 
-            return Name!.CompareTo(other.Name);
-        }
-
-        /// <inheritdoc cref="IEquatable{T}.Equals(T)" />
-        public bool Equals(PromisePath other)
-            => CompareTo(other) == 0;
-
-        /// <inheritdoc cref="object.Equals(object?)" />
-        public override bool Equals([NotNullWhen(true)] object? obj)
-            => obj is PromisePath other && Equals(other);
-
-        /// <inheritdoc cref="object.GetHashCode" />
-        public override int GetHashCode()
-        {
-            return HashCode.Combine(Number.GetHashCode(),
-                                    Folder.GetHashCode(),
-                                    Name?.GetHashCode() ?? 0);
-        }
+    /// <inheritdoc cref="object.GetHashCode" />
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(Number.GetHashCode(),
+                                Folder.GetHashCode(),
+                                Name?.GetHashCode() ?? 0);
+    }
 
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
-        public static bool operator ==(PromisePath left, PromisePath right)
-            => left.Equals(right);
+    public static bool operator ==(PromisePath left, PromisePath right)
+        => left.Equals(right);
 
-        public static bool operator !=(PromisePath left, PromisePath right)
-            => !(left == right);
+    public static bool operator !=(PromisePath left, PromisePath right)
+        => !(left == right);
 
-        public static bool operator <(PromisePath left, PromisePath right)
-            => left.CompareTo(right) < 0;
+    public static bool operator <(PromisePath left, PromisePath right)
+        => left.CompareTo(right) < 0;
 
-        public static bool operator <=(PromisePath left, PromisePath right)
-            => left.CompareTo(right) <= 0;
+    public static bool operator <=(PromisePath left, PromisePath right)
+        => left.CompareTo(right) <= 0;
 
-        public static bool operator >(PromisePath left, PromisePath right)
-            => left.CompareTo(right) > 0;
+    public static bool operator >(PromisePath left, PromisePath right)
+        => left.CompareTo(right) > 0;
 
-        public static bool operator >=(PromisePath left, PromisePath right)
-            => left.CompareTo(right) >= 0;
+    public static bool operator >=(PromisePath left, PromisePath right)
+        => left.CompareTo(right) >= 0;
 #pragma warning restore CS1591 // Missing XML comment for publicly visible type or member
 
-        /// <summary>
-        /// Parse a path string for a promise 
-        /// into the folder + name/number representation.
-        /// </summary>
-        public static PromisePath Parse(string pathString)
+    /// <summary>
+    /// Parse a path string for a promise 
+    /// into the folder + name/number representation.
+    /// </summary>
+    public static PromisePath Parse(string pathString)
+    {
+        Span<char> normalizedString = stackalloc char[255];
+
+        bool collapseSlash = true;
+
+        int slashIndex = -1;
+        int outputIndex = 0;
+        for (int inputIndex = 0; inputIndex < pathString.Length; ++inputIndex)
         {
-            Span<char> normalizedString = stackalloc char[255];
+            char c = pathString[inputIndex];
+            bool isSlash = (c == '/');
 
-            bool collapseSlash = true;
-
-            int slashIndex = -1;
-            int outputIndex = 0;
-            for (int inputIndex = 0; inputIndex < pathString.Length; ++inputIndex)
+            if (isSlash)
             {
-                char c = pathString[inputIndex];
-                bool isSlash = (c == '/');
+                if (collapseSlash)
+                    continue;
 
-                if (isSlash)
-                {
-                    if (collapseSlash)
-                        continue;
-
-                    slashIndex = outputIndex;
-                }
-
-                collapseSlash = isSlash;
-
-                if (outputIndex == normalizedString.Length)
-                    throw new InvalidOperationException("Path string is too long. ");
-
-                normalizedString[outputIndex++] = c;
+                slashIndex = outputIndex;
             }
 
-            var folderPath = slashIndex > 0 ? normalizedString[0..slashIndex].ToString()
-                                            : string.Empty;
+            collapseSlash = isSlash;
 
-            if (slashIndex == outputIndex - 1)
-                return PromisePath.ForFolder(folderPath);
+            if (outputIndex == normalizedString.Length)
+                throw new InvalidOperationException("Path string is too long. ");
 
-            var namePart = normalizedString[(slashIndex + 1)..outputIndex];
-            if (uint.TryParse(namePart, NumberStyles.None, null, out var number))
-                return PromisePath.ForNumberedFile(folderPath, number);
-
-            return PromisePath.ForNamedFile(folderPath, namePart.ToString());
+            normalizedString[outputIndex++] = c;
         }
+
+        var folderPath = slashIndex > 0 ? normalizedString[0..slashIndex].ToString()
+                                        : string.Empty;
+
+        if (slashIndex == outputIndex - 1)
+            return PromisePath.ForFolder(folderPath);
+
+        var namePart = normalizedString[(slashIndex + 1)..outputIndex];
+        if (uint.TryParse(namePart, NumberStyles.None, null, out var number))
+            return PromisePath.ForNumberedFile(folderPath, number);
+
+        return PromisePath.ForNamedFile(folderPath, namePart.ToString());
     }
 }
