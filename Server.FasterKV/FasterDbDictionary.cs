@@ -72,6 +72,7 @@ public partial class FasterDbDictionary<TKey, TValue>
     where TValue : struct
 {
     private readonly FunctionsImpl _functions = new();
+    private readonly IDevice _device;
     private readonly FasterKV<TKey, TValue> _storage;
     private bool _isDisposed;
 
@@ -136,39 +137,61 @@ public partial class FasterDbDictionary<TKey, TValue>
                               IFasterEqualityComparer<TKey>? comparer = null,
                               VariableLengthStructSettings<TKey, TValue>? varLenSettings = null)
     {
-        IDevice device;
-        if (fileOptions.Path is null)
+        IDevice? device = null;
+        FasterKV<TKey, TValue>? storage = null;
+
+        try
         {
-            device = new NullDevice();
-        }
-        else
-        {
-            bool deleteOnClose = fileOptions.DeleteOnDispose;
-            var path = fileOptions.Path;
-            if (string.IsNullOrEmpty(path))
+            if (fileOptions.Path is null)
             {
-                path = Path.GetTempFileName();
-                deleteOnClose = true;
+                device = new NullDevice();
+            }
+            else
+            {
+                bool deleteOnClose = fileOptions.DeleteOnDispose;
+                var path = fileOptions.Path;
+                if (string.IsNullOrEmpty(path))
+                {
+                    path = Path.GetTempFileName();
+                    deleteOnClose = true;
+                }
+
+                device = Devices.CreateLogDevice(
+                        logPath: path,
+                        preallocateFile: fileOptions.Preallocate,
+                        deleteOnClose: deleteOnClose);
             }
 
-            device = Devices.CreateLogDevice(
-                    logPath: path,
-                    preallocateFile: fileOptions.Preallocate,
-                    deleteOnClose: deleteOnClose);
+            var logSettings = new LogSettings
+            {
+                LogDevice = device
+            };
+            logSettings.MemorySizeBits =
+                Math.Min(47, Math.Max(logSettings.PageSizeBits,
+                                      fileOptions.MemoryLog2Capacity));
+
+            var indexSize =
+                Math.Min(1L << 40, Math.Max(fileOptions.HashIndexSize, 256));
+
+            storage = new FasterKV<TKey, TValue>(
+                        indexSize,
+                        logSettings,
+                        checkpointSettings: null,
+                        serializerSettings: null,
+                        comparer,
+                        varLenSettings);
+
+            _sessionPool = new(new SessionPoolHooks(this));
+        }
+        catch
+        {
+            storage?.Dispose();
+            device?.Dispose();
+            throw;
         }
 
-        _storage = new FasterKV<TKey, TValue>(
-                    size: 1L << 20,
-                    logSettings: new LogSettings
-                    {
-                        LogDevice = device
-                    },
-                    checkpointSettings: null,
-                    serializerSettings: null,
-                    comparer: comparer,
-                    variableLengthStructSettings: varLenSettings);
-
-        _sessionPool = new(new SessionPoolHooks(this));
+        _device = device;
+        _storage = storage;
     }
 
     /// <summary>
@@ -424,6 +447,7 @@ public partial class FasterDbDictionary<TKey, TValue>
             _isDisposed = true;
             _sessionPool.Dispose();
             _storage.Dispose();
+            _device.Dispose();
         }
     }
 
