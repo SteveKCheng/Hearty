@@ -59,6 +59,19 @@ public delegate TValue DictionaryItemFactory<TState, TKey, TValue>(ref TState st
 /// For simplicity, this class does not support asynchronous
 /// backing storage even though FASTER KV does.
 /// </para>
+/// <para>
+/// In general, this class is intended to be a near drop-in replacement
+/// for <see cref="System.Collections.Concurrent.ConcurrentDictionary{TKey, TValue}" />.
+/// </para>
+/// <para>
+/// Like in standard .NET dictionaries, <typeparamref name="TValue" /> 
+/// is essentially treated immutable: modifying an existing entry
+/// means replacing it.  (If <typeparamref name="TValue" /> is a reference type, 
+/// then it is the object reference that gets replaced, but the .NET object
+/// being pointed to can be arbitrarily mutated.)  In contrast, 
+/// FASTER KV allows the value to be mutable structs with fields
+/// that are updated with atomic (interlocked) instructions. 
+/// </para>
 /// </remarks>
 /// <typeparam name="TKey">
 /// The data type for the key in the dictionary.
@@ -105,25 +118,72 @@ public partial class FasterDbDictionary<TKey, TValue>
         public TValue Value;
     }
 
+    /// <summary>
+    /// Callbacks invoked by FASTER KV required for <see cref="FasterDbDictionary{TKey, TValue}" />
+    /// to implement its operations correctly and efficiently.
+    /// </summary>
+    /// <remarks>
+    /// Record-level locking in FASTER KV is turned off for efficiency:
+    /// that works because <typeparamref name="TValue" /> is being treated as 
+    /// essentially immutable.  Only complete instances of 
+    /// <typeparamref name="TValue"/> are published into FASTER KV's hash 
+    /// index, so readers may be concurrent with no risk of "struct tearing". 
+    /// Existing entries cannot be modified in-place; a copy is forced and
+    /// then the new value gets published.
+    /// </remarks>
     private sealed class FunctionsImpl : FunctionsBase<TKey, TValue, DbInput, DbOutput, Empty>
     {
         public FunctionsImpl() : base(locking: false) { }
 
-        public override void ConcurrentReader(ref TKey key, ref DbInput input, ref TValue value, ref DbOutput output)
-            => output.Value = value;
-
         public override void SingleReader(ref TKey key, ref DbInput input, ref TValue value, ref DbOutput output)
             => output.Value = value;
 
+        public override void ConcurrentReader(ref TKey key, ref DbInput input, ref TValue value, ref DbOutput output)
+            => output.Value = value;
+
+        public override void SingleWriter(ref TKey key, ref TValue src, ref TValue dst)
+            => dst = src;
+
+        /// <summary>
+        /// Disallow in-place modifications for upsert.
+        /// </summary>
+        /// <remarks>
+        /// FASTER FV calls this method when upsert finds an existing entry in its mutable region.
+        /// </remarks>
+        public override bool ConcurrentWriter(ref TKey key, ref TValue src, ref TValue dst)
+            => false;   
+
+        /// <summary>
+        /// Fake "RMW" operation for TryAdd, when it encounters existing entry.
+        /// </summary>
+        /// <remarks>
+        /// The existing entry is not modified for "TryAdd"; this method only needs
+        /// to copy the existing value out.
+        /// </remarks>
         public override bool InPlaceUpdater(ref TKey key, ref DbInput input, ref TValue value, ref DbOutput output)
         {
             output.Value = value;
             return true;
         }
 
+        /// <summary>
+        /// Should not actually be called because <see cref="NeedCopyUpdate" /> always returns false.
+        /// </summary>
+        public override void CopyUpdater(ref TKey key, ref DbInput input, ref TValue oldValue, ref TValue newValue, ref DbOutput output)
+        {
+            output.Value = newValue = oldValue;
+        }
+
+        /// <summary>
+        /// Turn off copy-update since the "RMW" operation does not actually modify
+        /// any existing value.
+        /// </summary>
         public override bool NeedCopyUpdate(ref TKey key, ref DbInput input, ref TValue oldValue, ref DbOutput output)
             => false;
 
+        /// <summary>
+        /// Fake "RMW" operation for TryAdd, when it is to (speculatively) create a new entry.
+        /// </summary>
         public override unsafe void InitialUpdater(ref TKey key, ref DbInput input, ref TValue value, ref DbOutput output)
         {
             var result = input.Invoker != null ? input.Invoker(ref input, key)
