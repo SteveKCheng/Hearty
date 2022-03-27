@@ -378,7 +378,45 @@ public partial class FasterDbDictionary<TKey, TValue>
         return hasAdded;
     }
 
-    public TValue this[TKey key] { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+    /// <summary>
+    /// Get or set the value associated with a key.
+    /// </summary>
+    /// <param name="key">
+    /// The key of the dictionary entry to get or set.
+    /// </param>
+    /// <returns>
+    /// The value associated with <paramref name="key" />.
+    /// </returns>
+    /// <exception cref="KeyNotFoundException">
+    /// For retrieving the item with <paramref name="key" />, if that
+    /// key is not found in the dictionary.
+    /// </exception>
+    public TValue this[TKey key]
+    {
+        get
+        {
+            if (TryGetValue(key, out var value))
+                return value;
+
+            throw new KeyNotFoundException($"The key {key} was not found in the dictionary. ");
+        }
+        set
+        {
+            using var pooledSession = _sessionPool.GetForCurrentThread();
+            var session = pooledSession.Target;
+
+            Status status;
+            while ((status = session.Upsert(ref key, ref value)) == Status.PENDING)
+                session.CompletePending();
+
+            bool hasAdded = (status == Status.NOTFOUND);
+            if (hasAdded)
+                Interlocked.Increment(ref _itemsCount);
+
+            if (status == Status.ERROR)
+                throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
+        }
+    }
 
     /// <inheritdoc cref="IDictionary{TKey, TValue}.Keys" />
     public ICollection<TKey> Keys => new KeysCollection(this);
