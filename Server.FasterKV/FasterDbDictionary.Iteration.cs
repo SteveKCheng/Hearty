@@ -120,4 +120,14 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
             array[arrayIndex++] = new(iterator.GetKey(), iterator.GetValue());
         }
     }
+
+    /// <inheritdoc cref="IDictionary{TKey, TValue}.Keys" />
+    public ICollection<TKey> Keys => new KeysCollection(this);
+
+    /// <inheritdoc cref="IDictionary{TKey, TValue}.Values" />
+    public ICollection<TValue> Values => new ValuesCollection(this);
+
+    IEnumerable<TKey> IReadOnlyDictionary<TKey, TValue>.Keys => Keys;
+
+    IEnumerable<TValue> IReadOnlyDictionary<TKey, TValue>.Values => Values;
 }

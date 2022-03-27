@@ -72,6 +72,15 @@ public delegate TValue DictionaryItemFactory<TState, TKey, TValue>(ref TState st
 /// FASTER KV allows the value to be mutable structs with fields
 /// that are updated with atomic (interlocked) instructions. 
 /// </para>
+/// <para>
+/// A few methods from <see cref="IDictionary{TKey, TValue}" />, in particular:
+/// <list type="bullet">
+/// <item><see cref="ICollection{T}.Remove(T)" /></item>
+/// <item><see cref="ICollection{T}.Clear"/> </item>
+/// </list>
+/// are not supported but they cannot be implemented efficiently
+/// and correctly (for concurrent callers) by FASTER KV.
+/// </para>
 /// </remarks>
 /// <typeparam name="TKey">
 /// The data type for the key in the dictionary.
@@ -80,7 +89,7 @@ public delegate TValue DictionaryItemFactory<TState, TKey, TValue>(ref TState st
 /// The data type for the values in the dictionary.
 /// </typeparam>
 public partial class FasterDbDictionary<TKey, TValue> 
-    : IDictionary<TKey, TValue>, IDisposable
+    : IDictionary<TKey, TValue>, IReadOnlyDictionary<TKey, TValue>, IDisposable
     where TKey : unmanaged
     where TValue : struct
 {
@@ -436,12 +445,6 @@ public partial class FasterDbDictionary<TKey, TValue>
         }
     }
 
-    /// <inheritdoc cref="IDictionary{TKey, TValue}.Keys" />
-    public ICollection<TKey> Keys => new KeysCollection(this);
-
-    /// <inheritdoc cref="IDictionary{TKey, TValue}.Values" />
-    public ICollection<TValue> Values => new ValuesCollection(this);
-
     /// <summary>
     /// Get the number of items stored in this database.
     /// </summary>
@@ -548,6 +551,9 @@ public partial class FasterDbDictionary<TKey, TValue>
     }
 
     bool IDictionary<TKey, TValue>.TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value)
+        => TryGetValue(key, out value);
+
+    bool IReadOnlyDictionary<TKey, TValue>.TryGetValue(TKey key, out TValue value)
         => TryGetValue(key, out value);
 
     protected virtual void DisposeImpl(bool disposing)
