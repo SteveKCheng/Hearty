@@ -29,7 +29,7 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
         void ICollection<TKey>.CopyTo(TKey[] array, int arrayIndex)
         {
             using var pooledSession = _parent._sessionPool.GetForCurrentThread();
-            using var iterator = pooledSession.Target.Iterate();
+            using var iterator = pooledSession.Target.Session.Iterate();
 
             while (arrayIndex < array.Length && iterator.GetNext(out var recordInfo))
                 array[arrayIndex++] = iterator.GetKey();
@@ -79,7 +79,7 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
         void ICollection<TValue>.CopyTo(TValue[] array, int arrayIndex)
         {
             using var pooledSession = _parent._sessionPool.GetForCurrentThread();
-            using var iterator = pooledSession.Target.Iterate();
+            using var iterator = pooledSession.Target.Session.Iterate();
 
             while (arrayIndex < array.Length && iterator.GetNext(out var recordInfo))
                 array[arrayIndex++] = iterator.GetValue();
@@ -107,7 +107,7 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
     public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
     {
         using var pooledSession = _sessionPool.GetForCurrentThread();
-        using var iterator = pooledSession.Target.Iterate();
+        using var iterator = pooledSession.Target.Session.Iterate();
 
         while (true)
         {
@@ -130,7 +130,7 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
     void ICollection<KeyValuePair<TKey, TValue>>.CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
     {
         using var pooledSession = _sessionPool.GetForCurrentThread();
-        using var iterator = pooledSession.Target.Iterate();
+        using var iterator = pooledSession.Target.Session.Iterate();
 
         while (arrayIndex < array.Length && iterator.GetNext(out var recordInfo))
             array[arrayIndex++] = new(iterator.GetKey(), iterator.GetValue());

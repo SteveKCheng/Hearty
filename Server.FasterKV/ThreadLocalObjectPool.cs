@@ -5,7 +5,7 @@ using System.Threading;
 namespace Hearty.Server.FasterKV;
 
 internal interface IThreadLocalObjectPoolHooks<T, THooks>
-    where T : class, IDisposable
+    where T : IDisposable
     where THooks : IThreadLocalObjectPoolHooks<T, THooks>
 {
     T InstantiateObject();
@@ -14,7 +14,7 @@ internal interface IThreadLocalObjectPoolHooks<T, THooks>
 }
 
 internal struct ThreadLocalObjectPool<T, THooks>
-    where T : class, IDisposable
+    where T : IDisposable
     where THooks : IThreadLocalObjectPoolHooks<T, THooks>
 {
     private readonly THooks _hooks;

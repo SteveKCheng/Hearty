@@ -57,7 +57,14 @@ public delegate TValue DictionaryItemFactory<TState, TKey, TValue>(ref TState st
 /// </para>
 /// <para>
 /// For simplicity, this class does not support asynchronous
-/// backing storage even though FASTER KV does.
+/// backing storage even though FASTER KV does.  When data needs
+/// to be loaded from or saved to the filesystem, this class
+/// simply synchronously blocks the calling thread.  In practice,
+/// I/O on an SSD should be fast enough, and file I/O in .NET 
+/// may not even be asynchronous in the first place. 
+/// (e.g. on Linux, asynchronous file I/O is only implemented
+/// by "io_uring" from recent Linux kernels, 
+/// which the .NET run-time system is not using.)
 /// </para>
 /// <para>
 /// In general, this class is intended to be a near drop-in replacement
@@ -154,7 +161,7 @@ public partial class FasterDbDictionary<TKey, TValue>
     /// Existing entries cannot be modified in-place; a copy is forced and
     /// then the new value gets published.
     /// </remarks>
-    private sealed class FunctionsImpl : FunctionsBase<TKey, TValue, DbInput, DbOutput, Empty>
+    private sealed class FunctionsImpl : FunctionsBase<TKey, TValue, DbInput, DbOutput, AsyncOutput>
     {
         public FunctionsImpl() : base(locking: false) { }
 
@@ -214,6 +221,18 @@ public partial class FasterDbDictionary<TKey, TValue>
             value = result;
             output.Value = result;
         }
+
+        /// <summary>
+        /// Propagate the result of reads, after I/O completes.
+        /// </summary>
+        public override void ReadCompletionCallback(ref TKey key, ref DbInput input, ref DbOutput output, AsyncOutput asyncOutput, Status status)
+            => asyncOutput.Copy(status, output);
+
+        /// <summary>
+        /// Propagate the result of the "RMW" operation, after I/O completes.
+        /// </summary>
+        public override void RMWCompletionCallback(ref TKey key, ref DbInput input, ref DbOutput output, AsyncOutput asyncOutput, Status status)
+            => asyncOutput.Copy(status, output);
     }
 
     public FasterDbDictionary(in FasterDbFileOptions fileOptions,
@@ -347,15 +366,22 @@ public partial class FasterDbDictionary<TKey, TValue>
         };
 
         using var pooledSession = _sessionPool.GetForCurrentThread();
-        var session = pooledSession.Target;
+        var session = pooledSession.Target.Session;
 
         var output = new DbOutput();
 
         try
         {
-            Status status;
-            while ((status = session.RMW(ref Unsafe.AsRef(key), ref input, ref output)) == Status.PENDING)
-                session.CompletePending();
+            Status status = session.RMW(ref Unsafe.AsRef(key),
+                                        ref input,
+                                        ref output,
+                                        pooledSession.Target.AsyncOutput);
+                                        
+            if (status == Status.PENDING)
+            {
+                session.CompletePending(wait: true);
+                (status, output) = pooledSession.Target.AsyncOutput;
+            }
 
             if (status == Status.ERROR)
                 throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
@@ -380,7 +406,7 @@ public partial class FasterDbDictionary<TKey, TValue>
     public bool TryAdd(in TKey key, in TValue value, out TValue storedValue)
     {
         using var pooledSession = _sessionPool.GetForCurrentThread();
-        var session = pooledSession.Target;
+        var session = pooledSession.Target.Session;
 
         var input = new DbInput
         {
@@ -389,9 +415,16 @@ public partial class FasterDbDictionary<TKey, TValue>
 
         var output = new DbOutput();
 
-        Status status;
-        while ((status = session.RMW(ref Unsafe.AsRef(key), ref input, ref output)) == Status.PENDING)
-            session.CompletePending();
+        Status status = session.RMW(ref Unsafe.AsRef(key),
+                                    ref input,
+                                    ref output,
+                                    pooledSession.Target.AsyncOutput);
+
+        if (status == Status.PENDING)
+        {
+            session.CompletePending(wait: true);
+            (status, output) = pooledSession.Target.AsyncOutput;
+        }
 
         if (status == Status.ERROR)
             throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
@@ -430,11 +463,15 @@ public partial class FasterDbDictionary<TKey, TValue>
         set
         {
             using var pooledSession = _sessionPool.GetForCurrentThread();
-            var session = pooledSession.Target;
+            var session = pooledSession.Target.Session;
 
-            Status status;
-            while ((status = session.Upsert(ref key, ref value)) == Status.PENDING)
-                session.CompletePending();
+            Status status = session.Upsert(ref key, ref value);
+
+            // Status.PENDING only occurs if the key already exists, due
+            // to how FASTER KV works: the hash index is never off-loaded
+            // to external storage.  We can let it complete in the background.
+            // Note that we register no callback for Upsert, so AsyncOutput can
+            // be freely written to for subsequent operations on this thread.
 
             bool hasAdded = (status == Status.NOTFOUND);
             if (hasAdded)
@@ -508,16 +545,20 @@ public partial class FasterDbDictionary<TKey, TValue>
     public bool Remove(TKey key)
     {
         using var pooledSession = _sessionPool.GetForCurrentThread();
-        var session = pooledSession.Target;
+        var session = pooledSession.Target.Session;
 
-        Status status;
-        while ((status = session.Delete(ref key)) == Status.PENDING)
-            session.CompletePending();
+        Status status = session.Delete(ref key);
+
+        // Status.PENDING only occurs if the key already exists, due
+        // to how FASTER KV works: the hash index is never off-loaded
+        // to external storage.  We can let it complete in the background.
+        // Note that we register no callback for Delete, so AsyncOutput can
+        // be freely written to for subsequent operations on this thread.
 
         if (status == Status.ERROR)
             throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
 
-        bool hasDeleted = (status == Status.OK);
+        bool hasDeleted = (status != Status.NOTFOUND);
         if (hasDeleted)
             Interlocked.Decrement(ref _itemsCount);
 
@@ -530,18 +571,25 @@ public partial class FasterDbDictionary<TKey, TValue>
     public bool TryGetValue(in TKey key, [MaybeNullWhen(false)] out TValue value)
     {
         using var pooledSession = _sessionPool.GetForCurrentThread();
-        var session = pooledSession.Target;
-
-        Status status;
-        value = default;
+        var session = pooledSession.Target.Session;
 
         var output = new DbOutput();
 
-        while ((status = session.Read(ref Unsafe.AsRef(key), ref output)) == Status.PENDING)
-            session.CompletePending();
+        Status status = session.Read(ref Unsafe.AsRef(key),
+                                     ref output,
+                                     pooledSession.Target.AsyncOutput);
+
+        if (status == Status.PENDING)
+        {
+            session.CompletePending(wait: true);
+            (status, output) = pooledSession.Target.AsyncOutput;
+        }
 
         if (status == Status.NOTFOUND)
+        {
+            value = default;
             return false;
+        }
 
         if (status == Status.ERROR)
             throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
@@ -574,24 +622,98 @@ public partial class FasterDbDictionary<TKey, TValue>
         GC.SuppressFinalize(this);
     }
 
-    private ThreadLocalObjectPool<
-                ClientSession<TKey, TValue, DbInput, DbOutput, Empty, FunctionsImpl>,
-                SessionPoolHooks> _sessionPool;
+    /// <summary>
+    /// The thread-local "session" for invoking FASTER KV operations.
+    /// </summary>
+    private struct LocalSession : IDisposable
+    {
+        /// <summary>
+        /// The FASTER KV session object.
+        /// </summary>
+        public readonly ClientSession<TKey, TValue, 
+                                      DbInput, DbOutput, 
+                                      AsyncOutput, FunctionsImpl> Session;
 
-    private struct SessionPoolHooks : IThreadLocalObjectPoolHooks<
-        ClientSession<TKey, TValue, DbInput, DbOutput, Empty, FunctionsImpl>, SessionPoolHooks>
+        /// <summary>
+        /// Stores results if the last FASTER KV operation goes pending.
+        /// </summary>
+        public readonly AsyncOutput AsyncOutput;
+
+        /// <summary>
+        /// Instantiates objects for a local session, when it has not
+        /// been cached for the current thread.
+        /// </summary>
+        public LocalSession(FasterDbDictionary<TKey, TValue> parent)
+        {
+            Session = parent._storage.For(parent._functions).NewSession<FunctionsImpl>();
+            AsyncOutput = new AsyncOutput();
+        }
+
+        /// <summary>
+        /// Disposes the FASTER KV session object when the thread-local
+        /// cache is to be cleared.
+        /// </summary>
+        public void Dispose() => Session.Dispose();
+    }
+
+    /// <summary>
+    /// Captures the output when an operation in FASTER KV goes "pending".
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// We are not interested in asynchronous operation here.
+    /// When FASTER KV wants to go asynchronous, we have the completion
+    /// callbacks write back the results that the calling thread
+    /// can access, after it blocks synchronously.  To make that work,
+    /// this type must be a reference type which is part of the thread-local
+    /// state.
+    /// </para>
+    /// <para>
+    /// This class implements the so-called "context" in FASTER KV.
+    /// "Context" is a bad name for the concept, so we call it 
+    /// "asynchronous output".
+    /// </para>
+    /// </remarks>
+    private class AsyncOutput
+    {
+        public Status Status;
+        public DbOutput Output;
+
+        /// <summary>
+        /// Propagates results from a completion callback made by FASTER KV
+        /// so the original caller can read them as if the request completed
+        /// synchronously.
+        /// </summary>
+        public void Copy(Status status, in DbOutput output)
+        {
+            Status = status;
+            Output = output;
+        }
+
+        public void Deconstruct(out Status status, out DbOutput output)
+        {
+            status = Status;
+            output = Output;
+        }
+    }
+
+    /// <summary>
+    /// Thread-local cache of FASTER KV sessions to avoid repeated allocation
+    /// while avoiding lock contention.
+    /// </summary>
+    private ThreadLocalObjectPool<LocalSession, SessionPoolHooks> _sessionPool;
+
+    /// <summary>
+    /// Hooks for FASTER KV sessions to be managed by <see cref="_sessionPool" />.
+    /// </summary>
+    private struct SessionPoolHooks : IThreadLocalObjectPoolHooks<LocalSession, SessionPoolHooks>
     {
         private readonly FasterDbDictionary<TKey, TValue> _parent;
 
-        public ref ThreadLocalObjectPool<ClientSession<TKey, TValue, DbInput, DbOutput, Empty, FunctionsImpl>, 
-                                         SessionPoolHooks> 
+        public ref ThreadLocalObjectPool<LocalSession, SessionPoolHooks> 
             Root => ref _parent._sessionPool;
 
-        public ClientSession<TKey, TValue, DbInput, DbOutput, Empty, FunctionsImpl> 
-            InstantiateObject()
-        {
-            return _parent._storage.For(_parent._functions).NewSession<FunctionsImpl>();
-        }
+        public LocalSession InstantiateObject() => new LocalSession(_parent);
 
         public SessionPoolHooks(FasterDbDictionary<TKey, TValue> parent)
             => _parent = parent;
