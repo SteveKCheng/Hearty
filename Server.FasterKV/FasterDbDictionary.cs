@@ -89,7 +89,15 @@ public partial class FasterDbDictionary<TKey, TValue>
     private readonly FasterKV<TKey, TValue> _storage;
     private bool _isDisposed;
 
-    // FIXME need to restore this count when reading a file
+    /// <summary>
+    /// Count of the number of items in the dictionary.
+    /// </summary>
+    /// <remarks>
+    /// FASTER KV does not track this count separately.
+    /// When initializing FASTER KV from an existing file,
+    /// the file needs to be scanned to determine this count.
+    /// Afterwards, this class maintains the count incrementally.
+    /// </remarks>
     private long _itemsCount;
 
     private unsafe struct DbInput
@@ -240,6 +248,8 @@ public partial class FasterDbDictionary<TKey, TValue>
                         serializerSettings: null,
                         comparer,
                         varLenSettings);
+
+            _itemsCount = storage.EntryCount;
 
             _sessionPool = new(new SessionPoolHooks(this));
         }
