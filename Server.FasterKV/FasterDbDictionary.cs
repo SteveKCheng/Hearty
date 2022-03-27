@@ -100,6 +100,12 @@ public partial class FasterDbDictionary<TKey, TValue>
     /// </remarks>
     private long _itemsCount;
 
+    /// <summary>
+    /// Compares instances of <typeparamref name="TValue" /> 
+    /// as required for certain methods.
+    /// </summary>
+    public IEqualityComparer<TValue> ValueComparer { get; set; }
+
     private unsafe struct DbInput
     {
         /// <summary>
@@ -205,6 +211,8 @@ public partial class FasterDbDictionary<TKey, TValue>
                               IFasterEqualityComparer<TKey>? comparer = null,
                               VariableLengthStructSettings<TKey, TValue>? varLenSettings = null)
     {
+        ValueComparer = EqualityComparer<TValue>.Default;
+
         IDevice? device = null;
         FasterKV<TKey, TValue>? storage = null;
 
@@ -481,15 +489,11 @@ public partial class FasterDbDictionary<TKey, TValue>
     void ICollection<KeyValuePair<TKey, TValue>>.Add(KeyValuePair<TKey, TValue> item)
         => Add(item.Key, item.Value);
 
-    public void Clear()
-    {
-        throw new NotImplementedException();
-    }
+    void ICollection<KeyValuePair<TKey, TValue>>.Clear()
+        => throw new NotSupportedException();
 
     bool ICollection<KeyValuePair<TKey, TValue>>.Contains(KeyValuePair<TKey, TValue> item)
-    {
-        throw new NotImplementedException();
-    }
+        => TryGetValue(item.Key, out var value) && ValueComparer.Equals(value, item.Value);
 
     /// <inheritdoc cref="IDictionary{TKey, TValue}.ContainsKey(TKey)" />
     public bool ContainsKey(TKey key)
@@ -518,9 +522,7 @@ public partial class FasterDbDictionary<TKey, TValue>
     }
 
     bool ICollection<KeyValuePair<TKey, TValue>>.Remove(KeyValuePair<TKey, TValue> item)
-    {
-        throw new NotImplementedException();
-    }
+        => throw new NotSupportedException();
 
     public bool TryGetValue(in TKey key, [MaybeNullWhen(false)] out TValue value)
     {
