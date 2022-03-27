@@ -1,12 +1,8 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Hearty.Server.FasterKV;
-
 
 public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue>
 {
@@ -28,10 +24,16 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
         void ICollection<TKey>.Clear() => throw new NotSupportedException();
 
         bool ICollection<TKey>.Contains(TKey item)
-            => throw new NotImplementedException();
+            => _parent.ContainsKey(item);
 
         void ICollection<TKey>.CopyTo(TKey[] array, int arrayIndex)
-            => throw new NotImplementedException();
+        {
+            using var pooledSession = _parent._sessionPool.GetForCurrentThread();
+            using var iterator = pooledSession.Target.Iterate();
+
+            while (arrayIndex < array.Length && iterator.GetNext(out var recordInfo))
+                array[arrayIndex++] = iterator.GetKey();
+        }
 
         public IEnumerator<TKey> GetEnumerator()
         {
@@ -63,10 +65,25 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
         void ICollection<TValue>.Clear() => throw new NotSupportedException();
 
         bool ICollection<TValue>.Contains(TValue item)
-            => throw new NotImplementedException();
+        {
+            using var enumerator = _parent.GetEnumerator();
+            while (enumerator.MoveNext())
+            {
+                if (_parent.ValueComparer.Equals(enumerator.Current.Value, item))
+                    return true;
+            }
+
+            return false;
+        }
 
         void ICollection<TValue>.CopyTo(TValue[] array, int arrayIndex)
-            => throw new NotImplementedException();
+        {
+            using var pooledSession = _parent._sessionPool.GetForCurrentThread();
+            using var iterator = pooledSession.Target.Iterate();
+
+            while (arrayIndex < array.Length && iterator.GetNext(out var recordInfo))
+                array[arrayIndex++] = iterator.GetValue();
+        }
 
         public IEnumerator<TValue> GetEnumerator()
         {
@@ -116,9 +133,7 @@ public partial class FasterDbDictionary<TKey, TValue> : IDictionary<TKey, TValue
         using var iterator = pooledSession.Target.Iterate();
 
         while (arrayIndex < array.Length && iterator.GetNext(out var recordInfo))
-        {
             array[arrayIndex++] = new(iterator.GetKey(), iterator.GetValue());
-        }
     }
 
     /// <inheritdoc cref="IDictionary{TKey, TValue}.Keys" />
