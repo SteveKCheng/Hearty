@@ -4,6 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using System.Threading.Tasks;
 using FASTER.core;
 
 namespace Hearty.Server.FasterKV;
@@ -95,7 +96,7 @@ public delegate TValue DictionaryItemFactory<TState, TKey, TValue>(ref TState st
 /// <typeparam name="TValue">
 /// The data type for the values in the dictionary.
 /// </typeparam>
-public partial class FasterDbDictionary<TKey, TValue> 
+public partial class FasterDbDictionary<TKey, TValue>
     : IDictionary<TKey, TValue>, IReadOnlyDictionary<TKey, TValue>, IDisposable
     where TKey : unmanaged
     where TValue : struct
@@ -135,7 +136,7 @@ public partial class FasterDbDictionary<TKey, TValue>
     /// Existing entries cannot be modified in-place; a copy is forced and
     /// then the new value gets published.
     /// </remarks>
-    private sealed class FunctionsImpl : FunctionsBase<TKey, TValue, TValue, TValue, AsyncOutput>
+    private sealed class FunctionsImpl : FunctionsBase<TKey, TValue, TValue, TValue, Empty>
     {
         public FunctionsImpl() : base(locking: false) { }
 
@@ -155,7 +156,7 @@ public partial class FasterDbDictionary<TKey, TValue>
         /// FASTER FV calls this method when upsert finds an existing entry in its mutable region.
         /// </remarks>
         public override bool ConcurrentWriter(ref TKey key, ref TValue src, ref TValue dst)
-            => false;   
+            => false;
 
         /// <summary>
         /// Fake "RMW" operation for TryAdd, when it encounters existing entry.
@@ -192,18 +193,6 @@ public partial class FasterDbDictionary<TKey, TValue>
         {
             output = value = input;
         }
-
-        /// <summary>
-        /// Propagate the result of reads, after I/O completes.
-        /// </summary>
-        public override void ReadCompletionCallback(ref TKey key, ref TValue input, ref TValue output, AsyncOutput asyncOutput, Status status)
-            => asyncOutput.Copy(status, output);
-
-        /// <summary>
-        /// Propagate the result of the "RMW" operation, after I/O completes.
-        /// </summary>
-        public override void RMWCompletionCallback(ref TKey key, ref TValue input, ref TValue output, AsyncOutput asyncOutput, Status status)
-            => asyncOutput.Copy(status, output);
     }
 
     public FasterDbDictionary(in FasterDbFileOptions fileOptions,
@@ -319,23 +308,12 @@ public partial class FasterDbDictionary<TKey, TValue>
     {
         var session = localSession.Session;
 
-        TValue output = default;
-
-        Status status = session.RMW(ref Unsafe.AsRef(key),
-                                    ref Unsafe.AsRef(desiredValue),
-                                    ref output,
-                                    localSession.AsyncOutput);
-
-        if (status == Status.PENDING)
-        {
-            session.CompletePending(wait: true);
-            (status, output) = localSession.AsyncOutput;
-        }
+        var task = session.RMWAsync(ref Unsafe.AsRef(key),
+                                    ref Unsafe.AsRef(desiredValue));
+        (Status status, storedValue) = localSession.WaitForTask(task).Complete();
 
         if (status == Status.ERROR)
             throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
-
-        storedValue = output;
 
         bool hasAdded = (status == Status.NOTFOUND);
         if (hasAdded)
@@ -377,13 +355,8 @@ public partial class FasterDbDictionary<TKey, TValue>
             using var pooledSession = _sessionPool.GetForCurrentThread();
             var session = pooledSession.Target.Session;
 
-            Status status = session.Upsert(ref key, ref value);
-
-            // Status.PENDING only occurs if the key already exists, due
-            // to how FASTER KV works: the hash index is never off-loaded
-            // to external storage.  We can let it complete in the background.
-            // Note that we register no callback for Upsert, so AsyncOutput can
-            // be freely written to for subsequent operations on this thread.
+            var task = session.UpsertAsync(ref key, ref value);
+            Status status = pooledSession.Target.WaitForTask(task).Complete();
 
             bool hasAdded = (status == Status.NOTFOUND);
             if (hasAdded)
@@ -459,13 +432,8 @@ public partial class FasterDbDictionary<TKey, TValue>
         using var pooledSession = _sessionPool.GetForCurrentThread();
         var session = pooledSession.Target.Session;
 
-        Status status = session.Delete(ref key);
-
-        // Status.PENDING only occurs if the key already exists, due
-        // to how FASTER KV works: the hash index is never off-loaded
-        // to external storage.  We can let it complete in the background.
-        // Note that we register no callback for Delete, so AsyncOutput can
-        // be freely written to for subsequent operations on this thread.
+        var task = session.DeleteAsync(ref key);
+        Status status = pooledSession.Target.WaitForTask(task).Complete();
 
         if (status == Status.ERROR)
             throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
@@ -481,33 +449,23 @@ public partial class FasterDbDictionary<TKey, TValue>
         => throw new NotSupportedException();
 
     private static bool TryGetValueInternal(LocalSession localSession,
-                                            in TKey key, 
+                                            in TKey key,
                                             [MaybeNullWhen(false)] out TValue value)
     {
         var session = localSession.Session;
 
-        TValue output = default;
+        TValue input = default; // value is not used
 
-        Status status = session.Read(ref Unsafe.AsRef(key),
-                                     ref output,
-                                     localSession.AsyncOutput);
-
-        if (status == Status.PENDING)
-        {
-            session.CompletePending(wait: true);
-            (status, output) = localSession.AsyncOutput;
-        }
+        var task = session.ReadAsync(ref Unsafe.AsRef(key),
+                                     ref input);
+        (Status status, value) = localSession.WaitForTask(task).Complete();
 
         if (status == Status.NOTFOUND)
-        {
-            value = default;
             return false;
-        }
 
         if (status == Status.ERROR)
             throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
 
-        value = output;
         return true;
     }
 
@@ -549,14 +507,9 @@ public partial class FasterDbDictionary<TKey, TValue>
         /// <summary>
         /// The FASTER KV session object.
         /// </summary>
-        public readonly ClientSession<TKey, TValue, 
-                                      TValue, TValue, 
-                                      AsyncOutput, FunctionsImpl> Session;
-
-        /// <summary>
-        /// Stores results if the last FASTER KV operation goes pending.
-        /// </summary>
-        public readonly AsyncOutput AsyncOutput;
+        public readonly ClientSession<TKey, TValue,
+                                      TValue, TValue,
+                                      Empty, FunctionsImpl> Session;
 
         /// <summary>
         /// Instantiates objects for a local session, when it has not
@@ -565,7 +518,6 @@ public partial class FasterDbDictionary<TKey, TValue>
         public LocalSession(FasterDbDictionary<TKey, TValue> parent)
         {
             Session = parent._storage.For(parent._functions).NewSession<FunctionsImpl>();
-            AsyncOutput = new AsyncOutput();
         }
 
         /// <summary>
@@ -573,46 +525,62 @@ public partial class FasterDbDictionary<TKey, TValue>
         /// cache is to be cleared.
         /// </summary>
         public void Dispose() => Session.Dispose();
-    }
-
-    /// <summary>
-    /// Captures the output when an operation in FASTER KV goes "pending".
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// We are not interested in asynchronous operation here.
-    /// When FASTER KV wants to go asynchronous, we have the completion
-    /// callbacks write back the results that the calling thread
-    /// can access, after it blocks synchronously.  To make that work,
-    /// this type must be a reference type which is part of the thread-local
-    /// state.
-    /// </para>
-    /// <para>
-    /// This class implements the so-called "context" in FASTER KV.
-    /// "Context" is a bad name for the concept, so we call it 
-    /// "asynchronous output".
-    /// </para>
-    /// </remarks>
-    private class AsyncOutput
-    {
-        public Status Status;
-        public TValue Output;
 
         /// <summary>
-        /// Propagates results from a completion callback made by FASTER KV
-        /// so the original caller can read them as if the request completed
-        /// synchronously.
+        /// Synchronously wait for a task to complete.
         /// </summary>
-        public void Copy(Status status, in TValue output)
+        /// <remarks>
+        /// <para>
+        /// Operations in FASTER KV can become "pending" if they need
+        /// filesystem/device I/O.  The calling thread needs to
+        /// be blocked for <see cref="FasterDbDictionary{TKey, TValue}" />
+        /// to present a synchronous interface.
+        /// </para>
+        /// <para>
+        /// FASTER KV can report completion using direct callbacks,
+        /// but it does not propagate the status of delete and
+        /// upsert operations.  It appears to be an oversight
+        /// in its API.  Thus we must use the asynchronous version
+        /// of its APIs and wire synchronous waiting ourselves.
+        /// </para>
+        /// </remarks>
+        /// <typeparam name="T">The result from the asynchronous 
+        /// operation. </typeparam>
+        /// <param name="task">
+        /// The task to wait upon.  
+        /// </param>
+        /// <returns>
+        /// The result from <paramref name="task" /> once it completes.
+        /// If the task fails then its exception is propagated out.
+        /// </returns>
+        public T WaitForTask<T>(in ValueTask<T> task)
         {
-            Status = status;
-            Output = output;
-        }
+            if (task.IsCompleted)
+                return task.Result;
 
-        public void Deconstruct(out Status status, out TValue output)
-        {
-            status = Status;
-            output = Output;
+            var awaiter = task.ConfigureAwait(false).GetAwaiter();
+
+            var session = Session;
+            lock (session)
+            {
+                awaiter.UnsafeOnCompleted(() =>
+                {
+                    // Will be a recursive lock if this callback gets
+                    // synchronously invoked.
+                    //
+                    // PulseAll is used instead of Pulse to tolerate
+                    // accidental sharing of the lock object.
+                    lock (session)
+                        Monitor.PulseAll(session);
+                });
+
+                // Block until the task is complete.  This loop should
+                // only execute once if there are no spurious wake-ups.
+                while (!task.IsCompleted)
+                    Monitor.Wait(session);
+            }
+
+            return awaiter.GetResult();
         }
     }
 
@@ -629,7 +597,7 @@ public partial class FasterDbDictionary<TKey, TValue>
     {
         private readonly FasterDbDictionary<TKey, TValue> _parent;
 
-        public ref ThreadLocalObjectPool<LocalSession, SessionPoolHooks> 
+        public ref ThreadLocalObjectPool<LocalSession, SessionPoolHooks>
             Root => ref _parent._sessionPool;
 
         public LocalSession InstantiateObject() => new LocalSession(_parent);
