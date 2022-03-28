@@ -124,22 +124,6 @@ public partial class FasterDbDictionary<TKey, TValue>
 
     private unsafe struct DbInput
     {
-        /// <summary>
-        /// Instance of <see cref="DictionaryItemFactory{TState, TKey, TValue}" />
-        /// that been type-erased.
-        /// </summary>
-        public object? Factory;
-
-        /// <summary>
-        /// Pinned pointer to the state object for the factory.
-        /// </summary>
-        public void* State;
-
-        /// <summary>
-        /// Address of an instantiation of <see cref="InvokerImpl{TState}" />.
-        /// </summary>
-        public delegate*<ref DbInput, in TKey, TValue> Invoker;
-
         public TValue Value;
     }
 
@@ -216,10 +200,7 @@ public partial class FasterDbDictionary<TKey, TValue>
         /// </summary>
         public override unsafe void InitialUpdater(ref TKey key, ref DbInput input, ref TValue value, ref DbOutput output)
         {
-            var result = input.Invoker != null ? input.Invoker(ref input, key)
-                                               : input.Value;
-            value = result;
-            output.Value = result;
+            output.Value = value = input.Value;
         }
 
         /// <summary>
@@ -301,30 +282,6 @@ public partial class FasterDbDictionary<TKey, TValue>
     }
 
     /// <summary>
-    /// Invokes the user's factory function, for FASTER KV's RMW operation,
-    /// after (unsafe) casting from the type-erased pointer of the state back 
-    /// to a type-correct reference.
-    /// </summary>
-    /// <typeparam name="TState">
-    /// The state object of the user's factory function.
-    /// </typeparam>
-    /// <param name="input">
-    /// Internal input to FASTER KV for adding a new item
-    /// along with the user's factory function after type erasure.
-    /// </param>
-    /// <param name="key">
-    /// The key for the new item.
-    /// </param>
-    /// <returns>
-    /// The value for the item produced by the user's factory function.
-    /// </returns>
-    private static unsafe TValue InvokerImpl<TState>(ref DbInput input, in TKey key)
-    {
-        return Unsafe.As<DictionaryItemFactory<TState, TKey, TValue>>(input.Factory!)
-                     .Invoke(ref Unsafe.AsRef<TState>(input.State), key);
-    }
-
-    /// <summary>
     /// Add an item where the value is produced by the factory only
     /// if the key for the item does not already exist.
     /// </summary>
@@ -353,64 +310,28 @@ public partial class FasterDbDictionary<TKey, TValue>
                                       DictionaryItemFactory<TState, TKey, TValue> factory,
                                       out TValue storedValue)
     {
-        // C# does not allow pinning an arbitrary TState, so we
-        // have to make a copy on the stack to ensure the garbage
-        // collector can never move it, then call Unsafe.AsPointer below.
-        var stateCopy = state;
-
-        var input = new DbInput
-        {
-            Factory = factory ?? throw new ArgumentNullException(nameof(factory)),
-            State = Unsafe.AsPointer(ref stateCopy),
-            Invoker = &InvokerImpl<TState>
-        };
-
         using var pooledSession = _sessionPool.GetForCurrentThread();
         var session = pooledSession.Target.Session;
 
-        var output = new DbOutput();
+        if (TryGetValueInternal(pooledSession.Target, key, out storedValue))
+            return false;
 
-        try
-        {
-            Status status = session.RMW(ref Unsafe.AsRef(key),
-                                        ref input,
-                                        ref output,
-                                        pooledSession.Target.AsyncOutput);
-                                        
-            if (status == Status.PENDING)
-            {
-                session.CompletePending(wait: true);
-                (status, output) = pooledSession.Target.AsyncOutput;
-            }
-
-            if (status == Status.ERROR)
-                throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
-
-            bool hasAdded = (status == Status.NOTFOUND);
-            if (hasAdded)
-                Interlocked.Increment(ref _itemsCount);
-
-            storedValue = output.Value;
-            return hasAdded;
-        }
-        finally
-        {
-            // Propagate changes on stateCopy back to caller
-            state = stateCopy;
-        }
+        return TryAddInternal(pooledSession.Target, key, factory(ref state, key), out storedValue);
     }
 
     public bool TryAdd(in TKey key, in TValue value)
         => TryAdd(key, value, out _);
 
-    public bool TryAdd(in TKey key, in TValue value, out TValue storedValue)
+    private bool TryAddInternal(LocalSession localSession,
+                                in TKey key,
+                                in TValue desiredValue,
+                                out TValue storedValue)
     {
-        using var pooledSession = _sessionPool.GetForCurrentThread();
-        var session = pooledSession.Target.Session;
+        var session = localSession.Session;
 
         var input = new DbInput
         {
-            Value = value
+            Value = desiredValue
         };
 
         var output = new DbOutput();
@@ -418,12 +339,12 @@ public partial class FasterDbDictionary<TKey, TValue>
         Status status = session.RMW(ref Unsafe.AsRef(key),
                                     ref input,
                                     ref output,
-                                    pooledSession.Target.AsyncOutput);
+                                    localSession.AsyncOutput);
 
         if (status == Status.PENDING)
         {
             session.CompletePending(wait: true);
-            (status, output) = pooledSession.Target.AsyncOutput;
+            (status, output) = localSession.AsyncOutput;
         }
 
         if (status == Status.ERROR)
@@ -436,6 +357,12 @@ public partial class FasterDbDictionary<TKey, TValue>
             Interlocked.Increment(ref _itemsCount);
 
         return hasAdded;
+    }
+
+    public bool TryAdd(in TKey key, in TValue value, out TValue storedValue)
+    {
+        using var pooledSession = _sessionPool.GetForCurrentThread();
+        return TryAddInternal(pooledSession.Target, key, value, out storedValue);
     }
 
     /// <summary>
@@ -568,21 +495,22 @@ public partial class FasterDbDictionary<TKey, TValue>
     bool ICollection<KeyValuePair<TKey, TValue>>.Remove(KeyValuePair<TKey, TValue> item)
         => throw new NotSupportedException();
 
-    public bool TryGetValue(in TKey key, [MaybeNullWhen(false)] out TValue value)
+    private static bool TryGetValueInternal(LocalSession localSession,
+                                            in TKey key, 
+                                            [MaybeNullWhen(false)] out TValue value)
     {
-        using var pooledSession = _sessionPool.GetForCurrentThread();
-        var session = pooledSession.Target.Session;
+        var session = localSession.Session;
 
         var output = new DbOutput();
 
         Status status = session.Read(ref Unsafe.AsRef(key),
                                      ref output,
-                                     pooledSession.Target.AsyncOutput);
+                                     localSession.AsyncOutput);
 
         if (status == Status.PENDING)
         {
             session.CompletePending(wait: true);
-            (status, output) = pooledSession.Target.AsyncOutput;
+            (status, output) = localSession.AsyncOutput;
         }
 
         if (status == Status.NOTFOUND)
@@ -596,6 +524,12 @@ public partial class FasterDbDictionary<TKey, TValue>
 
         value = output.Value;
         return true;
+    }
+
+    public bool TryGetValue(in TKey key, [MaybeNullWhen(false)] out TValue value)
+    {
+        using var pooledSession = _sessionPool.GetForCurrentThread();
+        return FasterDbDictionary<TKey, TValue>.TryGetValueInternal(pooledSession.Target, key, out value);
     }
 
     bool IDictionary<TKey, TValue>.TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value)
