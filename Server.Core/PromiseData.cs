@@ -359,28 +359,10 @@ public abstract class PromiseData
     /// <returns>
     /// Whether this instance can be serialized.
     /// </returns>
-    public virtual bool TryGetSerializationInfo(out PromiseDataSerializationInfo info)
+    public virtual bool TryPrepareSerialization(out PromiseDataSerializationInfo info)
     {
         info = default;
         return false;
-    }
-
-    /// <summary>
-    /// Serialize this instance into a sequence of bytes.
-    /// </summary>
-    /// <param name="buffer">
-    /// The bytes of the "payload" should be written to here.
-    /// This buffer is sized according to 
-    /// <see cref="PromiseDataSerializationInfo.PayloadLength" />
-    /// as reported by <see cref="TryGetSerializationInfo" />.
-    /// </param>
-    /// <exception cref="NotSupportedException">
-    /// Serialization is not supported for this instance, i.e. 
-    /// when <see cref="TryGetSerializationInfo" /> returns false.
-    /// </exception>
-    public virtual void Serialize(Span<byte> buffer)
-    {
-        throw new NotSupportedException();
     }
 }
 

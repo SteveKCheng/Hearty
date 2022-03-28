@@ -134,7 +134,7 @@ public sealed class Payload : PromiseData
     }
 
     /// <inheritdoc />
-    public override bool TryGetSerializationInfo(out PromiseDataSerializationInfo info)
+    public override bool TryPrepareSerialization(out PromiseDataSerializationInfo info)
     {
         var payloadLength = sizeof(int) + (uint)_contentType.Input.Length
                             + sizeof(Flags)
@@ -149,14 +149,16 @@ public sealed class Payload : PromiseData
         info = new PromiseDataSerializationInfo
         {
             PayloadLength = (int)payloadLength,
-            SchemaCode = SchemaCode
+            SchemaCode = SchemaCode,
+            State = this,
+            Serializer = static (in PromiseDataSerializationInfo info, Span<byte> buffer)
+                            => ((Payload)info.State!).Serialize(buffer)
         };
 
         return true;
     }
 
-    /// <inheritdoc />
-    public override void Serialize(Span<byte> buffer)
+    private void Serialize(Span<byte> buffer)
     {
         BinaryPrimitives.WriteInt32LittleEndian(buffer, _contentType.Input.Length);
         buffer = buffer[sizeof(int)..];

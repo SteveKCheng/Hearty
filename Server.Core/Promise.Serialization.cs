@@ -13,15 +13,19 @@ public partial class Promise
     /// The header provides the length of the serialized representation
     /// which is often required for pre-allocating buffers.
     /// </remarks>
-    /// <param name="header">
-    /// Set to the header information for the current state of this promise,
-    /// if this method returns true.
+    /// <param name="info">
+    /// Set to the prepared information and state to serialize
+    /// this promise, when this method returns true.
+    /// This preparation is needed to capture the current state
+    /// of the object as it may see concurrent updates; also
+    /// if the serialization has variable length, it may need
+    /// to be serialized to temporary buffers first.
     /// </param>
     /// <returns>
     /// True if this promise in its current state supports serialization,
     /// false otherwise.
     /// </returns>
-    public bool TryGetSerializationHeader(out PromiseSerializationHeader header)
+    public bool TryPrepareSerialization(out PromiseSerializationInfo info)
     {
         var input = RequestOutput;
         var output = ResultOutput;
@@ -29,73 +33,40 @@ public partial class Promise
         PromiseDataSerializationInfo inputInfo = default;
         PromiseDataSerializationInfo outputInfo = default;
 
-        if (input is not null && !input.TryGetSerializationInfo(out inputInfo))
+        if (input is not null && !input.TryPrepareSerialization(out inputInfo))
         {
-            header = default;
-            return false;
-        }
-            
-        if (output is not null && !output.TryGetSerializationInfo(out outputInfo))
-        {
-            header = default;
+            info = default;
             return false;
         }
 
-        header = new PromiseSerializationHeader
+        if (output is not null && !output.TryPrepareSerialization(out outputInfo))
         {
-            HeaderLength = PromiseSerializationHeader.Size,
-            InputSchemaCode = input is not null ? inputInfo.SchemaCode : (ushort)0,
-            OutputSchemaCode = output is not null ? outputInfo.SchemaCode : (ushort)0,
-            Reserved = 0,
-            InputLength = input is not null ? inputInfo.PayloadLength : 0,
-            OutputLength = output is not null ? outputInfo.PayloadLength : 0,
-            Id = Id
+            info = default;
+            return false;
+        }
+
+        info = new PromiseSerializationInfo
+        {
+            Header = new PromiseSerializationHeader
+            {
+                HeaderLength = PromiseSerializationHeader.Size,
+                InputSchemaCode = input is not null ? inputInfo.SchemaCode : (ushort)0,
+                OutputSchemaCode = output is not null ? outputInfo.SchemaCode : (ushort)0,
+                Reserved = 0,
+                InputLength = input is not null ? inputInfo.PayloadLength : 0,
+                OutputLength = output is not null ? outputInfo.PayloadLength : 0,
+                Id = Id
+            },
+            Input = inputInfo,
+            Output = outputInfo
         };
 
         return true;
     }
 
     /// <summary>
-    /// Serialize this promise into buffers.
-    /// </summary>
-    /// <remarks>
-    /// This method is used to persist the promise outside
-    /// of .NET's GC-managed memory.
-    /// </remarks>
-    /// <param name="header">
-    /// The header obtained from <see cref="TryGetSerializationHeader" />.
-    /// This argument is needed because the current object may see
-    /// (concurrent) updates, in particular, completion of data, which 
-    /// may affect the length of its serialization.  The header is re-read
-    /// to cap the length of the serialization to when the "snapshot"
-    /// of this object was taken.
-    /// </param>
-    /// <param name="buffer">
-    /// The buffer to write to.  This buffer is sized
-    /// to <see cref="PromiseSerializationHeader.TotalLength" />
-    /// as reported in <paramref name="header" />, and this method
-    /// shall write exactly that many bytes.
-    /// </param>
-    public void Serialize(in PromiseSerializationHeader header, Span<byte> buffer)
-    {
-        var headerLength = (int)header.HeaderLength;
-        header.WriteTo(buffer[0..headerLength]);
-        buffer = buffer[headerLength..];
-
-        if (header.InputLength != 0)
-        {
-            RequestOutput!.Serialize(buffer[0..(int)header.InputLength]);
-            buffer = buffer[(int)header.InputLength..];
-        }
-            
-        if (header.OutputLength != 0)
-        {
-            ResultOutput!.Serialize(buffer[0..(int)header.OutputLength]);
-        }
-    }
-
-    /// <summary>
-    /// Re-materialize a promise object from what <see cref="Serialize" />
+    /// Re-materialize a promise object from what 
+    /// <see cref="PromiseSerializationInfo.Serialize" />
     /// has written.
     /// </summary>
     /// <param name="schemas">
@@ -131,6 +102,64 @@ public partial class Promise
         }
 
         return new Promise(DateTime.UtcNow, header.Id, inputData, outputData);
+    }
+}
+
+/// <summary>
+/// Prepared state for serializing a promise, opaque to clients.
+/// </summary>
+public struct PromiseSerializationInfo
+{
+    internal PromiseSerializationHeader Header;
+
+    internal PromiseDataSerializationInfo Input;
+
+    internal PromiseDataSerializationInfo Output;
+
+    /// <summary>
+    /// The total length, in bytes, of the serialization of the promise.
+    /// </summary>
+    public long TotalLength => Header.TotalLength;
+
+    /// <summary>
+    /// Serialize into a buffer allocated by the caller.
+    /// </summary>
+    /// <remarks>
+    /// This method is used to persist the promise outside
+    /// of .NET's GC-managed memory.
+    /// </remarks>
+    /// <param name="buffer">
+    /// The buffer to write to.  This buffer is sized
+    /// to <see cref="TotalLength" />, and this method
+    /// shall write exactly that many bytes.
+    /// </param>
+    public void Serialize(Span<byte> buffer)
+    {
+        try
+        {
+            var headerLength = (int)Header.HeaderLength;
+            Header.WriteTo(buffer[0..headerLength]);
+            buffer = buffer[headerLength..];
+
+            if (Header.InputLength != 0)
+            {
+                Input.Serializer.Invoke(Input, buffer[0..(int)Header.InputLength]);
+                buffer = buffer[(int)Header.InputLength..];
+            }
+
+            if (Header.OutputLength != 0)
+            {
+                Output.Serializer.Invoke(Output, buffer[0..(int)Header.OutputLength]);
+            }
+        }
+        finally
+        {
+            if (Input.State is not null)
+                Input.StateDisposal?.Invoke(Input.State);
+
+            if (Output.State is not null)
+                Output.StateDisposal?.Invoke(Output.State);
+        }
     }
 }
 

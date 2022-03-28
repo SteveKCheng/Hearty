@@ -113,8 +113,21 @@ public sealed class PromiseDataSchemas : IReadOnlyDictionary<ushort, PromiseData
 public delegate PromiseData PromiseDataDeserializer(ReadOnlySpan<byte> buffer);
 
 /// <summary>
-/// Basic information about an instance of <see cref="PromiseData" /> 
-/// to start decoding its serialization.
+/// Writes out the serialized (promise) data into a buffer, synchronously.
+/// </summary>
+/// <param name="info">
+/// The serialization state and information obtained from 
+/// <see cref="PromiseData.TryPrepareSerialization" />.
+/// </param>
+/// <param name="buffer">
+/// The buffer to write the serialized data into. 
+/// It is sized to exactly <see cref="PromiseDataSerializationInfo.PayloadLength" />.
+/// </param>
+public delegate void PromiseDataSerializer(in PromiseDataSerializationInfo info,
+                                           Span<byte> buffer);
+
+/// <summary>
+/// Information prepared for serializing an instance of <see cref="PromiseData" />.
 /// </summary>
 public readonly struct PromiseDataSerializationInfo
 {
@@ -157,4 +170,38 @@ public readonly struct PromiseDataSerializationInfo
     /// </para>
     /// </remarks>
     public ushort SchemaCode { get; init; }
+
+    /// <summary>
+    /// Arbitrary state object consulted by <see cref="Serializer" />.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This reference may point to the instance of <see cref="PromiseData" />.
+    /// </para>
+    /// <para>
+    /// However, some implementations of <see cref="PromiseData" /> may not
+    /// know the length of the serialized data without producing it.
+    /// For such implementations, <see cref="PromiseData.TryPrepareSerialization" />
+    /// must serialize into temporary re-sizable buffers.  Then this property may be
+    /// set to those temporary buffers so that <see cref="Serializer" />
+    /// can just copy the results over to the final (pinned) buffer.
+    /// </para>
+    /// </remarks>
+    public object? State { get; init; }
+
+    /// <summary>
+    /// Function to write out the serialization after a buffer of
+    /// size <see cref="PayloadLength" /> has been allocated for it.
+    /// </summary>
+    public PromiseDataSerializer Serializer { get; init; }
+    
+    /// <summary>
+    /// If <see cref="State" /> is not null, this function is called
+    /// after serialization happens or has been abandoned.
+    /// </summary>
+    /// <remarks>
+    /// This function may be used to return temporary buffers
+    /// to an array pool, etc.
+    /// </remarks>
+    public Action<object>? StateDisposal { get; init; }
 }

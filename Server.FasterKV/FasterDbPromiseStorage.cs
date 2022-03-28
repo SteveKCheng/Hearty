@@ -64,14 +64,14 @@ public sealed class FasterDbPromiseStorage : PromiseStorage, IDisposable
     {
         var promise = CreatePromiseObject(input, output);
 
-        bool canSerialize = promise.TryGetSerializationHeader(out var header) &&
-                            header.TotalLength <= MaxSerializationLength;
+        bool canSerialize = promise.TryPrepareSerialization(out var info) &&
+                            info.TotalLength <= MaxSerializationLength;
 
         if (canSerialize)
         {
             // FIXME: have FASTER KV write to database page directly to avoid copying bytes
-            byte[] bytes = new byte[header.TotalLength];
-            promise.Serialize(header, bytes);
+            byte[] bytes = new byte[info.TotalLength];
+            info.Serialize(bytes);
             _db.Add(promise.Id, new ReadOnlyMemory<byte>(bytes));
         }
 
