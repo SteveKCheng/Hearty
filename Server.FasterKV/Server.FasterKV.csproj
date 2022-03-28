@@ -17,6 +17,7 @@
     <Compile Include="FasterDbDictionary.cs" />
     <Compile Include="FasterDbDictionary.Iteration.cs" />
     <Compile Include="FasterDbFileOptions.cs" />
+    <Compile Include="FasterDbPromiseComparer.cs" />
     <Compile Include="FasterDbPromiseStorage.cs" />
     <Compile Include="ThreadLocalObjectPool.cs" />
   </ItemGroup>
