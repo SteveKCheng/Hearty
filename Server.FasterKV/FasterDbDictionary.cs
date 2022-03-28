@@ -122,16 +122,6 @@ public partial class FasterDbDictionary<TKey, TValue>
     /// </summary>
     public IEqualityComparer<TValue> ValueComparer { get; set; }
 
-    private unsafe struct DbInput
-    {
-        public TValue Value;
-    }
-
-    private struct DbOutput
-    {
-        public TValue Value;
-    }
-
     /// <summary>
     /// Callbacks invoked by FASTER KV required for <see cref="FasterDbDictionary{TKey, TValue}" />
     /// to implement its operations correctly and efficiently.
@@ -145,15 +135,15 @@ public partial class FasterDbDictionary<TKey, TValue>
     /// Existing entries cannot be modified in-place; a copy is forced and
     /// then the new value gets published.
     /// </remarks>
-    private sealed class FunctionsImpl : FunctionsBase<TKey, TValue, DbInput, DbOutput, AsyncOutput>
+    private sealed class FunctionsImpl : FunctionsBase<TKey, TValue, TValue, TValue, AsyncOutput>
     {
         public FunctionsImpl() : base(locking: false) { }
 
-        public override void SingleReader(ref TKey key, ref DbInput input, ref TValue value, ref DbOutput output)
-            => output.Value = value;
+        public override void SingleReader(ref TKey key, ref TValue input, ref TValue value, ref TValue output)
+            => output = value;
 
-        public override void ConcurrentReader(ref TKey key, ref DbInput input, ref TValue value, ref DbOutput output)
-            => output.Value = value;
+        public override void ConcurrentReader(ref TKey key, ref TValue input, ref TValue value, ref TValue output)
+            => output = value;
 
         public override void SingleWriter(ref TKey key, ref TValue src, ref TValue dst)
             => dst = src;
@@ -174,45 +164,45 @@ public partial class FasterDbDictionary<TKey, TValue>
         /// The existing entry is not modified for "TryAdd"; this method only needs
         /// to copy the existing value out.
         /// </remarks>
-        public override bool InPlaceUpdater(ref TKey key, ref DbInput input, ref TValue value, ref DbOutput output)
+        public override bool InPlaceUpdater(ref TKey key, ref TValue input, ref TValue value, ref TValue output)
         {
-            output.Value = value;
+            output = value;
             return true;
         }
 
         /// <summary>
         /// Should not actually be called because <see cref="NeedCopyUpdate" /> always returns false.
         /// </summary>
-        public override void CopyUpdater(ref TKey key, ref DbInput input, ref TValue oldValue, ref TValue newValue, ref DbOutput output)
+        public override void CopyUpdater(ref TKey key, ref TValue input, ref TValue oldValue, ref TValue newValue, ref TValue output)
         {
-            output.Value = newValue = oldValue;
+            output = newValue = oldValue;
         }
 
         /// <summary>
         /// Turn off copy-update since the "RMW" operation does not actually modify
         /// any existing value.
         /// </summary>
-        public override bool NeedCopyUpdate(ref TKey key, ref DbInput input, ref TValue oldValue, ref DbOutput output)
+        public override bool NeedCopyUpdate(ref TKey key, ref TValue input, ref TValue oldValue, ref TValue output)
             => false;
 
         /// <summary>
         /// Fake "RMW" operation for TryAdd, when it is to (speculatively) create a new entry.
         /// </summary>
-        public override unsafe void InitialUpdater(ref TKey key, ref DbInput input, ref TValue value, ref DbOutput output)
+        public override unsafe void InitialUpdater(ref TKey key, ref TValue input, ref TValue value, ref TValue output)
         {
-            output.Value = value = input.Value;
+            output = value = input;
         }
 
         /// <summary>
         /// Propagate the result of reads, after I/O completes.
         /// </summary>
-        public override void ReadCompletionCallback(ref TKey key, ref DbInput input, ref DbOutput output, AsyncOutput asyncOutput, Status status)
+        public override void ReadCompletionCallback(ref TKey key, ref TValue input, ref TValue output, AsyncOutput asyncOutput, Status status)
             => asyncOutput.Copy(status, output);
 
         /// <summary>
         /// Propagate the result of the "RMW" operation, after I/O completes.
         /// </summary>
-        public override void RMWCompletionCallback(ref TKey key, ref DbInput input, ref DbOutput output, AsyncOutput asyncOutput, Status status)
+        public override void RMWCompletionCallback(ref TKey key, ref TValue input, ref TValue output, AsyncOutput asyncOutput, Status status)
             => asyncOutput.Copy(status, output);
     }
 
@@ -329,15 +319,10 @@ public partial class FasterDbDictionary<TKey, TValue>
     {
         var session = localSession.Session;
 
-        var input = new DbInput
-        {
-            Value = desiredValue
-        };
-
-        var output = new DbOutput();
+        TValue output = default;
 
         Status status = session.RMW(ref Unsafe.AsRef(key),
-                                    ref input,
+                                    ref Unsafe.AsRef(desiredValue),
                                     ref output,
                                     localSession.AsyncOutput);
 
@@ -350,7 +335,7 @@ public partial class FasterDbDictionary<TKey, TValue>
         if (status == Status.ERROR)
             throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
 
-        storedValue = output.Value;
+        storedValue = output;
 
         bool hasAdded = (status == Status.NOTFOUND);
         if (hasAdded)
@@ -501,7 +486,7 @@ public partial class FasterDbDictionary<TKey, TValue>
     {
         var session = localSession.Session;
 
-        var output = new DbOutput();
+        TValue output = default;
 
         Status status = session.Read(ref Unsafe.AsRef(key),
                                      ref output,
@@ -522,7 +507,7 @@ public partial class FasterDbDictionary<TKey, TValue>
         if (status == Status.ERROR)
             throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
 
-        value = output.Value;
+        value = output;
         return true;
     }
 
@@ -565,7 +550,7 @@ public partial class FasterDbDictionary<TKey, TValue>
         /// The FASTER KV session object.
         /// </summary>
         public readonly ClientSession<TKey, TValue, 
-                                      DbInput, DbOutput, 
+                                      TValue, TValue, 
                                       AsyncOutput, FunctionsImpl> Session;
 
         /// <summary>
@@ -611,20 +596,20 @@ public partial class FasterDbDictionary<TKey, TValue>
     private class AsyncOutput
     {
         public Status Status;
-        public DbOutput Output;
+        public TValue Output;
 
         /// <summary>
         /// Propagates results from a completion callback made by FASTER KV
         /// so the original caller can read them as if the request completed
         /// synchronously.
         /// </summary>
-        public void Copy(Status status, in DbOutput output)
+        public void Copy(Status status, in TValue output)
         {
             Status = status;
             Output = output;
         }
 
-        public void Deconstruct(out Status status, out DbOutput output)
+        public void Deconstruct(out Status status, out TValue output)
         {
             status = Status;
             output = Output;
