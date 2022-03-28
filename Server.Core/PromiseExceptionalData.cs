@@ -3,10 +3,8 @@ using Hearty.Utilities;
 using MessagePack;
 using System;
 using System.Buffers;
-using System.Collections.Generic;
 using System.IO;
 using System.IO.Pipelines;
-using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -139,4 +137,66 @@ public sealed class PromiseExceptionalData : PromiseData
             Format.MessagePack => new(ServedMediaTypes.ExceptionMsgPack, ContentPreference.Best),
             _ => throw new ArgumentOutOfRangeException(nameof(format))
         };
+
+    /// <inheritdoc />
+    public override bool TryPrepareSerialization(out PromiseDataSerializationInfo info)
+    {
+        ReadOnlySequence<byte> payload = GetPayload((int)Format.MessagePack);
+
+        info = new PromiseDataSerializationInfo
+        {
+            PayloadLength = checked((int)payload.Length),
+            SchemaCode = SchemaCode,
+            State = payload,
+            Serializer = static (in PromiseDataSerializationInfo info, Span<byte> buffer)
+                => Serialize((ReadOnlySequence<byte>)info.State!, buffer)
+        };
+
+        return true;
+    }
+
+    private static void Serialize(ReadOnlySequence<byte> payload, 
+                                  Span<byte> buffer)
+    {
+        while (payload.Length > 0)
+        {
+            var segment = payload.FirstSpan;
+            segment.CopyTo(buffer);
+            buffer = buffer[segment.Length..];
+            payload = payload.Slice(segment.Length);
+        }
+    }
+
+    /// <summary>
+    /// Schema code for serialization.
+    /// </summary>
+    public const ushort SchemaCode = (byte)'E' | ((byte)'x' << 8);
+
+    /// <summary>
+    /// De-serialize an instance of this class
+    /// from its serialization created from <see cref="Serialize" />.
+    /// </summary>
+    /// <param name="buffer">
+    /// The buffer of bytes to de-serialize from.
+    /// </param>
+    public static PromiseExceptionalData Deserialize(ReadOnlySpan<byte> buffer)
+    {
+        // Need to copy because MessagePackSerializer does not support spans,
+        // even though it ought to because MessagePackReader is a ref struct
+        // anyway.  Unsafe code could work around this problem.  Exception
+        // payload is expected to be small so the copy is not so painful.
+        var copy = ArrayPool<byte>.Shared.Rent(buffer.Length);
+        try
+        {
+            buffer.CopyTo(copy);
+
+            var reader = new MessagePackReader(copy);
+            var body = MessagePackSerializer.Deserialize<ExceptionPayload>(ref reader);
+            return new PromiseExceptionalData(body);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(copy);
+        }
+    }
 }
