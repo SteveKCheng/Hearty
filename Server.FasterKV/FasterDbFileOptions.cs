@@ -28,22 +28,21 @@ public readonly struct FasterDbFileOptions
     public bool DeleteOnDispose { get; init; }
 
     /// <summary>
-    /// Base-2 logarithm of the maximum amount of in-process
-    /// memory to store the values.
+    /// Base-2 logarithm of the maximum amount of bytes of
+    /// in-process memory to store the values.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// FASTER KV requires the memory capacity to be
+    /// FASTER KV requires the memory capacity in bytes to be
     /// powers of 2.  Furthermore, it must be at least
     /// the size of the database's storage page, which is
-    /// currently 2^25 bytes = 32MB.  
+    /// set in <see cref="PageLog2Size" />.
     /// See the documentation from
     /// FASTER KV for more details.
     /// </para>
     /// <para>
     /// If this property's value is less than the
-    /// base-2 logarithm of the page size, i.e. less
-    /// than 25, it will be floored to that.
+    /// base-2 logarithm of the page size, it will be floored to that.
     /// </para>
     /// <para>
     /// The memory capacity also cannot be greater than
@@ -57,6 +56,26 @@ public readonly struct FasterDbFileOptions
     /// </para>
     /// </remarks>
     public int MemoryLog2Capacity { get; init; }
+
+    /// <summary>
+    /// Base-2 logarithm of the number of bytes 
+    /// in a page in the database.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The page size in bytes must be a power of 2.  It must be 
+    /// at least the sector size of filesystem storage,
+    /// typically 512 bytes.  See the documentation from
+    /// FASTER KV for more details.
+    /// </para>
+    /// <para>
+    /// A null value for this property means 
+    /// the default page size of 2^25 bytes (32 MB), as recommended
+    /// by the FASTER KV authors.  Any other value will be capped 
+    /// to 2^26 bytes and floored to 2^9 bytes.
+    /// </para>
+    /// </remarks>
+    public int? PageLog2Size { get; init; }
 
     /// <summary>
     /// The number of buckets in the top-level hash index

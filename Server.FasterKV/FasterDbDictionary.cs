@@ -230,6 +230,10 @@ public partial class FasterDbDictionary<TKey, TValue>
             {
                 LogDevice = device
             };
+
+            logSettings.PageSizeBits =
+                Math.Min(26, Math.Max(9, fileOptions.PageLog2Size ?? 25));
+
             logSettings.MemorySizeBits =
                 Math.Min(47, Math.Max(logSettings.PageSizeBits,
                                       fileOptions.MemoryLog2Capacity));
