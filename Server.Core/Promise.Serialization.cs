@@ -52,7 +52,6 @@ public partial class Promise
                 HeaderLength = PromiseSerializationHeader.Size,
                 InputSchemaCode = input is not null ? inputInfo.SchemaCode : (ushort)0,
                 OutputSchemaCode = output is not null ? outputInfo.SchemaCode : (ushort)0,
-                Reserved = 0,
                 InputLength = input is not null ? inputInfo.PayloadLength : 0,
                 OutputLength = output is not null ? outputInfo.PayloadLength : 0,
                 Id = Id
@@ -110,7 +109,10 @@ public partial class Promise
 /// </summary>
 public struct PromiseSerializationInfo
 {
-    internal PromiseSerializationHeader Header;
+    /// <summary>
+    /// The header in the serialized representation of the promise.
+    /// </summary>
+    public PromiseSerializationHeader Header { get; internal set; }
 
     internal PromiseDataSerializationInfo Input;
 
@@ -133,7 +135,7 @@ public struct PromiseSerializationInfo
     /// to <see cref="TotalLength" />, and this method
     /// shall write exactly that many bytes.
     /// </param>
-    public void Serialize(Span<byte> buffer)
+    public readonly void Serialize(Span<byte> buffer)
     {
         try
         {
@@ -209,7 +211,7 @@ public struct PromiseSerializationHeader
 
     internal ushort OutputSchemaCode;
 
-    internal ushort Reserved;
+    internal ushort MetadataSchemaCode;
 
     /// <summary>
     /// The ID of the promise being stored.
@@ -241,6 +243,18 @@ public struct PromiseSerializationHeader
     /// </para>
     /// </remarks>
     internal int OutputLength;
+
+    internal int MetadataLength;
+
+    /// <summary>
+    /// Reserved for storing information about
+    /// the blob (in a database, etc.) that contains this header.
+    /// </summary>
+    /// <remarks>
+    /// This field is not considered part of the serialized data
+    /// for the promise.
+    /// </remarks>
+    public uint BlobState;
 
     internal ulong CreationTime;
 
