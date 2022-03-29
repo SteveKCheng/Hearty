@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading;
-using System.Threading.Tasks;
 using FASTER.core;
 
 namespace Hearty.Server.FasterKV;
@@ -88,6 +86,15 @@ public delegate TValue DictionaryItemFactory<TState, TKey, TValue>(ref TState st
 /// </list>
 /// are not supported but they cannot be implemented efficiently
 /// and correctly (for concurrent callers) by FASTER KV.
+/// </para>
+/// <para>
+/// FASTER KV supports variable-length blobs but this wrapper 
+/// currently does not.  Such blobs require special logic in the 
+/// callback methods from FASTER KV: this feature simply does not 
+/// compose well in FASTER KV's API.  In theory, this wrapper
+/// could support variable-length blobs but that might make
+/// it too unwieldy to use: it would certainly require more
+/// type parameters.
 /// </para>
 /// </remarks>
 /// <typeparam name="TKey">
@@ -196,49 +203,16 @@ public partial class FasterDbDictionary<TKey, TValue>
     }
 
     public FasterDbDictionary(in FasterDbFileOptions fileOptions,
-                              IFasterEqualityComparer<TKey>? comparer = null,
-                              VariableLengthStructSettings<TKey, TValue>? varLenSettings = null)
+                              IFasterEqualityComparer<TKey>? comparer = null)
     {
         ValueComparer = EqualityComparer<TValue>.Default;
 
-        IDevice? device = null;
         FasterKV<TKey, TValue>? storage = null;
+
+        var logSettings = fileOptions.CreateFasterDbLogSettings();
 
         try
         {
-            if (fileOptions.Path is null)
-            {
-                device = new NullDevice();
-            }
-            else
-            {
-                bool deleteOnClose = fileOptions.DeleteOnDispose;
-                var path = fileOptions.Path;
-                if (string.IsNullOrEmpty(path))
-                {
-                    path = Path.GetTempFileName();
-                    deleteOnClose = true;
-                }
-
-                device = Devices.CreateLogDevice(
-                        logPath: path,
-                        preallocateFile: fileOptions.Preallocate,
-                        deleteOnClose: deleteOnClose);
-
-            }
-
-            var logSettings = new LogSettings
-            {
-                LogDevice = device
-            };
-
-            logSettings.PageSizeBits =
-                Math.Min(26, Math.Max(9, fileOptions.PageLog2Size ?? 25));
-
-            logSettings.MemorySizeBits =
-                Math.Min(47, Math.Max(logSettings.PageSizeBits,
-                                      fileOptions.MemoryLog2Capacity));
-
             var indexSize =
                 Math.Min(1L << 40, Math.Max(fileOptions.HashIndexSize, 256));
 
@@ -247,8 +221,7 @@ public partial class FasterDbDictionary<TKey, TValue>
                         logSettings,
                         checkpointSettings: null,
                         serializerSettings: null,
-                        comparer,
-                        varLenSettings);
+                        comparer);
 
             _itemsCount = storage.EntryCount;
 
@@ -257,11 +230,11 @@ public partial class FasterDbDictionary<TKey, TValue>
         catch
         {
             storage?.Dispose();
-            device?.Dispose();
+            logSettings.LogDevice.Dispose();
             throw;
         }
 
-        _device = device;
+        _device = logSettings.LogDevice;
         _storage = storage;
     }
 
@@ -315,7 +288,7 @@ public partial class FasterDbDictionary<TKey, TValue>
 
         var task = session.RMWAsync(ref Unsafe.AsRef(key),
                                     ref Unsafe.AsRef(desiredValue));
-        (Status status, storedValue) = localSession.WaitForTask(task).Complete();
+        (Status status, storedValue) = task.Wait().Complete();
 
         if (status == Status.ERROR)
             throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
@@ -361,7 +334,7 @@ public partial class FasterDbDictionary<TKey, TValue>
             var session = pooledSession.Target.Session;
 
             var task = session.UpsertAsync(ref key, ref value);
-            Status status = pooledSession.Target.WaitForTask(task).Complete();
+            Status status = task.Wait().Complete();
 
             bool hasAdded = (status == Status.NOTFOUND);
             if (hasAdded)
@@ -438,7 +411,7 @@ public partial class FasterDbDictionary<TKey, TValue>
         var session = pooledSession.Target.Session;
 
         var task = session.DeleteAsync(ref key);
-        Status status = pooledSession.Target.WaitForTask(task).Complete();
+        Status status = task.Wait().Complete();
 
         if (status == Status.ERROR)
             throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
@@ -463,7 +436,7 @@ public partial class FasterDbDictionary<TKey, TValue>
 
         var task = session.ReadAsync(ref Unsafe.AsRef(key),
                                      ref input);
-        (Status status, value) = localSession.WaitForTask(task).Complete();
+        (Status status, value) = task.Wait().Complete();
 
         if (status == Status.NOTFOUND)
             return false;
@@ -530,36 +503,6 @@ public partial class FasterDbDictionary<TKey, TValue>
         /// cache is to be cleared.
         /// </summary>
         public void Dispose() => Session.Dispose();
-
-        /// <summary>
-        /// Synchronously wait for a task to complete.
-        /// </summary>
-        /// <remarks>
-        /// <para>
-        /// Operations in FASTER KV can become "pending" if they need
-        /// filesystem/device I/O.  The calling thread needs to
-        /// be blocked for <see cref="FasterDbDictionary{TKey, TValue}" />
-        /// to present a synchronous interface.
-        /// </para>
-        /// <para>
-        /// FASTER KV can report completion using direct callbacks,
-        /// but it does not propagate the status of delete and
-        /// upsert operations.  It appears to be an oversight
-        /// in its API.  Thus we must use the asynchronous version
-        /// of its APIs and wire synchronous waiting ourselves.
-        /// </para>
-        /// </remarks>
-        /// <typeparam name="T">The result from the asynchronous 
-        /// operation. </typeparam>
-        /// <param name="task">
-        /// The task to wait upon.  
-        /// </param>
-        /// <returns>
-        /// The result from <paramref name="task" /> once it completes.
-        /// If the task fails then its exception is propagated out.
-        /// </returns>
-        public T WaitForTask<T>(in ValueTask<T> task)
-            => task.Wait(monitor: Session);
     }
 
     /// <summary>

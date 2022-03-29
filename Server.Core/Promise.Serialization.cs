@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -79,9 +80,9 @@ public partial class Promise
     /// The de-serialized promise object.
     /// </returns>
     public static Promise Deserialize(PromiseDataSchemas schemas,
-                                      ReadOnlyMemory<byte> data)
+                                      ReadOnlySpan<byte> data)
     {
-        var header = PromiseSerializationHeader.ReadFrom(data.Span);
+        var header = PromiseSerializationHeader.ReadFrom(data);
         data = data[header.HeaderLength..];
 
         PromiseData? inputData = null;
@@ -90,14 +91,14 @@ public partial class Promise
         if (header.InputSchemaCode != 0)
         {
             var deserializer = schemas[header.InputSchemaCode];
-            inputData = deserializer.Invoke(data[0 .. (int)header.InputLength].Span);
+            inputData = deserializer.Invoke(data[0 .. (int)header.InputLength]);
             data = data[(int)header.InputLength..];
         }
 
         if (header.OutputSchemaCode != 0)
         {
             var deserializer = schemas[header.OutputSchemaCode];
-            outputData = deserializer.Invoke(data[0..(int)header.OutputLength].Span);
+            outputData = deserializer.Invoke(data[0..(int)header.OutputLength]);
         }
 
         return new Promise(DateTime.UtcNow, header.Id, inputData, outputData);
@@ -121,7 +122,7 @@ public struct PromiseSerializationInfo
     /// <summary>
     /// The total length, in bytes, of the serialization of the promise.
     /// </summary>
-    public long TotalLength => Header.TotalLength;
+    public readonly long TotalLength => Header.TotalLength;
 
     /// <summary>
     /// Serialize into a buffer allocated by the caller.
@@ -311,6 +312,10 @@ public struct PromiseSerializationHeader
     {
         if (!MemoryMarshal.TryRead(buffer, out PromiseSerializationHeader header))
             ThrowExceptionForTooSmallBuffer();
+
+        if (header.HeaderLength < Size)
+            throw new InvalidDataException("Header from promise serialization has an invalid length.  It is corrupted. ");
+
         return header;
     }
 
@@ -354,9 +359,18 @@ public struct PromiseSerializationHeader
     /// arguments.
     /// </returns>
     public static PromiseSerializationHeader AllocateForBlob(int length, byte status)
-        => new PromiseSerializationHeader
+    {
+        if (length < Size)
+        {
+            throw new InvalidOperationException(
+                "Attempt to initialize a promise blob onto a memory buffer " +
+                "that is sized too small. ");
+        }
+
+        return new PromiseSerializationHeader
         {
             InputLength = length,
             BlobStatus = status
         };
+    }
 }

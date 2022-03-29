@@ -1,32 +1,37 @@
-﻿using System;
-using System.Buffers;
+﻿using FASTER.core;
+using System;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Hearty.Server.FasterKV;
 
-// "Missing XML comment for publicly visible type or member"
-// Disabled until this library becomes less experimental
-#pragma warning disable CS1591
-
-public sealed class FasterDbPromiseStorage : PromiseStorage, IDisposable
+/// <summary>
+/// Storage of promises for the Hearty job server which is backed
+/// by a FASTER KV database.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The FASTER KV database can store its data in files.
+/// So promise data can exceed the amount of in-process (GC)
+/// memory available, and can persist when the job server
+/// restarts.
+/// </para>
+/// <para>
+/// The database only stores complete promises.  Incomplete
+/// promises always require an in-memory representation
+/// as <see cref="Promise" /> objects so that they can receive
+/// (asynchronous) results posted to them.
+/// </para>
+/// <para>
+/// Promise objects are pushed out of memory when the garbage
+/// collector sees they are not in use.  If they are retrieved
+/// again, they are re-materialized as objects from their
+/// serialized form in the FASTER KV database.
+/// </para>
+/// </remarks>
+public sealed partial class FasterDbPromiseStorage : PromiseStorage, IDisposable
 {
-    /// <summary>
-    /// Promises represented in serialized form in the Faster KV database.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// For performance reasons, <see cref="Promise" /> does not have a finalizer.
-    /// So it is not possible to serialize a promise object only when it is about
-    /// to be collected as garbage; the serialized form must be present in
-    /// the database at the same time as the live object in <see cref="_objects" />.
-    /// However, for persistence and disaster recovery, that is going to
-    /// be required anyway.
-    /// </para>
-    /// </remarks>
-    private readonly FasterDbDictionary<PromiseId, ReadOnlyMemory<byte>> _db;
-
     /// <summary>
     /// Promises that may have a current live representation as .NET objects.
     /// </summary>
@@ -39,19 +44,52 @@ public sealed class FasterDbPromiseStorage : PromiseStorage, IDisposable
     private readonly ConcurrentDictionary<PromiseId, GCHandle> _objects = new();
 
     /// <summary>
-    /// Needed to re-materialize promise objects from <see cref="_db" />.
+    /// Prepare to store promises in memory and in the database.
     /// </summary>
-    private readonly PromiseDataSchemas _schemas;
-
-    public FasterDbPromiseStorage(PromiseDataSchemas schemas)
+    /// <param name="schemas">
+    /// Data schemas required to re-materialize (de-serialize) promises
+    /// from the database.
+    /// </param>
+    /// <param name="fileOptions">
+    /// Options for the FASTER KV database.
+    /// </param>
+    public FasterDbPromiseStorage(PromiseDataSchemas schemas,
+                                  in FasterDbFileOptions fileOptions)
     {
-        _schemas = schemas;
-        _db = new(new FasterDbFileOptions
+        var logSettings = fileOptions.CreateFasterDbLogSettings();
+        try
         {
-            Path = string.Empty,
-            DeleteOnDispose = true,
-            Preallocate = true
-        });
+            _device = logSettings.LogDevice;
+
+            var indexSize =
+                Math.Min(1L << 40, Math.Max(fileOptions.HashIndexSize, 256));
+
+            _functions = new FunctionsImpl(schemas);
+            var blobHooks = new PromiseBlobVarLenStruct();
+
+            _sessionPool = new(new SessionPoolHooks(this));
+
+            _db = new FasterKV<PromiseId, PromiseBlob>(
+                    indexSize,
+                    logSettings,
+                    checkpointSettings: null,
+                    comparer: new FasterDbPromiseComparer(),
+                    variableLengthStructSettings: new()
+                    {
+                        valueLength = blobHooks
+                    });
+
+            _sessionVarLenSettings = new()
+            {
+                valueLength = blobHooks
+            };
+        }
+        catch
+        {
+            _db?.Dispose();
+            _device?.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
@@ -69,10 +107,11 @@ public sealed class FasterDbPromiseStorage : PromiseStorage, IDisposable
 
         if (canSerialize)
         {
-            // FIXME: have FASTER KV write to database page directly to avoid copying bytes
-            byte[] bytes = new byte[info.TotalLength];
-            info.Serialize(bytes);
-            _db.Add(promise.Id, new ReadOnlyMemory<byte>(bytes));
+            if (!DbTryAddValue(promise.Id, info))
+            {
+                throw new InvalidOperationException(
+                    "The promise already exists in the database. This should not happen. ");
+            }
         }
 
         var gcHandle = GCHandle.Alloc(promise, canSerialize ? GCHandleType.Weak
@@ -91,21 +130,16 @@ public sealed class FasterDbPromiseStorage : PromiseStorage, IDisposable
         return promise;
     }
 
-    /// <inheritdoc cref="IDisposable.Dispose" />
-    public void Dispose()
-    {
-        _db.Dispose();
-    }
-
     /// <inheritdoc />
     public override Promise? GetPromiseById(PromiseId id)
     {
         GCHandle gcHandle;
+        Promise? promise;
 
         // Get the live .NET object if it exists.
         if (_objects.TryGetValue(id, out gcHandle))
         {
-            var promise = Unsafe.As<Promise?>(gcHandle.Target);
+            promise = Unsafe.As<Promise?>(gcHandle.Target);
             if (promise is not null)
                 return promise;
         }
@@ -113,11 +147,9 @@ public sealed class FasterDbPromiseStorage : PromiseStorage, IDisposable
         // Otherwise, try getting from the database.
         // If it exists, de-serialize the data and then register
         // the live .NET object.
-        //
-        // FIXME: Also try to avoid double copying here
-        if (_db.TryGetValue(id, out var data))
+        promise = DbTryGetValue(id);
+        if (promise is not null)
         {
-            var promise = Promise.Deserialize(_schemas, data);
             gcHandle = GCHandle.Alloc(promise, GCHandleType.Weak);
 
             Promise? promiseLast = null;
@@ -149,6 +181,7 @@ public sealed class FasterDbPromiseStorage : PromiseStorage, IDisposable
         return null;
     }
 
+    /// <inheritdoc />
     public override void SchedulePromiseExpiry(Promise promise, DateTime expiry)
     {
         throw new NotImplementedException();

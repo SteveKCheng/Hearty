@@ -1,4 +1,5 @@
-﻿using System;
+﻿using FASTER.core;
+using System;
 
 namespace Hearty.Server.FasterKV;
 
@@ -102,4 +103,43 @@ public readonly struct FasterDbFileOptions
     /// </para>
     /// </remarks>
     public long HashIndexSize { get; init; }
+
+    /// <summary>
+    /// Translate (the simplified) settings in this structure to 
+    /// what FASTER KV's API accepts.
+    /// </summary>
+    internal LogSettings CreateFasterDbLogSettings()
+    {
+        var logSettings = new LogSettings();
+
+        logSettings.PageSizeBits =
+            Math.Min(26, Math.Max(9, this.PageLog2Size ?? 25));
+
+        logSettings.MemorySizeBits =
+            Math.Min(47, Math.Max(logSettings.PageSizeBits,
+                                  this.MemoryLog2Capacity));
+
+        if (this.Path is null)
+        {
+            logSettings.LogDevice = new NullDevice();
+        }
+        else
+        {
+            bool deleteOnClose = this.DeleteOnDispose;
+            var path = this.Path;
+            if (string.IsNullOrEmpty(path))
+            {
+                path = System.IO.Path.GetTempFileName();
+                deleteOnClose = true;
+            }
+
+            logSettings.LogDevice = Devices.CreateLogDevice(
+                    logPath: path,
+                    preallocateFile: this.Preallocate,
+                    deleteOnClose: deleteOnClose);
+
+        }
+
+        return logSettings;
+    }
 }

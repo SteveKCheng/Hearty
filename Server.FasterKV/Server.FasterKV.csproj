@@ -18,6 +18,7 @@
     <Compile Include="FasterDbDictionary.Iteration.cs" />
     <Compile Include="FasterDbFileOptions.cs" />
     <Compile Include="FasterDbPromiseComparer.cs" />
+    <Compile Include="FasterDbPromiseStorage.Db.cs" />
     <Compile Include="FasterDbPromiseStorage.cs" />
     <Compile Include="PromiseBlob.cs" />
     <Compile Include="TaskExtensions.cs" />
