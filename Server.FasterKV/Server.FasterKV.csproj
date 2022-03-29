@@ -19,6 +19,7 @@
     <Compile Include="FasterDbFileOptions.cs" />
     <Compile Include="FasterDbPromiseComparer.cs" />
     <Compile Include="FasterDbPromiseStorage.cs" />
+    <Compile Include="PromiseBlob.cs" />
     <Compile Include="ThreadLocalObjectPool.cs" />
   </ItemGroup>
 

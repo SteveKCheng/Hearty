@@ -131,8 +131,8 @@ public struct PromiseSerializationInfo
     /// of .NET's GC-managed memory.
     /// </remarks>
     /// <param name="buffer">
-    /// The buffer to write to.  This buffer is sized
-    /// to <see cref="TotalLength" />, and this method
+    /// The buffer to write to.  This buffer must be sized
+    /// at least <see cref="TotalLength" />, and this method
     /// shall write exactly that many bytes.
     /// </param>
     public readonly void Serialize(Span<byte> buffer)
@@ -189,13 +189,13 @@ public struct PromiseSerializationInfo
 /// public.
 /// </para>
 /// </remarks>
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
 public struct PromiseSerializationHeader
 {
     /// <summary>
     /// The total length, in bytes, of the serialization of the promise.
     /// </summary>
-    public long TotalLength => (long)HeaderLength + InputLength + OutputLength;
+    public readonly long TotalLength => (long)HeaderLength + InputLength + OutputLength;
 
     /// <summary>
     /// The length in bytes of this header.  
@@ -207,10 +207,22 @@ public struct PromiseSerializationHeader
     /// </remarks>
     internal ushort HeaderLength;
 
+    /// <summary>
+    /// Schema code for the serialization of the input data.
+    /// </summary>
     internal ushort InputSchemaCode;
 
+    /// <summary>
+    /// Schema code for the serialization of the output data.
+    /// </summary>
     internal ushort OutputSchemaCode;
 
+    /// <summary>
+    /// Schema code for the serialization of the metadata.
+    /// </summary>
+    /// <remarks>
+    /// Reserved; not used as currently promise objects do not store metadata.
+    /// </remarks>
     internal ushort MetadataSchemaCode;
 
     /// <summary>
@@ -244,17 +256,49 @@ public struct PromiseSerializationHeader
     /// </remarks>
     internal int OutputLength;
 
+    /// <summary>
+    /// The length in bytes of the serialization of the metadata
+    /// </summary>
+    /// <remarks>
+    /// Reserved; not used as currently promise objects do not store metadata.
+    /// </remarks>
     internal int MetadataLength;
 
     /// <summary>
-    /// Reserved for storing information about
+    /// Indicates if the input data is compressed and by what format.
+    /// </summary>
+    /// <remarks>
+    /// Reserved; currently no compression is implemented.
+    /// </remarks>
+    internal byte InputCompression;
+
+    /// <summary>
+    /// Indicates if the output data is compressed and by what format.
+    /// </summary>
+    /// <remarks>
+    /// Reserved; currently no compression is implemented.
+    /// </remarks>
+    internal byte OutputCompression;
+
+    /// <summary>
+    /// Indicates if the metadata is compressed and by what format.
+    /// </summary>
+    /// <remarks>
+    /// Reserved; currently no compression is implemented.
+    /// </remarks>
+    internal byte MetadataCompression;
+
+    /// <summary>
+    /// Reserved for storing status about
     /// the blob (in a database, etc.) that contains this header.
     /// </summary>
     /// <remarks>
     /// This field is not considered part of the serialized data
-    /// for the promise.
+    /// for the promise.  It is provided so that a blob
+    /// does not need to take up extra bytes (when padding is
+    /// taken into account) to store its flags.
     /// </remarks>
-    public uint BlobState;
+    public byte BlobStatus;
 
     internal ulong CreationTime;
 
@@ -292,4 +336,27 @@ public struct PromiseSerializationHeader
                          "for PromiseSerializationHeader. ",
                 paramName: "buffer");
     }
+
+    /// <summary>
+    /// Create a dummy header (for a database etc.)
+    /// indicating that space has been allocated for the serialized data 
+    /// but that data has not yet been produced.
+    /// </summary>
+    /// <param name="length">
+    /// The length, in bytes, to set for 
+    /// <see cref="PromiseSerializationHeader.TotalLength" />.
+    /// </param>
+    /// <param name="status">
+    /// Sets <see cref="PromiseSerializationHeader.BlobStatus" />.
+    /// </param>
+    /// <returns>
+    /// A dummy header that has its fields set as indicated by the
+    /// arguments.
+    /// </returns>
+    public static PromiseSerializationHeader AllocateForBlob(int length, byte status)
+        => new PromiseSerializationHeader
+        {
+            InputLength = length,
+            BlobStatus = status
+        };
 }
