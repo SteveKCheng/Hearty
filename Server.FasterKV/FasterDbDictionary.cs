@@ -224,6 +224,7 @@ public partial class FasterDbDictionary<TKey, TValue>
                         logPath: path,
                         preallocateFile: fileOptions.Preallocate,
                         deleteOnClose: deleteOnClose);
+
             }
 
             var logSettings = new LogSettings
@@ -558,34 +559,7 @@ public partial class FasterDbDictionary<TKey, TValue>
         /// If the task fails then its exception is propagated out.
         /// </returns>
         public T WaitForTask<T>(in ValueTask<T> task)
-        {
-            if (task.IsCompleted)
-                return task.Result;
-
-            var awaiter = task.ConfigureAwait(false).GetAwaiter();
-
-            var session = Session;
-            lock (session)
-            {
-                awaiter.UnsafeOnCompleted(() =>
-                {
-                    // Will be a recursive lock if this callback gets
-                    // synchronously invoked.
-                    //
-                    // PulseAll is used instead of Pulse to tolerate
-                    // accidental sharing of the lock object.
-                    lock (session)
-                        Monitor.PulseAll(session);
-                });
-
-                // Block until the task is complete.  This loop should
-                // only execute once if there are no spurious wake-ups.
-                while (!task.IsCompleted)
-                    Monitor.Wait(session);
-            }
-
-            return awaiter.GetResult();
-        }
+            => task.Wait(monitor: Session);
     }
 
     /// <summary>
