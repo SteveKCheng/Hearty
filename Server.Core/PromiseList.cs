@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Primitives;
 using System;
 using System.Buffers;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Pipelines;
@@ -487,4 +488,94 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
         };
 
     #endregion
+
+    /// <inheritdoc />
+    public override bool TryPrepareSerialization(out PromiseDataSerializationInfo info)
+    {
+        if (!IsComplete)
+        {
+            info = default;
+            return false;
+        }
+
+        info = new PromiseDataSerializationInfo
+        {
+            PayloadLength = checked((int)(_promiseIdTotal * (sizeof(ulong) + sizeof(int)))),
+            SchemaCode = SchemaCode,
+            State = this,
+            Serializer = static (in PromiseDataSerializationInfo info, Span<byte> buffer)
+                            => ((PromiseList)info.State!).Serialize(buffer)
+        };
+
+        return true;
+    }
+
+    private void Serialize(Span<byte> buffer)
+    {
+        int count = _promiseIdTotal;
+
+        var idBuffer = buffer.Slice(0, count * sizeof(ulong));
+        var ordinalBuffer = buffer.Slice(count * sizeof(ulong), count * sizeof(int));
+
+        for (int index = 0; index < count; ++index)
+        {
+            var t = _promiseIds.TryGetMemberAsync(index, default);
+            if (!t.IsCompleted)
+                throw new InvalidOperationException("PromiseList must be completed to be serialized. ");
+
+            var ((ordinal, id), isValid) = t.Result;
+
+            if (!isValid)
+                throw new InvalidOperationException("Internal count in PromiseList is inconsistent. ");
+
+            BinaryPrimitives.WriteUInt64LittleEndian(idBuffer[(index * sizeof(ulong))..],
+                                                     id.RawInteger);
+
+            BinaryPrimitives.WriteInt32LittleEndian(ordinalBuffer[(index * sizeof(int))..],
+                                                    ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Schema code for serialization.
+    /// </summary>
+    public const ushort SchemaCode = (byte)'P' | ((byte)'L' << 8);
+
+    /// <summary>
+    /// De-serialize an instance of this class
+    /// from its serialization created from <see cref="Serialize" />.
+    /// </summary>
+    /// <param name="promiseStorage">
+    /// Needed to look up promises from their IDs stored in the serialization.
+    /// </param>
+    /// <param name="buffer">
+    /// The buffer of bytes to de-serialize from.
+    /// </param>
+    public static PromiseList Deserialize(PromiseStorage promiseStorage, ReadOnlySpan<byte> buffer)
+    {
+        var self = new PromiseList(promiseStorage);
+
+        int count = Math.DivRem(buffer.Length, sizeof(ulong) + sizeof(int), out int remainder);
+        if (remainder != 0)
+            throw new InvalidDataException("Length of serialized data is wrong for an instance of PromiseList. ");
+
+        var idBuffer = buffer.Slice(0, count * sizeof(ulong));
+        var ordinalBuffer = buffer.Slice(count * sizeof(ulong), count * sizeof(int));
+
+        for (int index = 0; index < count; ++index)
+        {
+            ulong id = BinaryPrimitives.ReadUInt64LittleEndian(idBuffer[(index * sizeof(ulong))..]);
+            int ordinal = BinaryPrimitives.ReadInt32LittleEndian(ordinalBuffer[(index * sizeof(ulong))..]);
+            self._promiseIds.TrySetMember(index, KeyValuePair.Create(ordinal, new PromiseId(id)));
+        }
+
+        self._committedCount = count;
+        self._transientCount = 0;
+        self._promisesSeen = count;
+        self._promiseIdTotal = count;
+
+        // FIXME _completionException not serialized
+
+        return self;
+    }
 }
