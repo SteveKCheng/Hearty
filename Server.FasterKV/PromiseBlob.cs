@@ -194,8 +194,7 @@ internal struct PromiseBlob
         fixed (void* p = buffer)
         {
             ref var blob = ref Unsafe.AsRef<PromiseSerializationHeader>(p);
-            blob = PromiseSerializationHeader.AllocateForBlob(
-                    buffer.Length, 0);
+            blob = PromiseSerializationHeader.AllocateForBlob(buffer.Length);
         }
     }
 }

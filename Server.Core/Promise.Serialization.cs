@@ -196,6 +196,10 @@ public struct PromiseSerializationHeader
     /// <summary>
     /// The total length, in bytes, of the serialization of the promise.
     /// </summary>
+    /// <remarks>
+    /// This property reports the allocated size of the blob
+    /// if this header comes from <see cref="AllocateForBlob(int)" />.
+    /// </remarks>
     public readonly long TotalLength => (long)HeaderLength + InputLength + OutputLength;
 
     /// <summary>
@@ -240,6 +244,14 @@ public struct PromiseSerializationHeader
     /// This field is zero if no completed input has been stored
     /// in the <see cref="Promise" /> object.  Otherwise it
     /// is populated from <see cref="PromiseDataSerializationInfo.PayloadLength" />.
+    /// </para>
+    /// <para>
+    /// This field is also used for the dummy header that comes
+    /// out of <see cref="AllocateForBlob" />.  For such a dummy
+    /// header, <see cref="HeaderLength" /> is set to zero 
+    /// (indicating the data is invalid), but the allocated size
+    /// is set in this field so that <see cref="TotalLength" />
+    /// returns the allocated size.
     /// </para>
     /// </remarks>
     internal int InputLength;
@@ -290,16 +302,12 @@ public struct PromiseSerializationHeader
     internal byte MetadataCompression;
 
     /// <summary>
-    /// Reserved for storing status about
-    /// the blob (in a database, etc.) that contains this header.
+    /// Reserved for flags that might be stored about the promise.
     /// </summary>
     /// <remarks>
-    /// This field is not considered part of the serialized data
-    /// for the promise.  It is provided so that a blob
-    /// does not need to take up extra bytes (when padding is
-    /// taken into account) to store its flags.
+    /// Currently there are no flags.  This field is set to zero.
     /// </remarks>
-    public byte BlobStatus;
+    internal byte Flags;
 
     internal ulong CreationTime;
 
@@ -351,14 +359,11 @@ public struct PromiseSerializationHeader
     /// The length, in bytes, to set for 
     /// <see cref="PromiseSerializationHeader.TotalLength" />.
     /// </param>
-    /// <param name="status">
-    /// Sets <see cref="PromiseSerializationHeader.BlobStatus" />.
-    /// </param>
     /// <returns>
     /// A dummy header that has its fields set as indicated by the
     /// arguments.
     /// </returns>
-    public static PromiseSerializationHeader AllocateForBlob(int length, byte status)
+    public static PromiseSerializationHeader AllocateForBlob(int length)
     {
         if (length < Size)
         {
@@ -369,8 +374,7 @@ public struct PromiseSerializationHeader
 
         return new PromiseSerializationHeader
         {
-            InputLength = length,
-            BlobStatus = status
+            InputLength = length
         };
     }
 }
