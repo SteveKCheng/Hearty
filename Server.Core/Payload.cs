@@ -168,6 +168,7 @@ public sealed class Payload : PromiseData
 
         var flags = IsFailure ? Flags.IsFailure : Flags.Normal;
         BinaryPrimitives.WriteInt32LittleEndian(buffer, (int)flags);
+        buffer = buffer[sizeof(int)..];
 
         BinaryPrimitives.WriteInt32LittleEndian(buffer, (int)Body.Length);
         buffer = buffer[sizeof(int)..];
@@ -184,7 +185,7 @@ public sealed class Payload : PromiseData
     /// </param>
     public static Payload Deserialize(ReadOnlySpan<byte> buffer)
     {
-        int contentTypeStringLength = BinaryPrimitives.ReadInt32BigEndian(buffer);
+        int contentTypeStringLength = BinaryPrimitives.ReadInt32LittleEndian(buffer);
         buffer = buffer[sizeof(int)..];
 
         var contentTypeString = Encoding.ASCII.GetString(buffer[0..contentTypeStringLength]);
