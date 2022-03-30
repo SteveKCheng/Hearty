@@ -28,6 +28,7 @@
     <Compile Include="AsyncBarrier.cs" />
     <Compile Include="BTreeTests.cs" />
     <Compile Include="ContentNegotiationTests.cs" />
+    <Compile Include="FasterDbPromisesTests.cs" />
     <Compile Include="FasterKVTests.cs" />
     <Compile Include="PriorityHeapTests.cs" />
     <Compile Include="SchedulingTests.Exact.cs" />
