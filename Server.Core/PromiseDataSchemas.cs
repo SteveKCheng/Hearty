@@ -47,6 +47,12 @@ public sealed class PromiseDataSchemas : IReadOnlyDictionary<ushort, PromiseData
     }
 
     /// <summary>
+    /// Instantiate the builder to incrementally register entries into.
+    /// </summary>
+    public static ImmutableDictionary<ushort, PromiseDataDeserializer>.Builder CreateBuilder()
+        => ImmutableDictionary.CreateBuilder<ushort, PromiseDataDeserializer>();
+
+    /// <summary>
     /// Get the de-serializer corresponding to a schema code.
     /// </summary>
     /// <param name="key">The schema code. </param>
