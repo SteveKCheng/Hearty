@@ -334,4 +334,13 @@ public sealed partial class FasterDbPromiseStorage
 
         return status == Status.NOTFOUND;
     }
+
+    /// <summary>
+    /// Get the number of entries in the FASTER KV database.
+    /// </summary>
+    /// <remarks>
+    /// Currently, getting this count requires scanning the entire
+    /// hash index.  It is not a fast O(1) operation.
+    /// </remarks>
+    public long GetDatabaseEntriesCount() => _db.EntryCount;
 }
