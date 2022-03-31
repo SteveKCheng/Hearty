@@ -544,7 +544,7 @@ namespace Hearty.Server.WebApi
                     = parameters.PromiseId.ToString();
             }
 
-            if (parameters.Timeout == TimeSpan.Zero && !promise.IsCompleted)
+            if (parameters.Timeout == TimeSpan.Zero && !promise.HasOutput)
             {
                 httpResponse.StatusCode = StatusCodes.Status204NoContent;
                 return;

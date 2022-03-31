@@ -440,7 +440,7 @@ public partial class Promise
         /// </para>
         /// </remarks>
         private CallbackStage Poll()
-            => Promise.IsCompleted ? CallbackStage.Completed :
+            => Promise.HasOutput ? CallbackStage.Completed :
                CancellationToken.IsCancellationRequested ? CallbackStage.Cancelled :
                _timeoutTrigger.Token.IsCancellationRequested ? CallbackStage.TimedOut :
                CallbackStage.Start;

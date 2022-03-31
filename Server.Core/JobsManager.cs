@@ -345,7 +345,7 @@ public class JobsManager : IRemoteJobCancellation
             // exception.  Fortunately, cancellation should be the
             // only case where the promise would come out as 
             // uncompleted, which makes it easy to check for.
-            if (promise.IsCompleted && !promise.IsTransient)
+            if (promise.HasOutput && !promise.IsTransient)
                 return null;
 
             // We are careful to not invoke this callback inside the lock
@@ -378,7 +378,7 @@ public class JobsManager : IRemoteJobCancellation
         {
             // Check again if the promise completed, and if so,
             // the caller should not enqueue the message.
-            if (promise.IsCompleted)
+            if (promise.HasOutput)
                 return null;
         }
 
@@ -406,7 +406,7 @@ public class JobsManager : IRemoteJobCancellation
         outputTask = null;
 
         // Do not register any job if the promise is already complete
-        if (promise.IsCompleted)
+        if (promise.HasOutput)
             return null;
 
         var promiseId = promise.Id;

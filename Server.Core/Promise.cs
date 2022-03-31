@@ -56,16 +56,7 @@ public partial class Promise
     /// This property returns null if the promise has 
     /// not been fulfilled yet.
     /// </remarks>
-    public PromiseData? ResultOutput
-    {
-        get
-        {
-            if (_isFulfilled == 0)
-                return null;
-
-            return _resultOutput;
-        }
-    }
+    public PromiseData? ResultOutput => Volatile.Read(ref _resultOutput);
 
     /// <summary>
     /// The time, in UTC, when this promise was first created.
@@ -78,7 +69,13 @@ public partial class Promise
     /// </summary>
     public PromiseData? RequestOutput { get; internal set; }
 
-    public bool IsCompleted => _isFulfilled != 0;
+    public bool IsCompleted => HasOutput;
+
+    /// <summary>
+    /// Whether this promise has an output object, which may
+    /// not necessarily be complete.
+    /// </summary>
+    public bool HasOutput => _resultOutput is not null;
 
     /// <summary>
     /// True if the promise has completed and its output is transient.
@@ -117,7 +114,6 @@ public partial class Promise
         {
             _resultOutput = output;
             _hasAsyncResult = 1;
-            _isFulfilled = 1;
         }
     }
 
@@ -128,6 +124,10 @@ public partial class Promise
     /// </summary>
     public override int GetHashCode() => Id.GetHashCode();
 
+    /// <summary>
+    /// The output data stored by this promise.  Null if it has not
+    /// been posted yet.
+    /// </summary>
     private PromiseData? _resultOutput;
 
     /// <summary>
@@ -144,10 +144,11 @@ public partial class Promise
     /// </remarks>
     internal void PostResultInternal(PromiseData result)
     {
-        Debug.Assert(_isFulfilled == 0);
+        Debug.Assert(_resultOutput is null);
 
-        _resultOutput = result;
-        _isFulfilled = 1;   // Implies release fence to publish _resultOutput
+        // This explicit "volatile" write is not necessary anymore under
+        // CLR's new memory model, but do it anyway to call attention to it.
+        Volatile.Write(ref _resultOutput, result);
 
         // Loop through subscribers to wake up one by one.
         // Releases the list lock after de-queuing each node,
@@ -269,8 +270,6 @@ public partial class Promise
 
         FireUpdate();
     }
-
-    private volatile int _isFulfilled;
 
     /// <summary>
     /// Set to one the first time <see cref="AwaitAndPostResult" />
