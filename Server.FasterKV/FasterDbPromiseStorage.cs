@@ -30,7 +30,8 @@ namespace Hearty.Server.FasterKV;
 /// serialized form in the FASTER KV database.
 /// </para>
 /// </remarks>
-public sealed partial class FasterDbPromiseStorage : PromiseStorage, IDisposable
+public sealed partial class FasterDbPromiseStorage 
+    : PromiseStorage, IPromiseDataFixtures, IDisposable
 {
     /// <summary>
     /// Promises that may have a current live representation as .NET objects.
@@ -56,6 +57,8 @@ public sealed partial class FasterDbPromiseStorage : PromiseStorage, IDisposable
     public FasterDbPromiseStorage(PromiseDataSchemas schemas,
                                   in FasterDbFileOptions fileOptions)
     {
+        _schemas = schemas;
+
         var logSettings = fileOptions.CreateFasterDbLogSettings();
         try
         {
@@ -64,7 +67,7 @@ public sealed partial class FasterDbPromiseStorage : PromiseStorage, IDisposable
             var indexSize =
                 Math.Min(1L << 40, Math.Max(fileOptions.HashIndexSize, 256));
 
-            _functions = new FunctionsImpl(schemas);
+            _functions = new FunctionsImpl(this);
             var blobHooks = new PromiseBlobVarLenStruct();
 
             _sessionPool = new(new SessionPoolHooks(this));
@@ -96,6 +99,12 @@ public sealed partial class FasterDbPromiseStorage : PromiseStorage, IDisposable
     /// Limit on the number of bytes that serializing a promise results in.
     /// </summary>
     private const int MaxSerializationLength = (1 << 24);
+
+    private readonly PromiseDataSchemas _schemas;
+
+    PromiseStorage IPromiseDataFixtures.PromiseStorage => this;
+
+    PromiseDataSchemas IPromiseDataFixtures.Schemas => _schemas;
 
     /// <inheritdoc />
     public override Promise CreatePromise(PromiseData? input, PromiseData? output = null)

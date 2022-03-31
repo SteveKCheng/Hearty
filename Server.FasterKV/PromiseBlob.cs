@@ -159,21 +159,22 @@ internal struct PromiseBlob
     /// <summary>
     /// De-serialize this blob into a <see cref="Promise" /> object.
     /// </summary>
-    /// <param name="schemas">
-    /// Schemas required to interpret serialized payloads.
+    /// <param name="fixtures">
+    /// Dependencies needed to revive the promise object,
+    /// including the data schema registry.
     /// </param>
     /// <remarks>
     /// The promise object obtained from <see cref="Promise.Deserialize" />
     /// applied to this blob.
     /// </remarks>
-    public readonly unsafe Promise RestoreObject(PromiseDataSchemas schemas)
+    public readonly unsafe Promise RestoreObject(IPromiseDataFixtures fixtures)
     {
         int length = TotalLength;
 
         fixed (void* ptr = &this)
         {
             var buffer = new ReadOnlySpan<byte>(ptr, length);
-            return Promise.Deserialize(schemas, buffer);
+            return Promise.Deserialize(fixtures, buffer);
         }
     }
 

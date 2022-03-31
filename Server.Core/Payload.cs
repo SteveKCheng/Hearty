@@ -180,10 +180,15 @@ public sealed class Payload : PromiseData
     /// De-serialize an instance of <see cref="Payload" />
     /// from its serialization created from <see cref="Serialize" />.
     /// </summary>
+    /// <param name="fixtures">
+    /// Unused, but required for the function signature to conform
+    /// to <see cref="PromiseDataDeserializer" />.
+    /// </param>
     /// <param name="buffer">
     /// The buffer of bytes to de-serialize from.
     /// </param>
-    public static Payload Deserialize(ReadOnlySpan<byte> buffer)
+    public static Payload Deserialize(IPromiseDataFixtures fixtures, 
+                                      ReadOnlySpan<byte> buffer)
     {
         int contentTypeStringLength = BinaryPrimitives.ReadInt32LittleEndian(buffer);
         buffer = buffer[sizeof(int)..];

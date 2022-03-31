@@ -83,8 +83,13 @@ public sealed class PromiseDataSchemas : IReadOnlyDictionary<ushort, PromiseData
 }
 
 /// <summary>
-/// Materializes promise data from a sequence of bytes, i.e. de-serializes.
+/// Revives promise data from a sequence of bytes into its original
+/// .NET object, i.e. de-serializes.
 /// </summary>
+/// <param name="fixtures">
+/// Dependencies that may be required to revive the promise data
+/// object.
+/// </param>
 /// <param name="buffer">
 /// Where the payload for the serialized promise data should be read from.
 /// </param>
@@ -116,7 +121,8 @@ public sealed class PromiseDataSchemas : IReadOnlyDictionary<ushort, PromiseData
 /// <returns>
 /// The re-materialized instance of <see cref="PromiseData" />.
 /// </returns>
-public delegate PromiseData PromiseDataDeserializer(ReadOnlySpan<byte> buffer);
+public delegate PromiseData PromiseDataDeserializer(IPromiseDataFixtures fixtures,
+                                                    ReadOnlySpan<byte> buffer);
 
 /// <summary>
 /// Writes out the serialized (promise) data into a buffer, synchronously.
@@ -210,4 +216,34 @@ public readonly struct PromiseDataSerializationInfo
     /// to an array pool, etc.
     /// </remarks>
     public Action<object>? StateDisposal { get; init; }
+}
+
+/// <summary>
+/// Injects services required by instances of <see cref="PromiseData" />.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This interface may be necessary when de-serializing some
+/// derived classes of <see cref="PromiseData" />.  If the 
+/// (serialized) data contains references to other promises
+/// (by ID), the new instance needs to be able to retrieve
+/// them.
+/// </para>
+/// <para>
+/// Applications may derive from this interface to add 
+/// dependencies for their custom derived classes of
+/// <see cref="PromiseData" />.
+/// </para>
+/// </remarks>
+public interface IPromiseDataFixtures
+{
+    /// <summary>
+    /// The storage provider that the relevant promises come from.
+    /// </summary>
+    public PromiseStorage PromiseStorage { get; }
+
+    /// <summary>
+    /// The schemas for serialized data that have been registered.
+    /// </summary>
+    public PromiseDataSchemas Schemas { get; }
 }

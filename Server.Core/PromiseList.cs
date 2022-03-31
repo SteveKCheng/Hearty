@@ -609,14 +609,17 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
     /// De-serialize an instance of this class
     /// from its serialization created from <see cref="Serialize" />.
     /// </summary>
-    /// <param name="promiseStorage">
+    /// <param name="fixtures">
     /// Needed to look up promises from their IDs stored in the serialization.
     /// </param>
     /// <param name="buffer">
     /// The buffer of bytes to de-serialize from.
     /// </param>
-    public static PromiseList Deserialize(PromiseStorage promiseStorage, ReadOnlySpan<byte> buffer)
+    public static PromiseList Deserialize(IPromiseDataFixtures fixtures, 
+                                          ReadOnlySpan<byte> buffer)
     {
+        var promiseStorage = fixtures.PromiseStorage;
+
         // Read counts
         int committedCount = BinaryPrimitives.ReadInt32LittleEndian(buffer);
         int transientCount = BinaryPrimitives.ReadInt32LittleEndian(buffer[sizeof(int)..]);
@@ -653,7 +656,7 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
         PromiseExceptionalData? exceptionData = null;
         var exceptionBuffer = buffer[(headerOffset + idBufferSize + ordinalBufferSize)..];
         if (exceptionBuffer.Length > 0)
-            exceptionData = PromiseExceptionalData.Deserialize(exceptionBuffer);
+            exceptionData = PromiseExceptionalData.Deserialize(fixtures, exceptionBuffer);
 
         self._promiseIds.TryComplete(count, exceptionData);
         return self;

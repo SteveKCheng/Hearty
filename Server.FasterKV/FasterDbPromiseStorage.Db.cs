@@ -67,18 +67,18 @@ public sealed partial class FasterDbPromiseStorage
         /// Needed to re-materialize promise objects from their blobs
         /// in the FASTER KV database.
         /// </summary>
-        private readonly PromiseDataSchemas _schemas;
+        private readonly IPromiseDataFixtures _fixtures;
 
-        public FunctionsImpl(PromiseDataSchemas schemas) : base(locking: false)
+        public FunctionsImpl(IPromiseDataFixtures fixtures) : base(locking: false)
         {
-            _schemas = schemas;
+            _fixtures = fixtures;
         }
 
         public override void SingleReader(ref PromiseId key, ref DbInput input, ref PromiseBlob value, ref Promise? output)
-            => output = value.RestoreObject(_schemas);
+            => output = value.RestoreObject(_fixtures);
 
         public override void ConcurrentReader(ref PromiseId key, ref DbInput input, ref PromiseBlob value, ref Promise? output)
-            => output = value.RestoreObject(_schemas);
+            => output = value.RestoreObject(_fixtures);
 
         public override void SingleWriter(ref PromiseId key, ref PromiseBlob src, ref PromiseBlob dst)
             => src.CopyTo(ref dst);
@@ -101,7 +101,7 @@ public sealed partial class FasterDbPromiseStorage
         /// </remarks>
         public override bool InPlaceUpdater(ref PromiseId key, ref DbInput input, ref PromiseBlob value, ref Promise? output)
         {
-            output = value.RestoreObject(_schemas);
+            output = value.RestoreObject(_fixtures);
             return true;
         }
 

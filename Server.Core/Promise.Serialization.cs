@@ -69,9 +69,9 @@ public partial class Promise
     /// <see cref="PromiseSerializationInfo.Serialize" />
     /// has written.
     /// </summary>
-    /// <param name="schemas">
-    /// Mapping of schema codes required to instantiate the correct
-    /// derived classes of <see cref="PromiseData" />.
+    /// <param name="fixtures">
+    /// Dependencies needed to revive the promise object,
+    /// including the data schema registry.
     /// </param>
     /// <param name="data">
     /// The serialized bytes of the promise.
@@ -79,9 +79,11 @@ public partial class Promise
     /// <returns>
     /// The de-serialized promise object.
     /// </returns>
-    public static Promise Deserialize(PromiseDataSchemas schemas,
+    public static Promise Deserialize(IPromiseDataFixtures fixtures,
                                       ReadOnlySpan<byte> data)
     {
+        var schemas = fixtures.Schemas;
+
         var header = PromiseSerializationHeader.ReadFrom(data);
         data = data[header.HeaderLength..];
 
@@ -91,14 +93,16 @@ public partial class Promise
         if (header.InputSchemaCode != 0)
         {
             var deserializer = schemas[header.InputSchemaCode];
-            inputData = deserializer.Invoke(data[0 .. (int)header.InputLength]);
+            inputData = deserializer.Invoke(fixtures, 
+                                            data[0 .. (int)header.InputLength]);
             data = data[(int)header.InputLength..];
         }
 
         if (header.OutputSchemaCode != 0)
         {
             var deserializer = schemas[header.OutputSchemaCode];
-            outputData = deserializer.Invoke(data[0..(int)header.OutputLength]);
+            outputData = deserializer.Invoke(fixtures, 
+                                             data[0..(int)header.OutputLength]);
         }
 
         return new Promise(DateTime.UtcNow, header.Id, inputData, outputData);

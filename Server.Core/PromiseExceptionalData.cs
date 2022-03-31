@@ -237,10 +237,15 @@ public sealed class PromiseExceptionalData : PromiseData
     /// De-serialize an instance of this class
     /// from its serialization created from <see cref="Serialize" />.
     /// </summary>
+    /// <param name="fixtures">
+    /// Unused, but required for the function signature to conform
+    /// to <see cref="PromiseDataDeserializer" />.
+    /// </param>
     /// <param name="buffer">
     /// The buffer of bytes to de-serialize from.
     /// </param>
-    public static PromiseExceptionalData Deserialize(ReadOnlySpan<byte> buffer)
+    public static PromiseExceptionalData Deserialize(IPromiseDataFixtures fixtures,
+                                                     ReadOnlySpan<byte> buffer)
     {
         // Need to copy the buffer since we save the MessagePack serialization
         // inside the new object.
