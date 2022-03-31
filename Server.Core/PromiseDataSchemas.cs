@@ -21,6 +21,15 @@ public sealed class PromiseDataSchemas : IReadOnlyDictionary<ushort, PromiseData
     private readonly ImmutableDictionary<ushort, PromiseDataDeserializer> _entries;
 
     /// <summary>
+    /// Construct the mapping of schema codes
+    /// for the core sub-classes of <see cref="PromiseData" /> only.
+    /// </summary>
+    public PromiseDataSchemas()
+        : this(CreateBuilderWithDefaults())
+    {
+    }
+
+    /// <summary>
     /// Construct the mapping of schema codes in one shot.
     /// </summary>
     /// <param name="entries">
@@ -51,6 +60,20 @@ public sealed class PromiseDataSchemas : IReadOnlyDictionary<ushort, PromiseData
     /// </summary>
     public static ImmutableDictionary<ushort, PromiseDataDeserializer>.Builder CreateBuilder()
         => ImmutableDictionary.CreateBuilder<ushort, PromiseDataDeserializer>();
+
+    /// <summary>
+    /// Instantiate the builder to incrementally register entries into,
+    /// with the entries for the core sub-classes of <see cref="PromiseData" />
+    /// populated.
+    /// </summary>
+    public static ImmutableDictionary<ushort, PromiseDataDeserializer>.Builder CreateBuilderWithDefaults()
+    {
+        var builder = ImmutableDictionary.CreateBuilder<ushort, PromiseDataDeserializer>();
+        builder.Add(Payload.SchemaCode, Payload.Deserialize);
+        builder.Add(PromiseExceptionalData.SchemaCode, PromiseExceptionalData.Deserialize);
+        builder.Add(PromiseList.SchemaCode, PromiseList.Deserialize);
+        return builder;
+    }
 
     /// <summary>
     /// Get the de-serializer corresponding to a schema code.
