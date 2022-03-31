@@ -551,7 +551,7 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
         }
 
         PromiseDataSerializationInfo exceptionInfo = default;
-        if (ExceptionData is { } e && !e.TryPrepareSerialization(out exceptionInfo))
+        if (ExceptionData?.TryPrepareSerialization(out exceptionInfo) == false)
         {
             info = default;
             return false;
@@ -619,7 +619,7 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
         }
 
         // Serialize termination exception, if any
-        if (ExceptionData is { } e && e.TryPrepareSerialization(out var exceptionInfo))
+        if (ExceptionData?.TryPrepareSerialization(out var exceptionInfo) == true)
         {
             exceptionInfo.Serializer!.Invoke(
                 exceptionInfo,
