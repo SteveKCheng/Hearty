@@ -245,7 +245,7 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
     /// has completed, to free up memory.
     /// </para>
     /// </remarks>
-    private Dictionary<int, Promise>? _outstandingPromises = new(capacity: 64);
+    private Dictionary<int, Promise>? _outstandingPromises;
 
     /// <summary>
     /// The current count of items seen from calls to
@@ -299,6 +299,15 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
     /// they are set through <see cref="IPromiseListBuilder" />.
     /// </param>
     public PromiseList(PromiseStorage promiseStorage)
+        : this(promiseStorage, true)
+    {
+        _outstandingPromises = new(capacity: 64);
+    }
+
+    /// <summary>
+    /// Construct this object partially, for de-serialization.
+    /// </summary>
+    private PromiseList(PromiseStorage promiseStorage, bool _)
     {
         _promiseStorage = promiseStorage;
     }
@@ -514,9 +523,32 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
             return false;
         }
 
+        PromiseDataSerializationInfo exceptionInfo = default;
+        if (ExceptionData is { } e && !e.TryPrepareSerialization(out exceptionInfo))
+        {
+            info = default;
+            return false;
+        }
+
+        int count = _promiseIdTotal;
+
+        // Schema:
+        //
+        //  _commitCount    : int
+        //  _transientCount : int
+        //  ids             : PromiseId[_promiseIdTotal]
+        //  ordinals        : int[_promiseIdTotal]
+        //  exceptionData   : byte[exceptionInfo.PayloadLength]
+
+        const int headerOffset = 2 * sizeof(int);
+        int idBufferSize = count * sizeof(ulong);
+        int ordinalBufferSize = count * sizeof(int);
+
         info = new PromiseDataSerializationInfo
         {
-            PayloadLength = checked((int)(_promiseIdTotal * (sizeof(ulong) + sizeof(int)))),
+            PayloadLength = checked(
+                headerOffset + idBufferSize + ordinalBufferSize +
+                exceptionInfo.PayloadLength),
             SchemaCode = SchemaCode,
             State = this,
             Serializer = static (in PromiseDataSerializationInfo info, Span<byte> buffer)
@@ -528,11 +560,19 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
 
     private void Serialize(Span<byte> buffer)
     {
+        BinaryPrimitives.WriteInt32LittleEndian(buffer, _committedCount);
+        BinaryPrimitives.WriteInt32LittleEndian(buffer[sizeof(int)..], _transientCount);
+
         int count = _promiseIdTotal;
 
-        var idBuffer = buffer.Slice(0, count * sizeof(ulong));
-        var ordinalBuffer = buffer.Slice(count * sizeof(ulong), count * sizeof(int));
+        const int headerOffset = 2 * sizeof(int);
+        int idBufferSize = count * sizeof(ulong);
+        int ordinalBufferSize = count * sizeof(int);
 
+        var idBuffer = buffer.Slice(headerOffset, idBufferSize);
+        var ordinalBuffer = buffer.Slice(headerOffset + idBufferSize, ordinalBufferSize);
+
+        // Serialize list of promises
         for (int index = 0; index < count; ++index)
         {
             var t = _promiseIds.TryGetMemberAsync(index, default);
@@ -550,12 +590,20 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
             BinaryPrimitives.WriteInt32LittleEndian(ordinalBuffer[(index * sizeof(int))..],
                                                     ordinal);
         }
+
+        // Serialize termination exception, if any
+        if (ExceptionData is { } e && e.TryPrepareSerialization(out var exceptionInfo))
+        {
+            exceptionInfo.Serializer!.Invoke(
+                exceptionInfo,
+                buffer[(headerOffset + idBufferSize + ordinalBufferSize)..]);
+        }
     }
 
     /// <summary>
     /// Schema code for serialization.
     /// </summary>
-    public const ushort SchemaCode = (byte)'P' | ((byte)'L' << 8);
+    public const ushort SchemaCode = (byte)'L' | ((byte)'i' << 8);
 
     /// <summary>
     /// De-serialize an instance of this class
@@ -569,15 +617,31 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
     /// </param>
     public static PromiseList Deserialize(PromiseStorage promiseStorage, ReadOnlySpan<byte> buffer)
     {
-        var self = new PromiseList(promiseStorage);
+        // Read counts
+        int committedCount = BinaryPrimitives.ReadInt32LittleEndian(buffer);
+        int transientCount = BinaryPrimitives.ReadInt32LittleEndian(buffer[sizeof(int)..]);
+        if (committedCount < 0 || transientCount < 0)
+            throw new InvalidDataException("The counts of promises are the serialized PromiseList is invalid. ");
 
-        int count = Math.DivRem(buffer.Length, sizeof(ulong) + sizeof(int), out int remainder);
-        if (remainder != 0)
-            throw new InvalidDataException("Length of serialized data is wrong for an instance of PromiseList. ");
+        int count = checked(committedCount + transientCount);
 
-        var idBuffer = buffer.Slice(0, count * sizeof(ulong));
-        var ordinalBuffer = buffer.Slice(count * sizeof(ulong), count * sizeof(int));
+        const int headerOffset = 2 * sizeof(int);
+        int idBufferSize = count * sizeof(ulong);
+        int ordinalBufferSize = count * sizeof(int);
 
+        var idBuffer = buffer.Slice(headerOffset, idBufferSize);
+        var ordinalBuffer = buffer.Slice(headerOffset + idBufferSize, ordinalBufferSize);
+
+        // Instantiate object with correct counts
+        var self = new PromiseList(promiseStorage, false)
+        {
+            _committedCount = committedCount,
+            _transientCount = transientCount,
+            _promisesSeen = count,
+            _promiseIdTotal = count
+        };
+
+        // Populate Promise IDs and ordinals
         for (int index = 0; index < count; ++index)
         {
             ulong id = BinaryPrimitives.ReadUInt64LittleEndian(idBuffer[(index * sizeof(ulong))..]);
@@ -585,13 +649,13 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
             self._promiseIds.TrySetMember(index, KeyValuePair.Create(ordinal, new PromiseId(id)));
         }
 
-        self._committedCount = count;
-        self._transientCount = 0;
-        self._promisesSeen = count;
-        self._promiseIdTotal = count;
+        // De-serialize termination exception if any
+        PromiseExceptionalData? exceptionData = null;
+        var exceptionBuffer = buffer[(headerOffset + idBufferSize + ordinalBufferSize)..];
+        if (exceptionBuffer.Length > 0)
+            exceptionData = PromiseExceptionalData.Deserialize(exceptionBuffer);
 
-        // FIXME _completionException not serialized
-
+        self._promiseIds.TryComplete(count, exceptionData);
         return self;
     }
 }
