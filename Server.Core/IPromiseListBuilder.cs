@@ -97,15 +97,16 @@ public interface IPromiseListBuilder
     /// <remarks>
     /// <para>
     /// If the list is terminated with an associated exception,
-    /// then the returned task will be faulted with that exception.
+    /// then the returned task will still not fault.
+    /// This method lets the caller wait to perform clean-up
+    /// actions until all promises finish.  And that clean-up
+    /// should happen even if list terminated with an exception.
     /// </para>
     /// <para>
     /// The returned task may not complete even after 
     /// <see cref="TryComplete" />
     /// when any promise that had been set earlier by
     /// <see cref="SetMember" /> has not yet completed.
-    /// This task can be waited upon before executing clean-up
-    /// actions.
     /// </para>
     /// </remarks>
     ValueTask WaitForAllPromisesAsync();

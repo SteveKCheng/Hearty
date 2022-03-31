@@ -96,15 +96,15 @@ public class IncrementalAsyncList<T> : IAsyncEnumerable<T>
     private volatile Dictionary<int, AsyncTaskMethodBuilder<(T, bool)>>? _consumers = new();
 
     /// <summary>
-    /// Any user-supplied exception that is supplied on completing 
-    /// the list.
+    /// Any object supplied by the user on completing 
+    /// the list, usually an exception on failure.
     /// </summary>
     /// <remarks>
     /// This feature enables a background task that is producing the
     /// sequence to propagate errors it encounters 
     /// in producing the sequence.
     /// </remarks>
-    private Exception? _exception;
+    private object? _status;
 
     /// <summary>
     /// Builds the task for the <see cref="Completion" /> property.
@@ -170,10 +170,7 @@ public class IncrementalAsyncList<T> : IAsyncEnumerable<T>
     /// refers to an actual member, or false if the index
     /// is past the end of the list.  In the latter case
     /// the first item of the tuple is set to the default
-    /// value for <typeparamref name="T" />.  If the
-    /// list has been terminated with an exception, that
-    /// exception is not thrown out of this method, and
-    /// all preceding members remain available.
+    /// value for <typeparamref name="T" />.  
     /// </returns>
     public ValueTask<(T Value, bool IsValid)> 
         TryGetMemberAsync(int index,
@@ -201,10 +198,7 @@ public class IncrementalAsyncList<T> : IAsyncEnumerable<T>
     /// refers to an actual member, or false if the index
     /// is past the end of the list.  In the latter case
     /// the first item of the tuple is set to the default
-    /// value for <typeparamref name="T" />. If the
-    /// list has been terminated with an exception, that
-    /// exception is not thrown out of this method, and
-    /// all preceding members remain available.
+    /// value for <typeparamref name="T" />. 
     /// </returns>
     public ValueTask<(T Value, bool IsValid)> 
         TryGetMemberAsync(int index, 
@@ -351,8 +345,9 @@ public class IncrementalAsyncList<T> : IAsyncEnumerable<T>
     /// The number of items that should have been produced so far.
     /// This argument is passed in purely to check for errors.
     /// </param>
-    /// <param name="exception">
-    /// Any exception to record as part of completion.
+    /// <param name="status">
+    /// Any final status to post on completion, usually
+    /// an exception object.
     /// </param>
     /// <returns>
     /// True if the current invocation of this method
@@ -365,7 +360,7 @@ public class IncrementalAsyncList<T> : IAsyncEnumerable<T>
     /// number of unique indices whose corresponding values
     /// have been set.
     /// </exception>
-    public bool TryComplete(int count, Exception? exception = null)
+    public bool TryComplete(int count, object? status = null)
     {
         // Ignore if list is already completed
         var consumers = _consumers;
@@ -388,7 +383,7 @@ public class IncrementalAsyncList<T> : IAsyncEnumerable<T>
             if (_consumers is null)
                 return false;
 
-            _exception = exception;
+            _status = status;
 
             if (_completionBuilderInUse)
             {
@@ -407,19 +402,11 @@ public class IncrementalAsyncList<T> : IAsyncEnumerable<T>
         // Notify tasks waiting on the Completion property.
         if (completionBuilderInUse)
         {
-            if (exception is null)
-            {
-                completionBuilder.SetResult();
+            completionBuilder.SetResult();
 
-                // Do not need to keep the builder around
-                // if there is no exception.
-                _completionBuilderInUse = false;
-                _completionBuilder = default;
-            }
-            else
-            {
-                completionBuilder.SetException(exception);
-            }
+            // Do not need to keep the builder around at this point.
+            _completionBuilderInUse = false;
+            _completionBuilder = default;
         }
 
         return true;
@@ -469,16 +456,24 @@ public class IncrementalAsyncList<T> : IAsyncEnumerable<T>
     public int Count => _membersCount;
 
     /// <summary>
-    /// The exception that the list has been terminated with, if any.
+    /// The final status object that the list has been terminated with, if any.
     /// </summary>
-    public Exception? Exception => _exception;
+    public object? Status => _status;
 
     /// <summary>
     /// A task that completes when the list is terminated.
     /// </summary>
     /// <remarks>
-    /// If the list is terminated with an associated exception,
-    /// then this task will be faulted with that exception.
+    /// Unlike the similarly properties like
+    /// <see cref="System.Threading.Channels.ChannelReader{T}.Completion" />,
+    /// this task does not fault when the list is terminated with an
+    /// exceptional condition.  Firstly, this class allows an object
+    /// to be posted to <see cref="Status" /> that is not considered
+    /// exceptional.  Furthermore, this class is expected to be used
+    /// in by a server that communicates back results to the client.
+    /// Throwing exceptions should be avoided in such situations as 
+    /// .NET is slow at it, and the exceptions would have to
+    /// be caught anyway to send back to the client.
     /// </remarks>
     public Task Completion
     {
@@ -503,23 +498,7 @@ public class IncrementalAsyncList<T> : IAsyncEnumerable<T>
             // Execution reaches here if the list is already complete.
             //
 
-            var exception = _exception;
-            if (exception is null)
-                return Task.CompletedTask;
-
-            if (Volatile.Read(ref _completionBuilderInUse))
-                return _completionBuilder.Task;
-
-            var builder = new AsyncTaskMethodBuilder();
-            builder.SetException(exception);
-
-            // Cache the Task object holding the exception.
-            // We assume that struct tearing on _completionBuilder
-            // is harmless because it only holds a single reference.
-            _completionBuilder = builder;
-            Volatile.Write(ref _completionBuilderInUse, true);
-
-            return builder.Task;
+            return Task.CompletedTask;
         }
     }
 
@@ -538,8 +517,5 @@ public class IncrementalAsyncList<T> : IAsyncEnumerable<T>
             ++index;
             yield return item;
         }
-
-        if (Exception is Exception exception)
-            throw exception;
     }
 }

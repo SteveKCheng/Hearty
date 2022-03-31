@@ -45,7 +45,8 @@ public partial class PromiseList
                                                       PipeWriter writer,
                                                       int ordinal,
                                                       StringValues contentTypes,
-                                                      PromiseId promiseId, CancellationToken cancellationToken);
+                                                      PromiseId promiseId, 
+                                                      CancellationToken cancellationToken);
 
         /// <summary>
         /// Write the prologue after all the items have been written.
@@ -57,11 +58,8 @@ public partial class PromiseList
         /// Where the output goes.
         /// </param>
         /// <param name="contentTypes">
-        /// IANA media types desired by the client for an inner item.
-        /// </param>
-        /// <param name="exception">
-        /// The exception, if any, that the promise list has been
-        /// completed with.
+        /// IANA media types desired by the client for the exception
+        /// at the end, if any.
         /// </param>
         /// <returns>
         /// The number of unflushed bytes written by this method,
@@ -73,7 +71,7 @@ public partial class PromiseList
         public abstract ValueTask<int> WriteEndAsync(PromiseList self,
                                                      PipeWriter writer,
                                                      StringValues contentTypes,
-                                                     Exception? exception, CancellationToken cancellationToken);
+                                                     CancellationToken cancellationToken);
     }
 
     /// <summary>
@@ -86,14 +84,15 @@ public partial class PromiseList
         public override ValueTask<int> WriteEndAsync(PromiseList self,
                                                      PipeWriter writer,
                                                      StringValues contentTypes,
-                                                     Exception? exception, CancellationToken cancellationToken)
+                                                     CancellationToken cancellationToken)
         {
             int numBytes = 0;
 
-            if (exception is not null)
+            var exceptionData = self.ExceptionData;
+            if (exceptionData is not null)
             {
-                bool isCancellation = exception is OperationCanceledException;
-                string text = isCancellation ? "<CANCELLED>\r\n" : "<FAILED>\r\n";
+                string text = exceptionData.IsCancellation
+                                ? "<CANCELLED>\r\n" : "<FAILED>\r\n";
                 numBytes = (int)writer.WriteUtf8String(text);
             }
 
@@ -104,7 +103,8 @@ public partial class PromiseList
                                                       PipeWriter writer,
                                                       int ordinal,
                                                       StringValues innerFormat,
-                                                      PromiseId promiseId, CancellationToken cancellationToken)
+                                                      PromiseId promiseId, 
+                                                      CancellationToken cancellationToken)
         {
             var buffer = writer.GetMemory(PromiseId.MaxChars + 2);
 
@@ -153,10 +153,12 @@ public partial class PromiseList
         public override async ValueTask<int> WriteEndAsync(PromiseList self,
                                                            PipeWriter writer,
                                                            StringValues contentTypes,
-                                                           Exception? exception, CancellationToken cancellationToken)
+                                                           CancellationToken cancellationToken)
         {
             int numBytes = 0;
-            if (exception is not null)
+            var exceptionData = self.ExceptionData;
+
+            if (exceptionData is not null)
             {
                 numBytes += WriteBoundary(writer, isEnd: false);
 
@@ -164,13 +166,11 @@ public partial class PromiseList
                 writer.WriteUtf8String(": Trailer");
                 writer.WriteCrLf();
 
-                var output = new PromiseExceptionalData(exception);
-
-                var format = output.NegotiateFormat(contentTypes);
+                var format = exceptionData.NegotiateFormat(contentTypes);
                 format = (format >= 0) ? format : 0;
-                var formatInfo = output.GetFormatInfo(format);
+                var formatInfo = exceptionData.GetFormatInfo(format);
 
-                var payload = output.GetPayload(format);
+                var payload = exceptionData.GetPayload(format);
 
                 writer.WriteUtf8String("Content-Type: ");
                 writer.WriteUtf8String(formatInfo.MediaType.ToString());
@@ -186,10 +186,10 @@ public partial class PromiseList
             }
 
             numBytes += WriteBoundary(writer, isEnd: true);
-            if (exception is not null)
+            if (exceptionData is not null)
             {
-                bool isCancellation = exception is OperationCanceledException;
-                string text = isCancellation ? "<CANCELLED>\r\n" : "<FAILED>\r\n";
+                string text = exceptionData.IsCancellation 
+                                ? "<CANCELLED>\r\n" : "<FAILED>\r\n";
                 numBytes += (int)writer.WriteUtf8String(text);
             }
 

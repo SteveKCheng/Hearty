@@ -212,12 +212,19 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
                     _promiseIds.TrySetMember(c++, new(index, promise.Id));
             }
 
-            _promiseIds.TryComplete(total, _completionException);
+            // Convert exception to PromiseExceptionalData
+            // FIXME: will this throw an exception itself?
+            object? status = _completionException is not null
+                            ? new PromiseExceptionalData(_completionException)
+                            : null;
+                
+            _promiseIds.TryComplete(total, status);
 
             _outstandingPromises = null;
+            _completionException = null;
         }
     }
-        
+
     PromiseData IPromiseListBuilder.Output => this;
 
     /// <summary>
@@ -300,19 +307,29 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
     public override bool IsComplete => _promiseIds.IsComplete;
 
     /// <inheritdoc />
-    public override bool IsFailure => _promiseIds.Exception is not null;
+    public override bool IsFailure => _promiseIds.Status is not null;
+
+    /// <summary>
+    /// Any exceptional status that has been reported on termination
+    /// of the list.
+    /// </summary>
+    /// <remarks>
+    /// Exceptional status include cancellation.  The original
+    /// <see cref="ExceptionData" /> object from .NET is translated
+    /// into <see cref="PromiseExceptionalData" /> so it can
+    /// be reported back to remote clients.
+    /// </remarks>
+    public PromiseExceptionalData? ExceptionData 
+        => _promiseIds.Status as PromiseExceptionalData;
 
     /// <summary>
     /// Whether generation of the promise list was stopped
     /// by cancellation.
     /// </summary>
-    private bool IsCancellation
-        => _promiseIds.Exception is OperationCanceledException e;
+    private bool IsCancellation => ExceptionData?.IsCancellation ?? false;
 
     /// <inheritdoc />
-    public override bool IsTransient
-        => _promiseIds.Exception is OperationCanceledException ||
-           _transientCount > 0;
+    public override bool IsTransient => _transientCount > 0 || IsCancellation;
 
     /// <inheritdoc />
     public override ValueTask<Stream> GetByteStreamAsync(int format, CancellationToken cancellationToken)
@@ -423,7 +440,6 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
                     await impl.WriteEndAsync(this,
                                              writer,
                                              StringValues.Empty,
-                                             _promiseIds.Exception,
                                              cancellationToken)
                               .ConfigureAwait(false);
                     break;
