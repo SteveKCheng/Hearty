@@ -31,6 +31,7 @@
     <Compile Include="FasterDbPromisesTests.cs" />
     <Compile Include="FasterKVTests.cs" />
     <Compile Include="PriorityHeapTests.cs" />
+    <Compile Include="PromiseSerializationTests.cs" />
     <Compile Include="SchedulingTests.Exact.cs" />
     <Compile Include="SchedulingTests.Parallel.cs" />
     <Compile Include="WebSocketRpcTests.cs" />
