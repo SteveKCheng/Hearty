@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using Xunit;
 using Hearty.Server;
+using System.Threading.Tasks;
 
 namespace Hearty.Tests;
 
@@ -18,8 +19,7 @@ public class PromiseSerializationTests
 
     private readonly PromiseDataFixtures _fixtures = new();
 
-    [Fact]
-    public void SerializePayload()
+    private static Payload CreateTestPayload()
     {
         var bytes = new UTF8Encoding(false).GetBytes(
 @"Shall I compare thee to a summer’s day?
@@ -37,8 +37,13 @@ When in eternal lines to time thou grow’st:
 So long as men can breathe or eyes can see,
 So long lives this, and this gives life to thee. ");
 
-        var payload = new Payload("text/plain; charset=utf-8", bytes);
+        return new Payload("text/plain; charset=utf-8", bytes);
+    }
 
+    [Fact]
+    public void SerializePayload()
+    {
+        var payload = CreateTestPayload();
         Assert.True(payload.TryPrepareSerialization(out var info));
 
         var buffer = new byte[info.PayloadLength];
@@ -77,14 +82,16 @@ So long lives this, and this gives life to thee. ");
         }
     }
 
+    private static Exception CreateTestException()
+    {
+        return new ObjectDisposedException(
+            "This is a dummy exception to test serialization. ");
+    }
+
     [Fact]
     public void SerializeException()
     {
-        var exception = new 
-            ObjectDisposedException("This is a dummy exception to test serialization. ");
-
-        var data = new PromiseExceptionalData(exception);
-
+        var data = new PromiseExceptionalData(CreateTestException());
         Assert.True(data.TryPrepareSerialization(out var info));
 
         var buffer = new byte[info.PayloadLength];
@@ -101,7 +108,7 @@ So long lives this, and this gives life to thee. ");
             for (int i = 0; i < data.CountFormats; ++i)
             {
                 if (data.GetFormatInfo(i).MediaType.IsSubsetOf(ServedMediaTypes.MsgPack))
-                    return data.GetPayloadAsync(i, default).AsTask().Result;
+                    return GetSynchronousResult(data.GetPayloadAsync(i, default));
             }
 
             throw new InvalidOperationException("Promise data does not make available its payload in MessagePack format. ");
@@ -111,5 +118,41 @@ So long lives this, and this gives life to thee. ");
         var payload2 = GetMessagePackPayload(data2);
 
         Assert.True(SequenceEquals(payload1, payload2));
+    }
+
+    private static T GetSynchronousResult<T>(in ValueTask<T> task)
+    {
+        Assert.True(task.IsCompleted);
+        return task.Result;
+    }
+
+    [Fact]
+    public void SerializePromiseList()
+    {
+        var payloadPromise = _fixtures.PromiseStorage.CreatePromise(
+                            input: null,
+                            output: CreateTestPayload());
+
+        var promiseList = new PromiseList(_fixtures.PromiseStorage);
+        IPromiseListBuilder builder = promiseList;
+        builder.SetMember(0, payloadPromise);
+        builder.TryComplete(1, CreateTestException());
+
+        Assert.True(promiseList.TryPrepareSerialization(out var info));
+        var buffer = new byte[info.PayloadLength];
+        info.Serializer!.Invoke(info, buffer);
+
+        var promiseList2 = PromiseList.Deserialize(_fixtures, buffer);
+
+        Assert.True(promiseList2.IsComplete);
+
+        var payloadPromise1 = GetSynchronousResult(promiseList2.TryGetMemberPromiseAsync(0));
+
+        // Should be the same object actually
+        Assert.Equal(payloadPromise, payloadPromise1);
+
+        var exceptionData = promiseList2.ExceptionData;
+        Assert.NotNull(exceptionData);
+        Assert.True(exceptionData!.IsFailure);
     }
 }

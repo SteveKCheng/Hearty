@@ -514,6 +514,33 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
 
     #endregion
 
+    /// <summary>
+    /// Get a completed member promise.
+    /// </summary>
+    /// <param name="index">
+    /// The index of the promise within the completed list of promises.
+    /// Note it may not be the same as the index as it was originally
+    /// written with <see cref="IPromiseListBuilder" />,
+    /// when promises do not complete in their original order.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Can be used to cancel waiting for the member promise to complete.
+    /// </param>
+    /// <returns>
+    /// The completed member promise, or null if <paramref name="index" />
+    /// exceeds the number of items in the completed list.
+    /// </returns>
+    public async ValueTask<Promise?> 
+        TryGetMemberPromiseAsync(int index, CancellationToken cancellationToken = default)
+    {
+        var ((_, id), isValid) = await _promiseIds.TryGetMemberAsync(index, cancellationToken)
+                                                  .ConfigureAwait(false);
+        if (!isValid)
+            return null;
+
+        return _promiseStorage.GetPromiseById(id);
+    }
+
     /// <inheritdoc />
     public override bool TryPrepareSerialization(out PromiseDataSerializationInfo info)
     {
