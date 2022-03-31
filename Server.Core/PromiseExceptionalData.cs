@@ -43,6 +43,17 @@ public sealed class PromiseExceptionalData : PromiseData
     }
 
     /// <summary>
+    /// Construct by de-serializing the MessagePack representation
+    /// of <see cref="ExceptionPayload" />.
+    /// </summary>
+    public PromiseExceptionalData(ReadOnlySequence<byte> payloadMsgPack)
+    {
+        _payloadMsgPack = payloadMsgPack;
+        _hasPayloadMsgPack = true;
+        _payload = MessagePackSerializer.Deserialize<ExceptionPayload>(payloadMsgPack);
+    }
+
+    /// <summary>
     /// Always returns true on this class: it represents a failure.
     /// </summary>
     public override bool IsFailure => true;
@@ -62,7 +73,7 @@ public sealed class PromiseExceptionalData : PromiseData
         Count
     }
 
-    private static byte[] FormatAsText(ExceptionPayload payload)
+    private static ReadOnlySequence<byte> FormatAsText(ExceptionPayload payload)
     {
         var builder = new StringBuilder();
         builder.Append("Class: ");
@@ -71,7 +82,17 @@ public sealed class PromiseExceptionalData : PromiseData
         builder.AppendLine(payload.Description);
         builder.AppendLine("Stack Trace: ");
         builder.AppendLine(payload.Trace);
-        return Utf8NoBOM.GetBytes(builder.ToString());
+        return new ReadOnlySequence<byte>(Utf8NoBOM.GetBytes(builder.ToString()));
+    }
+
+    private static ReadOnlySequence<byte> FormatAsJson(ExceptionPayload payload)
+    {
+        var bufferWriter = new SegmentedArrayBufferWriter<byte>(
+                        initialBufferSize: 2048, doublingThreshold: 4);
+        var jsonWriter = new Utf8JsonWriter(bufferWriter);
+        JsonSerializer.Serialize(jsonWriter, payload);
+        jsonWriter.Flush();
+        return bufferWriter.GetSequence();
     }
 
     /// <inheritdoc />
@@ -102,12 +123,12 @@ public sealed class PromiseExceptionalData : PromiseData
         var bytes = (Format)format switch
         {
             Format.Text => FormatAsText(_payload),
-            Format.MessagePack => MessagePackSerializer.Serialize(_payload),
-            Format.Json => JsonSerializer.SerializeToUtf8Bytes(_payload),
+            Format.MessagePack => MessagePackPayload,
+            Format.Json => FormatAsJson(_payload),
             _ => throw new ArgumentOutOfRangeException(nameof(format))
         };
 
-        return new ReadOnlySequence<byte>(bytes);
+        return bytes;
     }
 
     /// <inheritdoc />
@@ -138,26 +159,66 @@ public sealed class PromiseExceptionalData : PromiseData
             _ => throw new ArgumentOutOfRangeException(nameof(format))
         };
 
+    /// <summary>
+    /// Cached MessagePack serialization of <see cref="_payload" />.
+    /// </summary>
+    private ReadOnlySequence<byte> _payloadMsgPack;
+
+    /// <summary>
+    /// Whether <see cref="_payloadMsgPack" /> is valid.
+    /// </summary>
+    private volatile bool _hasPayloadMsgPack;
+
+    /// <summary>
+    /// Get the MessagePack serialization of the exception.
+    /// </summary>
+    /// <remarks>
+    /// This serialization is cached within this object.
+    /// </remarks>
+    internal ReadOnlySequence<byte> MessagePackPayload
+    {
+        get
+        {
+            if (_hasPayloadMsgPack)
+                return _payloadMsgPack;
+
+            lock (_payload)
+            {
+                if (_hasPayloadMsgPack)
+                    return _payloadMsgPack;
+
+                var writer = new SegmentedArrayBufferWriter<byte>(
+                                initialBufferSize: 2048, doublingThreshold: 4);
+                MessagePackSerializer.Serialize(writer, _payload);
+
+                var payloadMsgPack = writer.GetSequence();
+                _payloadMsgPack = payloadMsgPack;
+                _hasPayloadMsgPack = true;
+
+                return payloadMsgPack;
+            }
+        }
+    }
+
     /// <inheritdoc />
     public override bool TryPrepareSerialization(out PromiseDataSerializationInfo info)
     {
-        ReadOnlySequence<byte> payload = GetPayload((int)Format.MessagePack);
-
         info = new PromiseDataSerializationInfo
         {
-            PayloadLength = checked((int)payload.Length),
+            PayloadLength = checked((int)MessagePackPayload.Length),
             SchemaCode = SchemaCode,
-            State = payload,
+            State = this,
             Serializer = static (in PromiseDataSerializationInfo info, Span<byte> buffer)
-                => Serialize((ReadOnlySequence<byte>)info.State!, buffer)
+                => ((PromiseExceptionalData)info.State!).Serialize(buffer)
         };
 
         return true;
     }
 
-    private static void Serialize(ReadOnlySequence<byte> payload, 
-                                  Span<byte> buffer)
+    private void Serialize(Span<byte> buffer)
     {
+        var payload = MessagePackPayload;
+
         while (payload.Length > 0)
         {
             var segment = payload.FirstSpan;
@@ -181,22 +242,11 @@ public sealed class PromiseExceptionalData : PromiseData
     /// </param>
     public static PromiseExceptionalData Deserialize(ReadOnlySpan<byte> buffer)
     {
-        // Need to copy because MessagePackSerializer does not support spans,
-        // even though it ought to because MessagePackReader is a ref struct
-        // anyway.  Unsafe code could work around this problem.  Exception
-        // payload is expected to be small so the copy is not so painful.
-        var copy = ArrayPool<byte>.Shared.Rent(buffer.Length);
-        try
-        {
-            buffer.CopyTo(copy);
+        // Need to copy the buffer since we save the MessagePack serialization
+        // inside the new object.
+        var bytes = new byte[buffer.Length];
+        buffer.CopyTo(bytes);
 
-            var reader = new MessagePackReader(copy);
-            var body = MessagePackSerializer.Deserialize<ExceptionPayload>(ref reader);
-            return new PromiseExceptionalData(body);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(copy);
-        }
+        return new PromiseExceptionalData(new ReadOnlySequence<byte>(bytes));
     }
 }
