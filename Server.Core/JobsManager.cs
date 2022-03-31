@@ -345,7 +345,7 @@ public class JobsManager : IRemoteJobCancellation
             // exception.  Fortunately, cancellation should be the
             // only case where the promise would come out as 
             // uncompleted, which makes it easy to check for.
-            if (promise.HasOutput && !promise.IsTransient)
+            if (promise.HasOutput && !promise.HasTransientOutput)
                 return null;
 
             // We are careful to not invoke this callback inside the lock

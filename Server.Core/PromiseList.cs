@@ -128,7 +128,7 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
                     return;
 
                 bool keep = object.ReferenceEquals(oldPromise, promise) ||
-                            (oldPromise.IsCompleted &&
+                            (oldPromise.HasCompleteOutput &&
                              !oldPromise.ResultOutput!.IsTransient);
                 if (keep)
                     return;

@@ -329,11 +329,17 @@ public abstract class PromiseData
     /// promise is requested to be "run" (not merely queried).
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This property is a key characteristic of cancellation.
     /// If a job associated to this promise has been cancelled
     /// (by other clients), requesting it as a job should restart
     /// the job.  Other kinds of failures may mark themselves
     /// as transient as well.
+    /// </para>
+    /// <para>
+    /// For partially complete data, this property is sticky:
+    /// once it is true, it may not become false again.
+    /// </para>
     /// </remarks>
     public virtual bool IsTransient => false;
 
@@ -352,12 +358,16 @@ public abstract class PromiseData
     /// in with information on the payload about to be serialized.
     /// Otherwise the parameter is set to its default value.
     /// </param>
-    /// <exception cref="InvalidOperationException">
-    /// This instance does not have its complete contents, 
-    /// e.g. the contents are still being incrementally by a running job.
-    /// </exception>
     /// <returns>
+    /// <para>
     /// Whether this instance can be serialized.
+    /// </para>
+    /// <para>
+    /// This instance may not support serialization if that feature
+    /// is unimplemented, or, if at the moment, it is not in
+    /// a complete state.  Storage providers are then required to 
+    /// hold this data as a .NET object only.
+    /// </para>
     /// </returns>
     public virtual bool TryPrepareSerialization(out PromiseDataSerializationInfo info)
     {

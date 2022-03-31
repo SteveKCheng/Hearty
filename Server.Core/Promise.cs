@@ -69,18 +69,41 @@ public partial class Promise
     /// </summary>
     public PromiseData? RequestOutput { get; internal set; }
 
-    public bool IsCompleted => HasOutput;
+    /// <summary>
+    /// Whether this promise has complete output.
+    /// </summary>
+    /// <remarks>
+    /// This property evaluates to true if both 
+    /// <see cref="HasOutput" /> and <see cref="PromiseData.IsComplete" />
+    /// on the output object is true.
+    /// </remarks>
+    public bool HasCompleteOutput
+        => Volatile.Read(ref _resultOutput)?.IsComplete ?? false;
 
     /// <summary>
     /// Whether this promise has an output object, which may
     /// not necessarily be complete.
     /// </summary>
+    /// <remarks>
+    /// That is, this property evaluates to true if there is
+    /// partial output.  (Some implementations of <see cref="PromiseData" />,
+    /// like <see cref="PromiseList" />, are capable of partial output.
+    /// Such output can be incrementally downloaded by clients.)
+    /// </remarks>
     public bool HasOutput => _resultOutput is not null;
 
     /// <summary>
     /// True if the promise has completed and its output is transient.
     /// </summary>
-    public bool IsTransient => IsCompleted && (RequestOutput?.IsTransient ?? false);
+    /// <remarks>
+    /// This property is false if there is no output object yet
+    /// (i.e. <see cref="HasOutput" /> is false).  
+    /// Note that the output may already be known to be transient 
+    /// if it is partial; however, it is not allowed to flip 
+    /// to non-transient afterwards.
+    /// </remarks>
+    public bool HasTransientOutput
+        => Volatile.Read(ref _resultOutput)?.IsTransient ?? false;
 
     /// <summary>
     /// The ID that has been assigned to this promise.

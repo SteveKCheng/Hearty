@@ -652,9 +652,9 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
         // FIXME racy checks of multiple flags
         JobStatus IRunningJob.Status =>
             (_work.Promise?.HasAsyncResult == true) ?
-            (_work.Promise!.IsCompleted) ? JobStatus.Succeeded
-                                         : JobStatus.Running
-                                         : JobStatus.NotStarted;
+            (_work.Promise!.HasCompleteOutput) ? JobStatus.Succeeded
+                                               : JobStatus.Running
+                                               : JobStatus.NotStarted;
             
         private readonly PromisedWork _work;
 

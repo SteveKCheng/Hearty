@@ -23,8 +23,16 @@ public partial class Promise
     /// to be serialized to temporary buffers first.
     /// </param>
     /// <returns>
+    /// <para>
     /// True if this promise in its current state supports serialization,
     /// false otherwise.
+    /// </para>
+    /// <para>
+    /// This promise may not support serialization if the data objects
+    /// it contains do not support it, or if at the moment, some data 
+    /// is not in a complete state.  Storage providers are then required 
+    /// to hold this promise as a .NET object only.
+    /// </para>
     /// </returns>
     public bool TryPrepareSerialization(out PromiseSerializationInfo info)
     {
