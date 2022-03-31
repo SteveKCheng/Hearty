@@ -1,9 +1,9 @@
-﻿using Hearty.Server;
-using System;
+﻿using System;
 using System.Buffers;
 using System.Linq;
 using System.Text;
 using Xunit;
+using Hearty.Server;
 
 namespace Hearty.Tests;
 
@@ -75,5 +75,41 @@ So long lives this, and this gives life to thee. ");
             readerA.Advance(len);
             readerB.Advance(len);
         }
+    }
+
+    [Fact]
+    public void SerializeException()
+    {
+        var exception = new 
+            ObjectDisposedException("This is a dummy exception to test serialization. ");
+
+        var data = new PromiseExceptionalData(exception);
+
+        Assert.True(data.TryPrepareSerialization(out var info));
+
+        var buffer = new byte[info.PayloadLength];
+        info.Serializer!.Invoke(info, buffer);
+
+        var data2 = PromiseExceptionalData.Deserialize(_fixtures, buffer);
+
+        Assert.Equal(data.IsCancellation, data2.IsCancellation);
+        Assert.Equal(data.IsTransient, data2.IsTransient);
+        Assert.Equal(data.IsComplete, data2.IsComplete);
+
+        static ReadOnlySequence<byte> GetMessagePackPayload(PromiseData data)
+        {
+            for (int i = 0; i < data.CountFormats; ++i)
+            {
+                if (data.GetFormatInfo(i).MediaType.IsSubsetOf(ServedMediaTypes.MsgPack))
+                    return data.GetPayloadAsync(i, default).AsTask().Result;
+            }
+
+            throw new InvalidOperationException("Promise data does not make available its payload in MessagePack format. ");
+        }
+
+        var payload1 = GetMessagePackPayload(data);
+        var payload2 = GetMessagePackPayload(data2);
+
+        Assert.True(SequenceEquals(payload1, payload2));
     }
 }
