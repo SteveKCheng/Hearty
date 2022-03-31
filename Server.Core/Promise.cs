@@ -257,7 +257,17 @@ public partial class Promise
         }
 
         PostResultInternal(output);
-        postAction?.Invoke(this);
+
+        try
+        {
+            postAction?.Invoke(this);
+        }
+        catch
+        {
+            // FIXME log any exception
+        }
+
+        FireUpdate();
     }
 
     private volatile int _isFulfilled;
@@ -289,4 +299,39 @@ public partial class Promise
     //      IPromiseSubscriber.RemovePromise(int handle)
     //      
 
+    /// <summary>
+    /// Arguments that are sent when <see cref="OnUpdate" /> fires.
+    /// </summary>
+    public struct UpdateEventArgs
+    {
+        /// <summary>
+        /// The promise that has been updated.
+        /// </summary>
+        public Promise Subject { get; init; }
+    }
+
+    /// <summary>
+    /// Event that is fired when this promise is updated.
+    /// </summary>
+    /// <remarks>
+    /// This event may be observed to log the events,
+    /// or to persist the promise to secondary storage
+    /// (once it has completed).
+    /// </remarks>
+    public event EventHandler<UpdateEventArgs>? OnUpdate;
+
+    /// <summary>
+    /// Fire the <see cref="OnUpdate" /> event.
+    /// </summary>
+    private void FireUpdate()
+    {
+        try
+        {
+            OnUpdate?.Invoke(this, new UpdateEventArgs { Subject = this });
+        }
+        catch
+        {
+            // FIXME log any exception
+        }
+    }
 }
