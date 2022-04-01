@@ -63,6 +63,9 @@ So long lives this, and this gives life to thee. ");
 
     private static bool SequenceEquals(ReadOnlySequence<byte> a, ReadOnlySequence<byte> b)
     {
+        if (a.Length != b.Length)
+            return false;
+
         var readerA = new SequenceReader<byte>(a);
         var readerB = new SequenceReader<byte>(b);
 
@@ -70,6 +73,7 @@ So long lives this, and this gives life to thee. ");
         {
             var spanA = readerA.UnreadSpan;
             var spanB = readerB.UnreadSpan;
+
             int len = Math.Min(spanA.Length, spanB.Length);
             if (len == 0)
                 return true;
