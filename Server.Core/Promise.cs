@@ -356,4 +356,13 @@ public partial class Promise
             // FIXME log any exception
         }
     }
+
+    /// <summary>
+    /// Receives updates from promise data that had not
+    /// completed before.
+    /// </summary>
+    internal void ReceiveUpdateFromData(PromiseData data)
+    {
+        FireUpdate();
+    }
 }

@@ -193,36 +193,44 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
         int c = _committedCount;
         int t = _transientCount;
 
-        if (c + t == total)
+        // Do nothing else if the promise list is not yet complete
+        if (c + t != total)
+            return;
+
+        // Consider the whole promise list cancelled if the
+        // CancellationToken has triggered, and there is one or
+        // more transient result member, after the producer called
+        // TryComplete without an exception.
+        if (t > 0 &&
+            _completionException is null &&
+            _completionCancellation.IsCancellationRequested)
         {
-            if (t > 0 &&
-                _completionException is null &&
-                _completionCancellation.IsCancellationRequested)
-            {
-                _completionException = new OperationCanceledException(_completionCancellation);
-            }
-
-            // Do not hold onto the cancellation token
-            _completionCancellation = default;
-
-            // Publish all transient promises at the end
-            if (t > 0)
-            {
-                foreach (var (index, promise) in _outstandingPromises!)
-                    _promiseIds.TrySetMember(c++, new(index, promise.Id));
-            }
-
-            // Convert exception to PromiseExceptionalData
-            // FIXME: will this throw an exception itself?
-            object? status = _completionException is not null
-                            ? new PromiseExceptionalData(_completionException)
-                            : null;
-                
-            _promiseIds.TryComplete(total, status);
-
-            _outstandingPromises = null;
-            _completionException = null;
+            _completionException = new OperationCanceledException(_completionCancellation);
         }
+
+        // Do not hold onto the cancellation token
+        _completionCancellation = default;
+
+        // Publish all transient promises at the end
+        if (t > 0)
+        {
+            foreach (var (index, promise) in _outstandingPromises!)
+                _promiseIds.TrySetMember(c++, new(index, promise.Id));
+        }
+
+        // Convert exception to PromiseExceptionalData
+        // FIXME: will this throw an exception itself?
+        object? status = _completionException is not null
+                        ? new PromiseExceptionalData(_completionException)
+                        : null;
+                
+        _promiseIds.TryComplete(total, status);
+
+        _outstandingPromises = null;
+        _completionException = null;
+
+        // Notify parent promises of the final update
+        FireUpdate();
     }
 
     PromiseData IPromiseListBuilder.Output => this;

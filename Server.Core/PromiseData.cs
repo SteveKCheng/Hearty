@@ -44,6 +44,8 @@ public abstract class PromiseData
     /// </summary>
     protected virtual void Dispose() { }
 
+    #region Retrieving payloads
+
     /// <summary>
     /// Upload the stream of bytes for the payload into a pipe, asynchronously.
     /// </summary>
@@ -182,6 +184,10 @@ public abstract class PromiseData
         GetPayloadAsync(int format, 
                         CancellationToken cancellationToken);
 
+    #endregion
+
+    #region Content formats and negotiation
+
     /// <summary>
     /// The IANA media type that is the default suggestion for the payload.
     /// </summary>
@@ -302,6 +308,10 @@ public abstract class PromiseData
     /// </returns>
     public virtual long? GetItemsCount(int format) => null;
 
+    #endregion
+
+    #region Status flags
+
     /// <summary>
     /// Whether this data represents a failure condition.
     /// </summary>
@@ -349,6 +359,10 @@ public abstract class PromiseData
     /// </summary>
     public virtual bool IsComplete => true;
 
+    #endregion
+
+    #region Serialization
+
     /// <summary>
     /// Get the basic information required to start serializing
     /// this instance (to external storage).
@@ -374,6 +388,104 @@ public abstract class PromiseData
         info = default;
         return false;
     }
+
+    #endregion
+
+    #region Update notifications
+
+    /// <summary>
+    /// Register a parent promise to receive notification when
+    /// this instance updates its data.
+    /// </summary>
+    /// <param name="subject">
+    /// The promise to receive the updates.
+    /// </param>
+    /// <remarks>
+    /// <para>
+    /// This notification is necessary to propagate updates
+    /// from partial data into <see cref="Promise.OnUpdate" />.
+    /// </para>
+    /// <para>
+    /// For efficiency reasons, this mechanism is internal
+    /// and not a generic one that can be used by clients.
+    /// By hard-wiring the target type of the receiver
+    /// (namely, the <see cref="Promise" /> class), we do
+    /// not need to allocate delegates for the notification.
+    /// </para>
+    /// </remarks>
+    /// <returns>
+    /// True if the promise has been registered.
+    /// False if this instance has already completed
+    /// (as indicated by <see cref="IsComplete" /> and so
+    /// no notifications are necessary to its parent promise.
+    /// </returns>
+    internal bool TrySubscribePromiseToUpdates(Promise subject)
+    {
+        if (IsComplete)
+            return false;
+
+        if (Interlocked.CompareExchange(ref _subjectPromise, subject, null) is not null)
+            throw new NotSupportedException("Currently it is not possible to register multiple promises for callback. ");
+
+        return true;
+    }
+
+    /// <summary>
+    /// This method should be invoked by derived classes when
+    /// the current instance updates its data.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This function is not necessary to call if the current instance
+    /// starts off already with its final data.
+    /// </para>
+    /// <para>
+    /// The promises registered for notification are automatically
+    /// unregistered if this instance completes, i.e.
+    /// <see cref="IsComplete" /> returns true.
+    /// </para>
+    /// </remarks>
+    protected void FireUpdate()
+    {
+        Promise? subject;
+
+        if (IsComplete)
+            subject = Interlocked.Exchange(ref _subjectPromise, null);
+        else
+            subject = _subjectPromise;
+
+        subject?.ReceiveUpdateFromData(this);
+    }
+
+    /// <summary>
+    /// Unregister a parent promise for notification from this instance. 
+    /// </summary>
+    /// <param name="subject">The promise to unregister. </param>
+    /// <returns>
+    /// <para>
+    /// Whether the parent promise had been registered.
+    /// </para>
+    /// <para>
+    /// The return value may be false even if <paramref name="subject" /> 
+    /// had called <see cref="TrySubscribePromiseToUpdates" /> earlier,
+    /// because notifications get automatically unregistered if this
+    /// instance flips to a completed state.  Thus this condition 
+    /// is not considered an error.
+    /// </para>
+    /// </returns>
+    internal bool UnsubscribePromiseToUpdates(Promise subject)
+    {
+        var oldSubject = Interlocked.CompareExchange(ref _subjectPromise, null, subject);
+        return object.ReferenceEquals(oldSubject, subject);
+    }
+
+    /// <summary>
+    /// Parent promises that are to receive notifications when this
+    /// instance updates.
+    /// </summary>
+    private Promise? _subjectPromise;
+
+    #endregion
 }
 
 /// <summary>
