@@ -58,6 +58,7 @@ public sealed partial class FasterDbPromiseStorage
                                   in FasterDbFileOptions fileOptions)
     {
         _schemas = schemas;
+        _promiseUpdateEventHandler = this.PromiseHasUpdated;
 
         var logSettings = fileOptions.CreateFasterDbLogSettings();
         try
@@ -115,13 +116,7 @@ public sealed partial class FasterDbPromiseStorage
                             info.TotalLength <= MaxSerializationLength;
 
         if (canSerialize)
-        {
-            if (!DbTryAddValue(promise.Id, info))
-            {
-                throw new InvalidOperationException(
-                    "The promise already exists in the database. This should not happen. ");
-            }
-        }
+            DbSetValue(promise.Id, info);
 
         var gcHandle = GCHandle.Alloc(promise, canSerialize ? GCHandleType.Weak
                                                             : GCHandleType.Normal);
@@ -136,7 +131,37 @@ public sealed partial class FasterDbPromiseStorage
             throw;
         }
 
+        if (!promise.HasCompleteOutput)
+            promise.OnUpdate += _promiseUpdateEventHandler;
+
+        ScheduleCleaningIfNeeded();
+
         return promise;
+    }
+
+    /// <summary>
+    /// Pre-allocated event handler attached to all promises created from
+    /// this storage provider.
+    /// </summary>
+    private readonly EventHandler<Promise.UpdateEventArgs> _promiseUpdateEventHandler;
+
+    /// <summary>
+    /// Called when <see cref="Promise.OnUpdate" /> fires,
+    /// to save updated results to the database.
+    /// </summary>
+    private void PromiseHasUpdated(object? sender, Promise.UpdateEventArgs args)
+    {
+        var promise = args.Subject;
+
+        //
+        // FIXME Do we need to defer this work to a task queue?
+        //
+
+        bool canSerialize = promise.TryPrepareSerialization(out var info) &&
+                            info.TotalLength <= MaxSerializationLength;
+
+        if (canSerialize)
+            DbSetValue(promise.Id, info);
     }
 
     /// <inheritdoc />
@@ -152,6 +177,8 @@ public sealed partial class FasterDbPromiseStorage
             if (promise is not null)
                 return promise;
         }
+
+        ScheduleCleaningIfNeeded();
 
         // Otherwise, try getting from the database.
         // If it exists, de-serialize the data and then register
@@ -184,6 +211,7 @@ public sealed partial class FasterDbPromiseStorage
                     gcHandle.Free();
             }
 
+            promiseLast.OnUpdate += _promiseUpdateEventHandler;
             return promiseLast;
         }
 

@@ -1,6 +1,9 @@
 ﻿using FASTER.core;
 using System;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Hearty.Server.FasterKV;
 
@@ -93,33 +96,28 @@ public sealed partial class FasterDbPromiseStorage
             => false;
 
         /// <summary>
-        /// Fake "RMW" operation for TryAdd, when it encounters existing entry.
+        /// Not used because FASTER KV is always ask to not overwrite existing
+        /// entries. 
         /// </summary>
-        /// <remarks>
-        /// The existing entry is not modified for "TryAdd"; this method only needs
-        /// to load the existing value.
-        /// </remarks>
         public override bool InPlaceUpdater(ref PromiseId key, ref DbInput input, ref PromiseBlob value, ref Promise? output)
-        {
-            output = value.RestoreObject(_fixtures);
-            return true;
-        }
-
-        /// <summary>
-        /// Should not actually be called because <see cref="NeedCopyUpdate" /> always returns false.
-        /// </summary>
-        public override void CopyUpdater(ref PromiseId key, ref DbInput input, ref PromiseBlob oldValue, ref PromiseBlob newValue, ref Promise? output)
             => throw new NotSupportedException();
 
         /// <summary>
-        /// Turn off copy-update since the "RMW" operation does not actually modify
-        /// any existing value.
+        /// Called by FASTER KV for creating a entry to replace an existing one.
         /// </summary>
-        public override bool NeedCopyUpdate(ref PromiseId key, ref DbInput input, ref PromiseBlob oldValue, ref Promise? output)
-            => false;
+        public override void CopyUpdater(ref PromiseId key, ref DbInput input, ref PromiseBlob oldValue, ref PromiseBlob newValue, ref Promise? output)
+            => newValue.SaveSerialization(input.Serialization);
 
         /// <summary>
-        /// Fake "RMW" operation for TryAdd, when it is to (speculatively) create a new entry.
+        /// Always requiring new allocations to update an entry,
+        /// both because the new entry may change the size and also reading does
+        /// not tolerate concurrent modifications.
+        /// </summary>
+        public override bool NeedCopyUpdate(ref PromiseId key, ref DbInput input, ref PromiseBlob oldValue, ref Promise? output)
+            => true;
+
+        /// <summary>
+        /// Called by FASTER KV for creating a new entry.
         /// </summary>
         public override unsafe void InitialUpdater(ref PromiseId key, ref DbInput input, ref PromiseBlob value, ref Promise? output)
             => value.SaveSerialization(input.Serialization);
@@ -315,16 +313,21 @@ public sealed partial class FasterDbPromiseStorage
     }
 
     /// <summary>
-    /// Add the serialization of a promise as a blob in the FASTER KV database.
+    /// Add or set an entry for the serialization of a promise 
+    /// as a blob in the FASTER KV database.
     /// </summary>
-    /// <returns>True if the blob has been successfully added.
-    /// False if an entry already exists for the same ID.
+    /// <returns>True if the blob has been successfully added;
+    /// false if an existing entry was changed.
     /// </returns>
-    private bool DbTryAddValue(PromiseId key, in PromiseSerializationInfo serialization)
+    private bool DbSetValue(PromiseId key, in PromiseSerializationInfo serialization)
     {
         using var pooledSession = _sessionPool.GetForCurrentThread();
         var session = pooledSession.Target.Session;
 
+        // Set the entry in the database.  Semantically this operation
+        // is what FASTER KV calls an "upsert", but its API for
+        // upsert does not allow specifying DbInput, so we rely on
+        // "RMW" instead.
         var input = new DbInput { Serialization = serialization };
         var task = session.RMWAsync(ref key, ref input);
         (Status status, _) = task.Wait().Complete();
@@ -343,4 +346,67 @@ public sealed partial class FasterDbPromiseStorage
     /// hash index.  It is not a fast O(1) operation.
     /// </remarks>
     public long GetDatabaseEntriesCount() => _db.EntryCount;
+
+    private int _lastGarbageCollectionCount;
+    private long _lastCleanUpTime;
+
+    /// <summary>
+    /// Heuristically check if the objects dictionary should be scanned
+    /// for expired GC handles to remove.
+    /// </summary>
+    /// <remarks>
+    /// We use the same technique as the "MemoryCache" class;
+    /// we poll for when cleaning is needed, and if so, 
+    /// schedule a background task for it.
+    /// </remarks>
+    private void ScheduleCleaningIfNeeded()
+    {
+        unchecked
+        {
+            var now = Environment.TickCount64;
+
+            if (now - _lastCleanUpTime > 1000)
+            {
+                var count = GC.CollectionCount(0);
+                if (count - _lastGarbageCollectionCount > 0)
+                {
+                    _lastCleanUpTime = now;
+                    _lastGarbageCollectionCount = count;
+
+                    Task.Factory.StartNew(state => ((FasterDbPromiseStorage)state!).CleanExpiredGCHandles(),
+                                          this,
+                                          CancellationToken.None,
+                                          TaskCreationOptions.DenyChildAttach,
+                                          TaskScheduler.Default);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Scan the <see cref="_objects" /> dictionary and delete entries
+    /// containing expired GC handles.
+    /// </summary>
+    private void CleanExpiredGCHandles()
+    {
+        foreach (var (id, gcHandle) in _objects)
+        {
+            // Handle not expired yet
+            if (gcHandle.Target is not null)
+                continue;
+
+            if (!_objects.TryRemove(id, out var gcHandle2))
+                continue;
+
+            // Oops, some other thread raced to revive the entry.
+            // Better add it back.
+            if (gcHandle2.Target is not null)
+            {
+                _objects.TryAdd(id, gcHandle2);
+                continue;
+            }
+
+            gcHandle2.Free();
+        }
+    }
 }
