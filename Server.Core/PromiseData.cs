@@ -5,6 +5,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Pipelines;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -412,6 +413,10 @@ public abstract class PromiseData
     /// (namely, the <see cref="Promise" /> class), we do
     /// not need to allocate delegates for the notification.
     /// </para>
+    /// <para>
+    /// A promise should not register itself more than once.
+    /// For efficiency again, this method does not check.
+    /// </para>
     /// </remarks>
     /// <returns>
     /// True if the promise has been registered.
@@ -424,8 +429,37 @@ public abstract class PromiseData
         if (IsComplete)
             return false;
 
-        if (Interlocked.CompareExchange(ref _subjectPromise, subject, null) is not null)
-            throw new NotSupportedException("Currently it is not possible to register multiple promises for callback. ");
+        while (true)
+        {
+            var s = Interlocked.CompareExchange(ref _subjectPromises, subject, null);
+
+            // Most common case: only one registration
+            if (s is null)
+                break;
+
+            if (s is Promise p)
+            {
+                // Speculatively create new list combining existing registration
+                var list = new List<Promise>(capacity: 8) { p, subject };
+                var q = Interlocked.CompareExchange(ref _subjectPromises, list, p);
+                if (object.ReferenceEquals(p, q))
+                    break;
+            }
+            else
+            {
+                // Add to existing list
+                var list = Unsafe.As<List<Promise>>(s);
+                lock (list)
+                {
+                    if (IsComplete)
+                        return false;
+
+                    list.Add(subject);
+                }
+                    
+                break;
+            }
+        }
 
         return true;
     }
@@ -447,20 +481,49 @@ public abstract class PromiseData
     /// </remarks>
     protected void FireUpdate()
     {
-        Promise? subject;
+        object? s;
 
+        // Remove all existing registrations if data is complete
         if (IsComplete)
-            subject = Interlocked.Exchange(ref _subjectPromise, null);
+            s = Interlocked.Exchange(ref _subjectPromises, null);
         else
-            subject = _subjectPromise;
+            s = _subjectPromises;
 
-        subject?.ReceiveUpdateFromData(this);
+        // Nothing to do if no promise has been registered
+        if (s is null)
+            return;
+
+        if (s is Promise p)
+        {
+            // Notify a single promise
+            p.ReceiveUpdateFromData(this);
+        }
+        else
+        {
+            // Fire notifications for each subject promise
+            var list = Unsafe.As<List<Promise>>(s);
+            lock (list)
+            {
+                foreach (var q in list)
+                    q.ReceiveUpdateFromData(this);
+            }
+        }
     }
 
     /// <summary>
     /// Unregister a parent promise for notification from this instance. 
     /// </summary>
     /// <param name="subject">The promise to unregister. </param>
+    /// <remarks>
+    /// This method theoretically has running time that is linear
+    /// in the number of promises registered for notification. 
+    /// However, it is expected to be rare to have more than one 
+    /// promise, and removal of the registration for a single promise 
+    /// only (instead of all of them at once) is even more rare.  
+    /// Thus the implementation prefers simple data structures that 
+    /// are efficient for tiny numbers of promises than more 
+    /// complex structures that are scalable.
+    /// </remarks>
     /// <returns>
     /// <para>
     /// Whether the parent promise had been registered.
@@ -475,15 +538,45 @@ public abstract class PromiseData
     /// </returns>
     internal bool UnsubscribePromiseToUpdates(Promise subject)
     {
-        var oldSubject = Interlocked.CompareExchange(ref _subjectPromise, null, subject);
-        return object.ReferenceEquals(oldSubject, subject);
+        var s = Interlocked.CompareExchange(ref _subjectPromises, null, subject);
+        if (object.ReferenceEquals(s, subject))
+            return true;
+        else if (s is null || s is Promise)
+            return false;
+
+        var list = Unsafe.As<List<Promise>>(s);
+        lock (list)
+        {
+            int c = list.Count;
+            for (int i = 0, n = list.Count; i < n; ++i)
+            {
+                if (object.ReferenceEquals(list[i], subject))
+                {
+                    list.RemoveAt(i);
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
     /// Parent promises that are to receive notifications when this
     /// instance updates.
     /// </summary>
-    private Promise? _subjectPromise;
+    /// <remarks>
+    /// <para>
+    /// This member can be null, an instance of <see cref="Promise" />
+    /// or a <see cref="List{T}" /> of promises.
+    /// </para>
+    /// <para>
+    /// The list is only present in the rare case that the application
+    /// attaches the same <see cref="PromiseData" /> to multiple
+    /// <see cref="Promise" /> instances.
+    /// </para>
+    /// </remarks>
+    private object? _subjectPromises;
 
     #endregion
 }
