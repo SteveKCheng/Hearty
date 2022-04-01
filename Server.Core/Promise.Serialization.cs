@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 
 namespace Hearty.Server;
 
-public partial class Promise
+public sealed partial class Promise
 {
     /// <summary>
     /// Get the header to write when this promise is to be serialized.

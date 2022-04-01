@@ -39,6 +39,7 @@ public delegate PromiseData
 /// Holds a result that is provided asynchronously, that can be queried by remote clients.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Conceptually, this class serves the same purpose as asynchronous tasks from the .NET
 /// standard library.  But this class is implemented in a way that instances can be 
 /// monitored and managed remotely, e.g. through ReST APIs or a Web UI.
@@ -46,8 +47,16 @@ public delegate PromiseData
 /// asynchronous tasks have to be efficient for local microscopic tasks
 /// within a .NET program.  So, this class tracks much more bookkeeping
 /// information.
+/// </para>
+/// <para>
+/// This class is sealed because it needs to work with custom storage 
+/// providers that may persist instances in secondary storage.  It
+/// would not work for derived classes to add arbitrary state to
+/// the promise.  All customization of the promise's behavior must
+/// happen through <see cref="PromiseData" />.
+/// </para>
 /// </remarks>
-public partial class Promise
+public sealed partial class Promise
 {
     /// <summary>
     /// The output object of the promise.
@@ -124,10 +133,14 @@ public partial class Promise
     /// <param name="output">
     /// The output of this promise, if it is available synchronously.
     /// </param>
-    public Promise(DateTime creationTime, 
-                   PromiseId id, 
-                   PromiseData? input, 
-                   PromiseData? output)
+    /// <remarks>
+    /// This method is internal; promises must be instantiated
+    /// through <see cref="PromiseStorage" />.
+    /// </remarks>
+    internal Promise(DateTime creationTime, 
+                     PromiseId id, 
+                     PromiseData? input, 
+                     PromiseData? output)
     {
         Id = id;
         CreationTime = creationTime;
