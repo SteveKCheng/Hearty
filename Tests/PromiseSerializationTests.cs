@@ -59,6 +59,8 @@ So long lives this, and this gives life to thee. ");
         Assert.Equal(payload.ContentType, payload2.ContentType);
 
         Assert.True(SequenceEquals(payload.Body, payload2.Body));
+
+        VerifyReserialization(payload2, buffer);
     }
 
     private static bool SequenceEquals(ReadOnlySequence<byte> a, ReadOnlySequence<byte> b)
@@ -84,6 +86,29 @@ So long lives this, and this gives life to thee. ");
             readerA.Advance(len);
             readerB.Advance(len);
         }
+    }
+
+    /// <summary>
+    /// Re-serialize <paramref name="target" /> that was
+    /// de-serialized from <paramref name="original" />,
+    /// checking if the new serialized form matches.
+    /// </summary>
+    private static void VerifyReserialization(PromiseData target, ReadOnlySpan<byte> original)
+    {
+        Assert.True(target.TryPrepareSerialization(out var info));
+        Assert.Equal(original.Length, info.PayloadLength);
+
+        var buffer = new Span<byte>(GC.AllocateUninitializedArray<byte>(info.PayloadLength));
+
+        // Deliberately write differing bytes to detect when
+        // serialization leaves holes in the buffer
+        original.CopyTo(buffer);
+        for (int i = 0; i < buffer.Length; ++i)
+            buffer[i] ^= 0xFF;
+
+        info.Serializer!.Invoke(info, buffer);
+
+        Assert.True(original.SequenceEqual(buffer));
     }
 
     private static Exception CreateTestException()
@@ -122,6 +147,8 @@ So long lives this, and this gives life to thee. ");
         var payload2 = GetMessagePackPayload(data2);
 
         Assert.True(SequenceEquals(payload1, payload2));
+
+        VerifyReserialization(data2, buffer);
     }
 
     private static T GetSynchronousResult<T>(in ValueTask<T> task)
@@ -158,5 +185,7 @@ So long lives this, and this gives life to thee. ");
         var exceptionData = promiseList2.ExceptionData;
         Assert.NotNull(exceptionData);
         Assert.True(exceptionData!.IsFailure);
+
+        VerifyReserialization(promiseList2, buffer);
     }
 }
