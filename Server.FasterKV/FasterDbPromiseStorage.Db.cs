@@ -96,17 +96,16 @@ public sealed partial class FasterDbPromiseStorage
             => false;
 
         /// <summary>
-        /// Not used because FASTER KV is always ask to not overwrite existing
+        /// Disallows in-place updating.
         /// entries. 
         /// </summary>
+        /// <remarks>
+        /// FASTER KV seems to call this optimistically, but as usual
+        /// it is poorly documented.  It seems that this method must
+        /// return a result consistent with <see cref="NeedCopyUpdate" />.
+        /// </remarks>
         public override bool InPlaceUpdater(ref PromiseId key, ref DbInput input, ref PromiseBlob value, ref Promise? output)
-            => throw new NotSupportedException();
-
-        /// <summary>
-        /// Called by FASTER KV for creating a entry to replace an existing one.
-        /// </summary>
-        public override void CopyUpdater(ref PromiseId key, ref DbInput input, ref PromiseBlob oldValue, ref PromiseBlob newValue, ref Promise? output)
-            => newValue.SaveSerialization(input.Serialization);
+            => false;
 
         /// <summary>
         /// Always requiring new allocations to update an entry,
@@ -115,6 +114,12 @@ public sealed partial class FasterDbPromiseStorage
         /// </summary>
         public override bool NeedCopyUpdate(ref PromiseId key, ref DbInput input, ref PromiseBlob oldValue, ref Promise? output)
             => true;
+
+        /// <summary>
+        /// Called by FASTER KV for creating a entry to replace an existing one.
+        /// </summary>
+        public override void CopyUpdater(ref PromiseId key, ref DbInput input, ref PromiseBlob oldValue, ref PromiseBlob newValue, ref Promise? output)
+            => newValue.SaveSerialization(input.Serialization);
 
         /// <summary>
         /// Called by FASTER KV for creating a new entry.
@@ -232,11 +237,10 @@ public sealed partial class FasterDbPromiseStorage
         /// Input to the RMW operation.
         /// </param>
         /// <returns>
-        /// The number of bytes in the existing blob or in the new blob,
-        /// whichever is greater.
+        /// The number of bytes required for the new blob.
         /// </returns>
         public int GetLength(ref PromiseBlob t, ref DbInput input)
-            => Math.Max((int)input.Serialization.TotalLength, t.TotalLength);
+            => (int)input.Serialization.TotalLength;
 
         #endregion
     }
