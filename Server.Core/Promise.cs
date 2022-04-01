@@ -186,6 +186,9 @@ public sealed partial class Promise
         // CLR's new memory model, but do it anyway to call attention to it.
         Volatile.Write(ref _resultOutput, result);
 
+        if (_onUpdate is not null)
+            EnsureSubscribedToOutput();
+
         // Loop through subscribers to wake up one by one.
         // Releases the list lock after de-queuing each node,
         // before invoking its continuation (involving user-defined code).
@@ -349,11 +352,53 @@ public sealed partial class Promise
     /// Event that is fired when this promise is updated.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This event may be observed to log the events,
     /// or to persist the promise to secondary storage
     /// (once it has completed).
+    /// </para>
+    /// <para>
+    /// It is possible to miss updates around the same
+    /// time a new subscriber is registered here, due 
+    /// to multiple threads racing.  Of course, updates
+    /// in the past are not re-played.  Callers adding a
+    /// new receiver should check afterwards if they
+    /// need to perform the processing on the current
+    /// state of this object and its data.
+    /// </para>
     /// </remarks>
-    public event EventHandler<UpdateEventArgs>? OnUpdate;
+    public event EventHandler<UpdateEventArgs>? OnUpdate
+    {
+        add
+        {
+            _onUpdate += value;
+            EnsureSubscribedToOutput();
+        }
+
+        remove
+        {
+            _onUpdate -= value;
+        }
+    }
+
+    /// <summary>
+    /// Ensure that this promise receives updates from <see cref="_resultOutput" />
+    /// if it currently has partial data.
+    /// </summary>
+    private bool EnsureSubscribedToOutput()
+    {
+        var r = _resultOutput;
+        if (r is null || r.IsComplete)
+            return false;
+
+        if (Interlocked.Exchange(ref _subscribedToOutput, 1) == 0)
+            r.TrySubscribePromiseToUpdates(this);
+
+        return true;
+    }
+
+    private int _subscribedToOutput;
+    private EventHandler<UpdateEventArgs>? _onUpdate;
 
     /// <summary>
     /// Fire the <see cref="OnUpdate" /> event.
@@ -362,7 +407,7 @@ public sealed partial class Promise
     {
         try
         {
-            OnUpdate?.Invoke(this, new UpdateEventArgs { Subject = this });
+            _onUpdate?.Invoke(this, new UpdateEventArgs { Subject = this });
         }
         catch
         {
