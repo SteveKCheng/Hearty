@@ -1,4 +1,5 @@
 ﻿using FASTER.core;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
@@ -351,8 +352,22 @@ public sealed partial class FasterDbPromiseStorage
     /// </remarks>
     public long GetDatabaseEntriesCount() => _db.EntryCount;
 
+    /// <summary>
+    /// The number of (generation 0) garbage collections 
+    /// that have occurred between the start of the this process
+    /// and the last cleaning up of expired GC handles.
+    /// </summary>
     private int _lastGarbageCollectionCount;
+
+    /// <summary>
+    /// The last time that cleaning of GC handles has been triggered.
+    /// </summary>
     private long _lastCleanUpTime;
+
+    /// <summary>
+    /// Flipped on (to value 1) if cleaning of GC handles has been scheduled.
+    /// </summary>
+    private int _hasActivatedCleanUp;
 
     /// <summary>
     /// Heuristically check if the objects dictionary should be scanned
@@ -369,21 +384,24 @@ public sealed partial class FasterDbPromiseStorage
         {
             var now = Environment.TickCount64;
 
-            if (now - _lastCleanUpTime > 1000)
-            {
-                var count = GC.CollectionCount(0);
-                if (count - _lastGarbageCollectionCount > 0)
-                {
-                    _lastCleanUpTime = now;
-                    _lastGarbageCollectionCount = count;
+            if (now - _lastCleanUpTime <= 1000)
+                return;
 
-                    Task.Factory.StartNew(state => ((FasterDbPromiseStorage)state!).CleanExpiredGCHandles(),
-                                          this,
-                                          CancellationToken.None,
-                                          TaskCreationOptions.DenyChildAttach,
-                                          TaskScheduler.Default);
-                }
-            }
+            var count = GC.CollectionCount(0);
+            if (count - _lastGarbageCollectionCount <= 0)
+                return;
+
+            if (Interlocked.Exchange(ref _hasActivatedCleanUp, 1) != 0)
+                return;
+
+            _lastCleanUpTime = now;
+            _lastGarbageCollectionCount = count;
+
+            Task.Factory.StartNew(state => ((FasterDbPromiseStorage)state!).CleanExpiredGCHandles(),
+                                  this,
+                                  CancellationToken.None,
+                                  TaskCreationOptions.DenyChildAttach,
+                                  TaskScheduler.Default);
         }
     }
 
@@ -393,24 +411,36 @@ public sealed partial class FasterDbPromiseStorage
     /// </summary>
     private void CleanExpiredGCHandles()
     {
-        foreach (var (id, gcHandle) in _objects)
+        try
         {
-            // Handle not expired yet
-            if (gcHandle.Target is not null)
-                continue;
-
-            if (!_objects.TryRemove(id, out var gcHandle2))
-                continue;
-
-            // Oops, some other thread raced to revive the entry.
-            // Better add it back.
-            if (gcHandle2.Target is not null)
+            foreach (var (id, gcHandle) in _objects)
             {
-                _objects.TryAdd(id, gcHandle2);
-                continue;
-            }
+                // Handle not expired yet
+                if (gcHandle.Target is not null)
+                    continue;
 
-            gcHandle2.Free();
+                if (!_objects.TryRemove(id, out var gcHandle2))
+                    continue;
+
+                // Oops, some other thread raced to revive the entry.
+                // Better add it back.
+                if (gcHandle2.Target is not null)
+                {
+                    _objects.TryAdd(id, gcHandle2);
+                    continue;
+                }
+
+                gcHandle2.Free();
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.LogCritical(e, 
+                "An error occurred while cleaning up entries for expired in-memory promises. ");
+        }
+        finally
+        {
+            _hasActivatedCleanUp = 0;
         }
     }
 }
