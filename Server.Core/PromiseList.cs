@@ -683,7 +683,7 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
         for (int index = 0; index < count; ++index)
         {
             ulong id = BinaryPrimitives.ReadUInt64LittleEndian(idBuffer[(index * sizeof(ulong))..]);
-            int ordinal = BinaryPrimitives.ReadInt32LittleEndian(ordinalBuffer[(index * sizeof(ulong))..]);
+            int ordinal = BinaryPrimitives.ReadInt32LittleEndian(ordinalBuffer[(index * sizeof(int))..]);
             self._promiseIds.TrySetMember(index, KeyValuePair.Create(ordinal, new PromiseId(id)));
         }
 
