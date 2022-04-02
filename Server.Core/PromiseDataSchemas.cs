@@ -116,6 +116,8 @@ public sealed class PromiseDataSchemas : IReadOnlyDictionary<ushort, PromiseData
 /// </param>
 /// <param name="buffer">
 /// Where the payload for the serialized promise data should be read from.
+/// This buffer must be sized to exactly the number of bytes that had
+/// been reported in <see cref="PromiseDataSerializationInfo.PayloadLength" />.
 /// </param>
 /// <remarks>
 /// <para>
@@ -158,6 +160,8 @@ public delegate PromiseData PromiseDataDeserializer(IPromiseDataFixtures fixture
 /// <param name="buffer">
 /// The buffer to write the serialized data into. 
 /// It is sized to exactly <see cref="PromiseDataSerializationInfo.PayloadLength" />.
+/// It need not be initialized, but the implementation (this function)
+/// is mandated to write to every byte of the buffer, for safety.
 /// </param>
 public delegate void PromiseDataSerializer(in PromiseDataSerializationInfo info,
                                            Span<byte> buffer);

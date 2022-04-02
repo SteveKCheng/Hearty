@@ -42,13 +42,13 @@ public sealed partial class Promise
         PromiseDataSerializationInfo inputInfo = default;
         PromiseDataSerializationInfo outputInfo = default;
 
-        if (input is not null && !input.TryPrepareSerialization(out inputInfo))
+        if (output?.TryPrepareSerialization(out outputInfo) == false)
         {
             info = default;
             return false;
         }
 
-        if (output is not null && !output.TryPrepareSerialization(out outputInfo))
+        if (input?.TryPrepareSerialization(out inputInfo) == false)
         {
             info = default;
             return false;
@@ -92,31 +92,41 @@ public sealed partial class Promise
     {
         var schemas = fixtures.Schemas;
 
-        var header = PromiseSerializationHeader.ReadFrom(data);
-        data = data[header.HeaderLength..];
-
         PromiseData? inputData = null;
         PromiseData? outputData = null;
+        PromiseSerializationHeader header;
 
-        if (header.InputSchemaCode != 0)
+        try
         {
-            var deserializer = schemas[header.InputSchemaCode];
-            inputData = deserializer.Invoke(fixtures, 
-                                            data[0 .. (int)header.InputLength]);
-            data = data[(int)header.InputLength..];
+            header = PromiseSerializationHeader.ReadFrom(data);
+            data = data[header.HeaderLength..];
+
+            if (header.InputSchemaCode != 0)
+            {
+                var deserializer = schemas[header.InputSchemaCode];
+                inputData = deserializer.Invoke(fixtures,
+                                                data[0..(int)header.InputLength]);
+                data = data[(int)header.InputLength..];
+            }
+
+            if (header.OutputSchemaCode != 0)
+            {
+                var deserializer = schemas[header.OutputSchemaCode];
+                outputData = deserializer.Invoke(fixtures,
+                                                 data[0..(int)header.OutputLength]);
+            }
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            throw new InvalidDataException(
+                "De-serialization of promise data failed.  The data may be corrupt. ",
+                innerException: e);
         }
 
-        if (header.OutputSchemaCode != 0)
-        {
-            var deserializer = schemas[header.OutputSchemaCode];
-            outputData = deserializer.Invoke(fixtures, 
-                                             data[0..(int)header.OutputLength]);
-        }
-
-        return new Promise(fixtures.Logger, 
-                           DateTime.UtcNow, 
-                           header.Id, 
-                           inputData, 
+        return new Promise(fixtures.Logger,
+                           DateTime.UtcNow,
+                           header.Id,
+                           inputData,
                            outputData);
     }
 }
