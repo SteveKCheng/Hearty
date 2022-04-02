@@ -287,6 +287,7 @@ namespace Hearty.BTree
         /// <summary>
         /// Get all values in this B+Tree, presented in the same sequence
         /// as their corresponding keys from <see cref="Keys" />.
+        /// </summary>
         public BTreeValuesCollection<TKey, TValue> Values => new BTreeValuesCollection<TKey, TValue>(this);
 
         /// <inheritdoc cref="IDictionary{TKey, TValue}.Keys" />
