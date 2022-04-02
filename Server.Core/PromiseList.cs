@@ -571,11 +571,13 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
         //
         //  _commitCount    : int
         //  _transientCount : int
+        //  exceptionLength : int
+        //  flags           : int
         //  ids             : PromiseId[_promiseIdTotal]
         //  ordinals        : int[_promiseIdTotal]
-        //  exceptionData   : byte[exceptionInfo.PayloadLength]
+        //  exceptionData   : byte[exceptionLength]
 
-        const int headerOffset = 2 * sizeof(int);
+        const int headerOffset = 4 * sizeof(int);
         int idBufferSize = count * sizeof(ulong);
         int ordinalBufferSize = count * sizeof(int);
 
@@ -598,9 +600,12 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
         BinaryPrimitives.WriteInt32LittleEndian(buffer, _committedCount);
         BinaryPrimitives.WriteInt32LittleEndian(buffer[sizeof(int)..], _transientCount);
 
+        BinaryPrimitives.WriteInt32LittleEndian(buffer[(2 * sizeof(int))..], 0);
+        BinaryPrimitives.WriteInt32LittleEndian(buffer[(3 * sizeof(int))..], 0);
+
         int count = _promiseIdTotal;
 
-        const int headerOffset = 2 * sizeof(int);
+        const int headerOffset = 4 * sizeof(int);
         int idBufferSize = count * sizeof(ulong);
         int ordinalBufferSize = count * sizeof(int);
 
@@ -629,6 +634,9 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
         // Serialize termination exception, if any
         if (ExceptionData?.TryPrepareSerialization(out var exceptionInfo) == true)
         {
+            BinaryPrimitives.WriteInt32LittleEndian(buffer[(2 * sizeof(int))..], 
+                                                    exceptionInfo.PayloadLength);
+
             exceptionInfo.Serializer!.Invoke(
                 exceptionInfo,
                 buffer[(headerOffset + idBufferSize + ordinalBufferSize)..]);
@@ -661,9 +669,13 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
         if (committedCount < 0 || transientCount < 0)
             throw new InvalidDataException("The counts of promises are the serialized PromiseList is invalid. ");
 
+        int flags = BinaryPrimitives.ReadInt32LittleEndian(buffer[(3 * sizeof(int))..]);
+        if (flags != 0)
+            throw new InvalidDataException("Reserved flags field must be currently zero, but is not. ");
+
         int count = checked(committedCount + transientCount);
 
-        const int headerOffset = 2 * sizeof(int);
+        const int headerOffset = 4 * sizeof(int);
         int idBufferSize = count * sizeof(ulong);
         int ordinalBufferSize = count * sizeof(int);
 
@@ -689,9 +701,13 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
 
         // De-serialize termination exception if any
         PromiseExceptionalData? exceptionData = null;
-        var exceptionBuffer = buffer[(headerOffset + idBufferSize + ordinalBufferSize)..];
-        if (exceptionBuffer.Length > 0)
+        var exceptionLength = BinaryPrimitives.ReadInt32LittleEndian(buffer[(2 * sizeof(int))..]);
+        if (exceptionLength > 0)
+        {
+            var exceptionBuffer = buffer.Slice(headerOffset + idBufferSize + ordinalBufferSize,
+                                               exceptionLength);
             exceptionData = PromiseExceptionalData.Deserialize(fixtures, exceptionBuffer);
+        }
 
         self._promiseIds.TryComplete(count, exceptionData);
         return self;
