@@ -84,9 +84,9 @@ public class Startup
 
         services.AddSingleton<PromiseStorage>(c =>
         {
-            var logger = c.GetRequiredService<ILogger<PromiseStorage>>();
+            var logger = c.GetRequiredService<ILogger<BasicPromiseStorage>>();
 
-            var promiseStorage = new BasicPromiseStorage();
+            var promiseStorage = new BasicPromiseStorage(logger);
             promiseStorage.OnStorageEvent += (sender, args) =>
             {
                 string message = args.Type switch
