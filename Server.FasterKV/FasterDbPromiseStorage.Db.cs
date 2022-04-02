@@ -413,8 +413,13 @@ public sealed partial class FasterDbPromiseStorage
     {
         try
         {
+            int totalEntries = 0;
+            int cleanedEntries = 0;
+
             foreach (var (id, gcHandle) in _objects)
             {
+                ++totalEntries;
+
                 // Handle not expired yet
                 if (gcHandle.Target is not null)
                     continue;
@@ -431,7 +436,11 @@ public sealed partial class FasterDbPromiseStorage
                 }
 
                 gcHandle2.Free();
+                ++cleanedEntries;
             }
+
+            _logger.LogDebug("Removed {cleaned} expired entries for in-memory promises out of {total} total entries. ",
+                             cleanedEntries, totalEntries);
         }
         catch (Exception e)
         {
