@@ -360,9 +360,9 @@ public sealed partial class FasterDbPromiseStorage
     private int _lastGarbageCollectionCount;
 
     /// <summary>
-    /// The last time that cleaning of GC handles has been triggered.
+    /// The last time that cleaning of GC handles might be triggered.
     /// </summary>
-    private long _lastCleanUpTime;
+    private long _lastCleanUpCheckTime;
 
     /// <summary>
     /// Flipped on (to value 1) if cleaning of GC handles has been scheduled.
@@ -384,9 +384,18 @@ public sealed partial class FasterDbPromiseStorage
         {
             var now = Environment.TickCount64;
 
-            if (now - _lastCleanUpTime <= 1000)
+            if (now - _lastCleanUpCheckTime <= 1000)
                 return;
 
+            // If the above check passes, write out the updated time
+            // immediately to avoid the more expensive checks below
+            // when this method is invoked again soon.
+            //
+            // On 32-bit .NET, this read can tear but we can tolerate
+            // the above check returning the wrong result very rarely.
+            _lastCleanUpCheckTime = now;
+
+            // May be an expensive query in the .NET run-time system.
             var count = GC.CollectionCount(0);
             if (count - _lastGarbageCollectionCount <= 0)
                 return;
@@ -394,7 +403,6 @@ public sealed partial class FasterDbPromiseStorage
             if (Interlocked.Exchange(ref _hasActivatedCleanUp, 1) != 0)
                 return;
 
-            _lastCleanUpTime = now;
             _lastGarbageCollectionCount = count;
 
             Task.Factory.StartNew(state => ((FasterDbPromiseStorage)state!).CleanExpiredGCHandles(),

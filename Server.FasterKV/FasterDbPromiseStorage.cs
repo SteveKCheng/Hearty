@@ -95,6 +95,7 @@ public sealed partial class FasterDbPromiseStorage
                 valueLength = blobHooks
             };
 
+            _lastCleanUpCheckTime = Environment.TickCount64;
         }
         catch
         {
