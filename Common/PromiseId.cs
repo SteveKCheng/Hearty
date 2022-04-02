@@ -120,9 +120,9 @@ public readonly struct PromiseId : IComparable<PromiseId>
                                 ReadOnlySpan<char> sequenceNumberStr,
                                 out PromiseId promiseId)
     {
-        if (uint.TryParse(serviceIdStr, NumberStyles.HexNumber, null, out var serviceId))
+        if (uint.TryParse(serviceIdStr, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var serviceId))
         {
-            if (uint.TryParse(sequenceNumberStr, NumberStyles.None, null, out var sequenceNumber))
+            if (uint.TryParse(sequenceNumberStr, NumberStyles.None, CultureInfo.InvariantCulture, out var sequenceNumber))
             {
                 promiseId = new PromiseId(serviceId, sequenceNumber);
                 return true;
@@ -194,7 +194,7 @@ public readonly struct PromiseId : IComparable<PromiseId>
     public bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format, IFormatProvider? provider)
     {
 #if NET6_0_OR_GREATER
-        return destination.TryWrite(null, $"{ServiceId:X8}/{SequenceNumber}", out charsWritten);
+        return destination.TryWrite(CultureInfo.InvariantCulture, $"{ServiceId:X8}/{SequenceNumber}", out charsWritten);
 #else
         if (destination.Length < MaxChars)
         {
@@ -229,7 +229,7 @@ public readonly struct PromiseId : IComparable<PromiseId>
     public int FormatAscii(Span<byte> destination)
     {
         Span<char> charBuffer = stackalloc char[MaxChars];
-        TryFormat(charBuffer, out int charsWritten, null, null);
+        TryFormat(charBuffer, out int charsWritten, null, CultureInfo.InvariantCulture);
 
         if (destination.Length < charsWritten)
         {
