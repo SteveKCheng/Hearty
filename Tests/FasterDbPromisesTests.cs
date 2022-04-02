@@ -1,4 +1,5 @@
-﻿using Hearty.Server;
+﻿using Divergic.Logging.Xunit;
+using Hearty.Server;
 using Hearty.Server.FasterKV;
 using System;
 using System.Collections.Generic;
@@ -6,13 +7,21 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Hearty.Tests;
 
-public class FasterDbPromisesTests
+public sealed class FasterDbPromisesTests : IDisposable
 {
     private readonly PromiseDataSchemas _schemas 
-        = new PromiseDataSchemas(PromiseDataSchemas.CreateBuilderWithDefaults());
+        = new(PromiseDataSchemas.CreateBuilderWithDefaults());
+
+    private readonly ICacheLogger<FasterDbPromiseStorage> _logger;
+
+    public FasterDbPromisesTests(ITestOutputHelper testOutput)
+        => _logger = testOutput.BuildLoggerFor<FasterDbPromiseStorage>();
+
+    public void Dispose() => _logger.Dispose();
 
     private Payload GenerateRandomPayload(Random random, int maxSize)
     {
@@ -30,7 +39,7 @@ public class FasterDbPromisesTests
     {
         int count = 256;
 
-        using var db = new FasterDbPromiseStorage(_schemas, new FasterDbFileOptions
+        using var db = new FasterDbPromiseStorage(_logger, _schemas, new FasterDbFileOptions
         {
             Preallocate = false,
             DeleteOnDispose = true,
@@ -77,7 +86,7 @@ public class FasterDbPromisesTests
     {
         int count = 16;
 
-        using var db = new FasterDbPromiseStorage(_schemas, new FasterDbFileOptions
+        using var db = new FasterDbPromiseStorage(_logger, _schemas, new FasterDbFileOptions
         {
             Preallocate = false,
             DeleteOnDispose = true,

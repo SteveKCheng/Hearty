@@ -5,19 +5,39 @@ using System.Text;
 using Xunit;
 using Hearty.Server;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Xunit.Abstractions;
+using Divergic.Logging.Xunit;
 
 namespace Hearty.Tests;
 
-public class PromiseSerializationTests
+public sealed class PromiseSerializationTests : IDisposable
 {
     private class PromiseDataFixtures : IPromiseDataFixtures
     {
-        public PromiseStorage PromiseStorage { get; } = new BasicPromiseStorage();
+        public PromiseStorage PromiseStorage { get; }
 
         public PromiseDataSchemas Schemas { get; } = new PromiseDataSchemas();
+
+        public ILogger Logger { get; }
+
+        public PromiseDataFixtures(ILogger<BasicPromiseStorage> logger)
+        {
+            Logger = logger;
+            PromiseStorage = new BasicPromiseStorage(logger);
+        }
     }
 
-    private readonly PromiseDataFixtures _fixtures = new();
+    private readonly ICacheLogger<BasicPromiseStorage> _logger;
+    private readonly PromiseDataFixtures _fixtures;
+
+    public PromiseSerializationTests(ITestOutputHelper testOutput)
+    {
+        _logger = testOutput.BuildLoggerFor<BasicPromiseStorage>();
+        _fixtures = new PromiseDataFixtures(_logger);
+    }
+
+    public void Dispose() => _logger.Dispose();
 
     private static Payload CreateTestPayload()
     {
@@ -151,7 +171,7 @@ So long lives this, and this gives life to thee. ");
         VerifyReserialization(data2, buffer);
     }
 
-    private static T GetSynchronousResult<T>(in ValueTask<T> task)
+    internal static T GetSynchronousResult<T>(in ValueTask<T> task)
     {
         Assert.True(task.IsCompleted);
         return task.Result;

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Threading;
 
 namespace Hearty.Server;
@@ -29,6 +30,23 @@ public abstract class PromiseStorage
                                           PromiseData? output = null);
 
     /// <summary>
+    /// Logs relevant events to the containing application's log.
+    /// </summary>
+    protected readonly ILogger _logger;
+
+    /// <summary>
+    /// Prepare base-class functionality for a promise storage provider.
+    /// </summary>
+    /// <param name="logger">
+    /// Used to log relevant events regarding promise storage,
+    /// and critical errors with <see cref="Promise" /> objects.
+    /// </param>
+    protected PromiseStorage(ILogger logger)
+    {
+        _logger = logger;
+    }
+
+    /// <summary>
     /// Instantiate an object of type <see cref="Promise" />,
     /// used to implement <see cref="CreatePromise" />.
     /// </summary>
@@ -47,7 +65,7 @@ public abstract class PromiseStorage
     {
         var newId = new PromiseId(Interlocked.Increment(ref _currentId));
         var currentTime = DateTime.UtcNow;
-        var promise = new Promise(currentTime, newId, input, output);
+        var promise = new Promise(_logger, currentTime, newId, input, output);
         return promise;
     }
 

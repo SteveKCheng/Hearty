@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 
@@ -27,7 +28,8 @@ public class BasicPromiseStorage : PromiseStorage
     /// Prepare to storage <see cref="Promise" /> objects
     /// entirely in managed memory.
     /// </summary>
-    public BasicPromiseStorage()
+    public BasicPromiseStorage(ILogger<BasicPromiseStorage> logger)
+        : base(logger)
     {
         _expiryQueue = new ExpiryQueue<Promise>(new PromiseComparer(), this.ExpirePromise);
     }

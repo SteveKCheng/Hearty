@@ -113,7 +113,11 @@ public sealed partial class Promise
                                              data[0..(int)header.OutputLength]);
         }
 
-        return new Promise(DateTime.UtcNow, header.Id, inputData, outputData);
+        return new Promise(fixtures.Logger, 
+                           DateTime.UtcNow, 
+                           header.Id, 
+                           inputData, 
+                           outputData);
     }
 }
 

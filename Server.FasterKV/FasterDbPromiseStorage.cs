@@ -1,4 +1,5 @@
 ﻿using FASTER.core;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
@@ -47,6 +48,10 @@ public sealed partial class FasterDbPromiseStorage
     /// <summary>
     /// Prepare to store promises in memory and in the database.
     /// </summary>
+    /// <param name="logger">
+    /// Logs significant events regarding this database,
+    /// and critical errors from <see cref="Promise" /> objects.
+    /// </param>
     /// <param name="schemas">
     /// Data schemas required to re-materialize (de-serialize) promises
     /// from the database.
@@ -54,8 +59,10 @@ public sealed partial class FasterDbPromiseStorage
     /// <param name="fileOptions">
     /// Options for the FASTER KV database.
     /// </param>
-    public FasterDbPromiseStorage(PromiseDataSchemas schemas,
+    public FasterDbPromiseStorage(ILogger<FasterDbPromiseStorage> logger,
+                                  PromiseDataSchemas schemas,
                                   in FasterDbFileOptions fileOptions)
+        : base(logger)
     {
         _schemas = schemas;
         _promiseUpdateEventHandler = this.PromiseHasUpdated;
@@ -87,6 +94,7 @@ public sealed partial class FasterDbPromiseStorage
             {
                 valueLength = blobHooks
             };
+
         }
         catch
         {
@@ -106,6 +114,8 @@ public sealed partial class FasterDbPromiseStorage
     PromiseStorage IPromiseDataFixtures.PromiseStorage => this;
 
     PromiseDataSchemas IPromiseDataFixtures.Schemas => _schemas;
+
+    ILogger IPromiseDataFixtures.Logger => _logger;
 
     /// <inheritdoc />
     public override Promise CreatePromise(PromiseData? input, PromiseData? output = null)

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -269,4 +270,10 @@ public interface IPromiseDataFixtures
     /// The schemas for serialized data that have been registered.
     /// </summary>
     public PromiseDataSchemas Schemas { get; }
+
+    /// <summary>
+    /// Used to log critical errors from <see cref="Promise" />
+    /// that cannot be reported via exceptions.
+    /// </summary>
+    public ILogger Logger { get; }
 }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -120,8 +121,26 @@ public sealed partial class Promise
     public PromiseId Id { get; }
 
     /// <summary>
+    /// Only used to log errors, which would be considered
+    /// critical that happen in callback functions.
+    /// </summary>
+    /// <remarks>
+    /// It generally does not make sense to propagate exceptions
+    /// back to the caller that caused the callback functions
+    /// to be invoked by this class.  That caller has nothing
+    /// to do with the consumers' callback functions registered here, 
+    /// and is often just posting the result from the producer.
+    /// </remarks>
+    private readonly ILogger _logger;
+
+    /// <summary>
     /// Construct or re-materialize an in-memory representation of a promise.
     /// </summary>
+    /// <param name="logger">
+    /// Used to log errors from invoking callback
+    /// functions, where it does not make sense to propagate
+    /// exceptions back to the invoker.
+    /// </param>
     /// <param name="creationTime">
     /// The time that this promise was first created.
     /// </param>
@@ -137,11 +156,14 @@ public sealed partial class Promise
     /// This method is internal; promises must be instantiated
     /// through <see cref="PromiseStorage" />.
     /// </remarks>
-    internal Promise(DateTime creationTime, 
+    internal Promise(ILogger logger,
+                     DateTime creationTime, 
                      PromiseId id, 
                      PromiseData? input, 
                      PromiseData? output)
     {
+        _logger = logger;
+
         Id = id;
         CreationTime = creationTime;
         RequestOutput = input;
@@ -199,12 +221,24 @@ public sealed partial class Promise
             {
                 node.TryMarkPublished();
             }
-            catch
+            catch (Exception e)
             {
-                // FIXME log the error, do not swallow
+                LogCallbackException(e, purpose: "waking up subscriber");
             }
         }
     }
+
+    [LoggerMessage(EventId = 110, 
+                   Level = LogLevel.Critical, 
+                   Message = "An exception occurred a callback function from promise {id}, for {purpose}")]
+    private static partial void LogCallbackExceptionImpl(
+        ILogger logger,
+        PromiseId id,
+        Exception exception,
+        string purpose);
+
+    private void LogCallbackException(Exception exception, string purpose)
+        => LogCallbackExceptionImpl(_logger, Id, exception, purpose);
 
     /// <summary>
     /// Awaits, in the background, for a job's result object to be published,
@@ -409,9 +443,9 @@ public sealed partial class Promise
         {
             _onUpdate?.Invoke(this, new UpdateEventArgs { Subject = this });
         }
-        catch
+        catch (Exception e)
         {
-            // FIXME log any exception
+            LogCallbackException(e, purpose: "firing a data update");
         }
     }
 
