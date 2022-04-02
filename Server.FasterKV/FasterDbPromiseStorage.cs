@@ -161,7 +161,44 @@ public sealed partial class FasterDbPromiseStorage
                             info.TotalLength <= MaxSerializationLength;
 
         if (canSerialize)
-            DbSetValue(promise.Id, info);
+        {
+            bool isAdded = DbSetValue(promise.Id, info);
+
+            // If this is the first time the promise is added to the
+            // database, demote to a weak reference in _objects.
+            if (isAdded)
+            {
+                var gcHandle = GCHandle.Alloc(promise, GCHandleType.Weak);
+                try
+                {
+                    // We just want to exchange the old GC handle with 
+                    // the new one, and discard the old one:
+                    //
+                    //   var gcHandleOld = _objects[promise.Id];
+                    //   _objects[promise.Id] = gcHandle;
+                    //   gcHandleOld.Free();
+                    //
+                    // but there is no method in ConcurrentDictionary
+                    // for the "exchange" of values, so we call
+                    // AddOrUpdate instead.  The "Add" case should never
+                    // happen.
+                    _objects.AddOrUpdate(
+                        promise.Id,
+                        static (_, newValue) => newValue,
+                        static (_, oldValue, newValue) =>
+                        {
+                            oldValue.Free();
+                            return newValue;
+                        },
+                        gcHandle);
+                }
+                catch
+                {
+                    gcHandle.Free();
+                    throw;
+                }
+            }
+        }
     }
 
     /// <inheritdoc />
