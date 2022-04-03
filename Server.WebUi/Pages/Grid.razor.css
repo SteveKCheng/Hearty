@@ -16,7 +16,7 @@ th {
     padding-bottom: 0.2em;
 }
 
-th, td {
+th, tbody td {
     padding-left: 0.3em;
     padding-right: 0.2em;
 }

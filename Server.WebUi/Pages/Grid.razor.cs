@@ -84,6 +84,7 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
     private IJSObjectReference? _jsModule;
     private IJSObjectReference? _jsEventDisposable;
     private ElementReference _tableReference;
+    private bool _hasPrologueRow;
 
     private IEnumerable<TGridItem>? GetSortedItems()
         => (_sortByColumn is null || Items is null) 
@@ -219,6 +220,16 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
     }
 
     /// <summary>
+    /// Called from Razor syntax to render the contents of the prologue
+    /// row of the grid.
+    /// </summary>
+    private void RenderColumnPrologues(RenderTreeBuilder builder)
+    {
+        foreach (var col in _columns)
+            RenderColumnPrologue(builder, col);
+    }
+
+    /// <summary>
     /// Called from Razor syntax to render all the rows of the grid
     /// when virtualization is disabled.
     /// </summary>
@@ -266,5 +277,8 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
     }
 
     void IGrid<TGridItem>.RegisterColumn(ColumnDefinition<TGridItem> column)
-        => _columns.Add(column);
+    {
+        _columns.Add(column);
+        _hasPrologueRow |= (column.PrologueContent is not null);
+    }
 }

@@ -16,6 +16,12 @@
                 <tr>
                     @RenderColumnHeaders
                 </tr>
+                @if (_hasPrologueRow)
+                {
+                    <tr>
+                        @RenderColumnPrologues
+                    </tr>
+                }
             </thead>
             <tbody>
                 @if (Virtualize)
@@ -89,5 +95,15 @@
                 <div class="column-width-draghandle"></div>
             }
         </th>
+    }
+
+    /// <summary>
+    /// Renders the cell for one of the columns in the prologue row of the grid.
+    /// </summary>
+    private void RenderColumnPrologue(RenderTreeBuilder __builder, ColumnDefinition<TGridItem> col)
+    {
+        <td class="@ColumnHeaderClass(col)" @key="@col" scope="col">
+            @{ col.PrologueContent?.Invoke(__builder); }
+        </td>        
     }
 }

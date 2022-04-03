@@ -97,6 +97,20 @@ public abstract class ColumnDefinition<TGridItem> : ComponentBase
     public RenderFragment? ColumnOptions { get; set; }
 
     /// <summary>
+    /// A fragment to show for this column on a "prologue row"
+    /// situated above the header row.
+    /// </summary>
+    /// <remarks>
+    /// This area can be used to show a
+    /// text box for filtering entries that is always visible
+    /// above the headers.  The prologue row is not rendered if
+    /// no columns have prologue content (i.e. this property
+    /// is left as null).
+    /// </remarks>
+    [Parameter]
+    public RenderFragment? PrologueContent { get; set; }
+
+    /// <summary>
     /// A fragment to show, inside the header for this column.
     /// </summary>
     internal RenderFragment HeaderContent { get; }
