@@ -6,6 +6,14 @@ table {
 thead {
     position: sticky;
     top: 0;
+
+    /* Hack to avoid a bug in the Blink rendering engine when 
+       "position: sticky" is applied to "thead" instead of 
+       "thead th": the data rows bleed through the background.  
+       As we may have a "prologue" row, we cannot make 
+       "thead th" individually stick.  Firefox does not need
+       this workaround. */
+    background-color: white;
 }
 
 th {
