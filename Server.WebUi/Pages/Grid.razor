@@ -12,16 +12,23 @@
     @ChildContent
     <Defer>
         <table aria-rowcount="@_rowCount" @ref="_tableReference" @onclosecolumnoptions="CloseColumnOptions">
+            <colgroup>
+                @foreach (var col in _columns)
+                {
+                    <col class="@col.Class" />
+                }
+            </colgroup>
+
             <thead>
-                <tr>
-                    @RenderColumnHeaders
-                </tr>
                 @if (_hasPrologueRow)
                 {
                     <tr>
                         @RenderColumnPrologues
                     </tr>
                 }
+                <tr>
+                    @RenderColumnHeaders
+                </tr>
             </thead>
             <tbody>
                 @if (Virtualize)
@@ -102,7 +109,7 @@
     /// </summary>
     private void RenderColumnPrologue(RenderTreeBuilder __builder, ColumnDefinition<TGridItem> col)
     {
-        <td class="@ColumnHeaderClass(col)" @key="@col" scope="col">
+        <td class="@ColumnHeaderClass(col)">
             @{ col.PrologueContent?.Invoke(__builder); }
         </td>        
     }

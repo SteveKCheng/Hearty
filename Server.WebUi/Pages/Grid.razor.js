@@ -34,10 +34,25 @@ export function checkColumnOptionsPosition(elem) {
     }
 }
 
-function enableColumnResizing(elem) {
-    elem.querySelectorAll('thead .column-width-draghandle').forEach(handle => {
-        const th = handle.parentNode;
-        handle.addEventListener('mousedown', evt => {
+/**
+ * @brief Attaches event handlers onto the DOM for the mouse drags 
+ *        to resize the table's columns.
+ *        
+ * @param elem  The DOM element for the HTML table.
+ */
+function enableColumnResizing(elem)
+{
+    // Assumes these elements are in one-to-one correspondence
+    const dragHandles = elem.querySelectorAll(':scope > thead .column-width-draghandle');
+    const cols = elem.querySelectorAll(':scope > colgroup > col');
+
+    for (let i = 0; i < dragHandles.length; ++i)
+    {
+        const dragHandle = dragHandles[i];
+        const col = cols[i];
+        const th = dragHandle.parentNode;
+
+        dragHandle.addEventListener('mousedown', evt => {
             evt.preventDefault();
             evt.stopPropagation();
             const startPageX = evt.pageX;
@@ -50,7 +65,7 @@ function enableColumnResizing(elem) {
                 const nextWidth = originalColumnWidth + evt.pageX - startPageX;
                 if (Math.abs(nextWidth - updatedColumnWidth) > 0) {
                     updatedColumnWidth = nextWidth;
-                    th.style.width = `${updatedColumnWidth}px`;
+                    col.style.width = `${updatedColumnWidth}px`;
                 }
             }
 
@@ -62,5 +77,5 @@ function enableColumnResizing(elem) {
             document.body.addEventListener('mousemove', handleMouseMove);
             document.body.addEventListener('mouseup', handleMouseUp);
         });
-    });
+    }
 }
