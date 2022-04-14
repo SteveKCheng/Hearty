@@ -1,14 +1,14 @@
-GET https://localhost:5001/server/jobs/v1/id/00000000/1
+GET https://localhost:5001/server/promises/00000000/1
 Accept: multipart/parallel
 Accept-Item: application/json
 
 
 ###
-GET https://localhost:5001/server/jobs/v1/id/00000000/2
+GET https://localhost:5001/server/promises/00000000/2
 Accept: application/msgpack
 
 ###
-POST https://localhost:5001/server/jobs/v1/id/00000000/1?action=cancel
+POST https://localhost:5001/server/promises/00000000/1?action=cancel
 
 ###
 # @name jwt
@@ -27,12 +27,12 @@ Accept: application/json
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoic3RldmUiLCJuYmYiOjE2NDU2NDcxMzksImV4cCI6MTY3NzE4MzEzOSwiaXNzIjoiaHR0cHM6Ly9sb2NhbGhvc3Q6NTAwMS8iLCJhdWQiOiJodHRwczovL2xvY2FsaG9zdDo1MDAxLyJ9.4OfWYu7E2xGEx1P18wJUC3lz_DQNzd2Kik_dJ-jVZCA
 
 ###
-DELETE https://localhost:5001/server/jobs/v1/id/00000000/52
+DELETE https://localhost:5001/server/promises/00000000/52
 Accept: application/json
 Authorization: Bearer {{jwt.response.body.token}}
 
 ###
-DELETE https://localhost:5001/server/jobs/v1/admin/id/00000000/23
+DELETE https://localhost:5001/server/jobs/00000000/23
 Accept: application/json
 Authorization: Bearer {{jwt.response.body.token}}
 

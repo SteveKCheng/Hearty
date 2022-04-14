@@ -297,7 +297,7 @@ public partial class HeartyHttpClient : IHeartyClient
                                            TimeSpan timeout,
                                            CancellationToken cancellationToken = default)
     {
-        var url = CreateRequestUrl("jobs/v1/id/", promiseId,
+        var url = CreateRequestUrl("promises/", promiseId,
                                    timeout: (timeout != TimeSpan.Zero) ? timeout : null);
 
         var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -360,7 +360,7 @@ public partial class HeartyHttpClient : IHeartyClient
     public async Task CancelJobAsync(PromiseId promiseId,
                                      JobQueueKey queue = default)
     {
-        var url = CreateRequestUrl("jobs/v1/id/",
+        var url = CreateRequestUrl("promises/",
                                    promiseId,
                                    queue: queue);
 
@@ -376,7 +376,7 @@ public partial class HeartyHttpClient : IHeartyClient
     /// <inheritdoc cref="IHeartyClient.KillJobAsync" />
     public async Task KillJobAsync(PromiseId promiseId)
     {
-        var url = CreateRequestUrl("jobs/v1/admin/id/", promiseId);
+        var url = CreateRequestUrl("jobs/", promiseId);
 
         var request = new HttpRequestMessage(HttpMethod.Delete, url);
         AddAuthorizationHeader(request);

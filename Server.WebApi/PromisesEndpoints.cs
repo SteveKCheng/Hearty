@@ -303,7 +303,7 @@ namespace Hearty.Server.WebApi
                 httpResponse.Headers.Add(HeartyHttpHeaders.PromiseId, promiseId.ToString());
 
                 httpResponse.Headers.Location =
-                    httpRequest.PathBase.Add($"/jobs/v1/id/{promiseId}").ToString();
+                    httpRequest.PathBase.Add($"/promises/{promiseId}").ToString();
             }
         }
 
@@ -323,7 +323,7 @@ namespace Hearty.Server.WebApi
             IPromiseClientInfo clientInfo = new BasicPromiseClientInfo();
 
             return endpoints.MapGet(
-                    pattern: "/jobs/v1/id/{serviceId}/{sequenceNumber}",
+                    pattern: "/promises/{serviceId}/{sequenceNumber}",
                     requestDelegate: httpContext => GetPromiseByIdAsync(services, 
                                                                         httpContext, 
                                                                         clientInfo));
@@ -341,7 +341,7 @@ namespace Hearty.Server.WebApi
         {
             var services = endpoints.GetServices();
             return endpoints.MapDelete(
-                    "/jobs/v1/id/{serviceId}/{sequenceNumber}",
+                    "/promises/{serviceId}/{sequenceNumber}",
                     httpContext => CancelJobAsync(services, httpContext, kill: false));
         }
 
@@ -359,7 +359,7 @@ namespace Hearty.Server.WebApi
         {
             var services = endpoints.GetServices();
             return endpoints.MapDelete(
-                    "/jobs/v1/admin/id/{serviceId}/{sequenceNumber}",
+                    "/jobs/{serviceId}/{sequenceNumber}/",
                     httpContext => CancelJobAsync(services, httpContext, kill: true));
         }
 

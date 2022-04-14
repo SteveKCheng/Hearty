@@ -183,7 +183,7 @@ public partial class HeartyHttpClient
             if (response is null)
             {
                 promiseId = _promiseId;
-                var url = _client.CreateRequestUrl("jobs/v1/id/", promiseId);
+                var url = _client.CreateRequestUrl("promises/", promiseId);
 
                 var request = new HttpRequestMessage(HttpMethod.Get, url);
                 _client.AddAuthorizationHeader(request);

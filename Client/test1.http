@@ -6,11 +6,11 @@ Content-Type: application/json
 }
 
 ###
-GET https://localhost:5001/server/jobs/v1/id/00000000/1
+GET https://localhost:5001/server/promises/00000000/1
 
 ###
 GET https://localhost:5001/server/jobs/v1/current/1?timeout=P5D
 
 ###
-POST https://localhost:5001/server/jobs/v1/id/00000000/1?action=cancel
+POST https://localhost:5001/server/promises/00000000/1?action=cancel
 
