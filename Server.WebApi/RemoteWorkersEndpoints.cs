@@ -44,18 +44,32 @@ namespace Hearty.Server.WebApi
         /// Options when accepting connections on the WebSocket endpoint.
         /// If null, a default is used.
         /// </param>
+        /// <param name="rpcRegistry">
+        /// The RPC registry that will be used to accept connections.  
+        /// Custom functions can be registered into that registry, allowing 
+        /// the worker to call back into the job server while it is executing work,
+        /// i.e. before the worker sends its reply message. 
+        /// Complex jobs may require the job worker to coordinate
+        /// with the job server.  For example, a worker can ask the 
+        /// job server to de-duplicate partial work against other jobs.
+        /// The RPC registry can also be configured for serialization
+        /// of custom types with MessagePack.  If this argument is null,
+        /// it is as if a default-constructed <see cref="JobServerRpcRegistry" />
+        /// has been specified.
+        /// </param>
         /// <returns>
         /// Object that allows customizing the new endpoint further.
         /// </returns>
         public static IEndpointConventionBuilder
             MapRemoteWorkersWebSocket(this IEndpointRouteBuilder endpoints,
                                       string? pattern = null,
-                                      RemoteWorkersWebSocketOptions? options = null)
+                                      RemoteWorkersWebSocketOptions? options = null,
+                                      JobServerRpcRegistry? rpcRegistry = null)
         {
             return endpoints.Map(
                     pattern ?? WorkerHost.WebSocketsDefaultPath,
                     RemoteWorkersWebSocketEndpoint.CreateRequestDelegate(
-                        endpoints.ServiceProvider, options));
+                        endpoints.ServiceProvider, options, rpcRegistry));
         }
 
         /// <summary>
@@ -98,15 +112,18 @@ namespace Hearty.Server.WebApi
         private readonly ILogger _logger;
         private readonly WorkerDistribution<PromisedWork, PromiseData> _workerDistribution;
         private readonly RemoteWorkersWebSocketOptions _options;
+        private readonly JobServerRpcRegistry? _rpcRegistry;
 
         private RemoteWorkersWebSocketEndpoint(
             ILogger<RemoteWorkersWebSocketEndpoint> logger,
             WorkerDistribution<PromisedWork, PromiseData> workerDistribution,
-            RemoteWorkersWebSocketOptions options)
+            RemoteWorkersWebSocketOptions options,
+            JobServerRpcRegistry? rpcRegistry)
         {
             _logger = logger;
             _workerDistribution = workerDistribution;
             _options = options;
+            _rpcRegistry = rpcRegistry;
         }
 
         private Task AcceptAsync(HttpContext context)
@@ -137,19 +154,21 @@ namespace Hearty.Server.WebApi
             var (worker, closeTask) =
                 await RemoteWorkerService.AcceptHostAsync(_workerDistribution,
                                                           webSocket,
-                                                          null,
+                                                          _rpcRegistry,
                                                           cancellationSourceUse.Token);
             await closeTask;
         }
 
         public static RequestDelegate 
             CreateRequestDelegate(IServiceProvider services,
-                                  RemoteWorkersWebSocketOptions? options)
+                                  RemoteWorkersWebSocketOptions? options,
+                                  JobServerRpcRegistry? rpcRegistry)
         {
             var self = new RemoteWorkersWebSocketEndpoint(
                     services.GetRequiredService<ILogger<RemoteWorkersWebSocketEndpoint>>(),
                     services.GetRequiredService<WorkerDistribution<PromisedWork, PromiseData>>(),
-                    options ?? new RemoteWorkersWebSocketOptions()
+                    options ?? new RemoteWorkersWebSocketOptions(),
+                    rpcRegistry
                 );
             return self.AcceptAsync;
         }
