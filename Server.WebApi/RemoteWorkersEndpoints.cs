@@ -137,6 +137,7 @@ namespace Hearty.Server.WebApi
             var (worker, closeTask) =
                 await RemoteWorkerService.AcceptHostAsync(_workerDistribution,
                                                           webSocket,
+                                                          null,
                                                           cancellationSourceUse.Token);
             await closeTask;
         }

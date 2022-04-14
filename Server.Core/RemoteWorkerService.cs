@@ -14,14 +14,13 @@ namespace Hearty.Server;
 /// </summary>
 public static class RemoteWorkerService
 {
-    private static readonly RpcRegistry _rpcRegistry = CreateBankRpcRegistry();
-
-    private static RpcRegistry CreateBankRpcRegistry()
+    private static RpcRegistry CreateServerRpcRegistry()
     {
         var registry = new RpcRegistry(new RpcExceptionSerializer(WorkerHost.SerializeOptions), WorkerHost.SerializeOptions);
         registry.Add<RegisterWorkerRequestMessage, RegisterWorkerReplyMessage>(
             WorkerHost.TypeCode_RegisterWorker,
             (r, c, t) => ValueTask.FromResult(RegisterRemoteWorkerImpl(r, c, t)));
+
         return registry;
     }
 
@@ -33,16 +32,16 @@ public static class RemoteWorkerService
         var state = (PreInitState)connection.State!;
         bool success = false;
 
+        var reply = new RegisterWorkerReplyMessage();
+
+        if (Interlocked.Exchange(ref state.IsRegistered, 1) != 0)
+        {
+            reply.Status = RegisterWorkerReplyStatus.ConcurrentRegistration;
+            return reply;
+        }
+
         try
         {
-            var reply = new RegisterWorkerReplyMessage();
-
-            if (Interlocked.Exchange(ref state.IsRegistered, 1) != 0)
-            {
-                reply.Status = RegisterWorkerReplyStatus.ConcurrentRegistration;
-                return reply;
-            }
-
             var distribution = state.WorkerDistribution;
             var workerImpl = new RemoteWorkerProxy(request.Name, connection);
 
@@ -92,6 +91,18 @@ public static class RemoteWorkerService
     /// It should use <see cref="WorkerHost.WebSocketsSubProtocol" />
     /// as its sub-protocol.
     /// </param>
+    /// <param name="rpcConfig">
+    /// If non-null, this function is invoked with the RPC registry
+    /// that will be used to accept connections.  Custom functions
+    /// can be registered into that registry, allowing the worker
+    /// to call back into the job server while it is executing work,
+    /// i.e. before the worker sends its reply message. 
+    /// Complex jobs may require the job worker to coordinate
+    /// with the job server.  For example, a worker can ask the 
+    /// job server to de-duplicate partial work against other jobs.
+    /// The RPC registry can also be configured for serialization
+    /// of custom types with MessagePack.
+    /// </param>
     /// <param name="cancellationToken">
     /// When triggered, cancels the waiting.  It can be used to time
     /// out the idle connection when the remote host is not doing
@@ -112,10 +123,15 @@ public static class RemoteWorkerService
         AcceptHostAsync(
             WorkerDistribution<PromisedWork, PromiseData> distribution,
             WebSocket webSocket,
-            CancellationToken cancellationToken)
+            Action<RpcRegistry>? rpcConfig = null,
+            CancellationToken cancellationToken = default)
     {
         var state = new PreInitState(distribution);
-        state.Rpc = new WebSocketRpc(webSocket, _rpcRegistry, state);
+
+        var rpcRegistry = CreateServerRpcRegistry();
+        rpcConfig?.Invoke(rpcRegistry);
+
+        state.Rpc = new WebSocketRpc(webSocket, rpcRegistry, state);
 
         CancellationTokenRegistration cancelRegistration = default;
         if (cancellationToken.CanBeCanceled)
