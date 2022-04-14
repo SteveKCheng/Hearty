@@ -100,7 +100,7 @@ public partial class HeartyHttpClient : IHeartyClient
                                               JobQueueKey queue = default,
                                               CancellationToken cancellationToken = default)
     {
-        var url = CreateRequestUrl("jobs/v1/queue/",
+        var url = CreateRequestUrl("requests/",
                                    route: route,
                                    queue: queue);
 
@@ -222,7 +222,7 @@ public partial class HeartyHttpClient : IHeartyClient
                                         JobQueueKey queue = default,
                                         CancellationToken cancellationToken = default)
     {
-        var url = CreateRequestUrl("jobs/v1/queue",
+        var url = CreateRequestUrl("requests/",
                                    route: route,
                                    wantResult: true,
                                    queue: queue);

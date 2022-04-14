@@ -45,7 +45,7 @@ namespace Hearty.Server.WebApi
             var services = endpoints.GetServices();
             routeKey = routeKey.Trim('/');
             return endpoints.MapPost(
-                    "/jobs/v1/queue/" + routeKey,
+                    "/requests/" + routeKey,
                     httpContext => PostJobAsync(services, httpContext, routeKey, executor));
         }
 

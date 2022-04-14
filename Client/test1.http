@@ -1,4 +1,4 @@
-POST https://localhost:5001/server/jobs/v1/queue/pricing
+POST https://localhost:5001/server/requests/pricing
 Content-Type: application/json
 
 {

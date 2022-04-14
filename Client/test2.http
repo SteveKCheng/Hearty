@@ -42,7 +42,7 @@ Accept: application/json
 Authorization: Basic steve:steve
 
 ###
-POST https://localhost:5001/server/jobs/v1/queue/multi2
+POST https://localhost:5001/server/requests/multi2
 Content-Type: application/json
 Authorization: Bearer {{jwt.response.body.token}}
 

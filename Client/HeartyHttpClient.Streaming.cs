@@ -41,7 +41,7 @@ public partial class HeartyHttpClient
         if (reader.OwnsStream)
             ThrowOnReaderOwningStream(nameof(reader));
 
-        var url = CreateRequestUrl("jobs/v1/queue",
+        var url = CreateRequestUrl("requests/",
                                    route: route,
                                    wantResult: true,
                                    queue: queue);
