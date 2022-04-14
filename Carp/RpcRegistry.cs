@@ -58,7 +58,7 @@ namespace Hearty.Carp
         public RpcRegistry(IRpcExceptionSerializer exceptionSerializer, 
                            MessagePackSerializerOptions serializeOptions)
         {
-            SerializeOptions = serializeOptions 
+            _serializeOptions = serializeOptions 
                 ?? throw new ArgumentNullException(nameof(serializeOptions));
             _exceptionSerializer = exceptionSerializer;
         }
@@ -81,11 +81,36 @@ namespace Hearty.Carp
             = MessagePackSerializerOptions.Standard
                                           .WithSecurity(MessagePackSecurity.UntrustedData);
 
+        private MessagePackSerializerOptions _serializeOptions;
+
         /// <summary>
         /// Settings for serializing and de-serializing .NET types
         /// as MessagePack payloads.
         /// </summary>
-        public MessagePackSerializerOptions SerializeOptions { get; }
+        /// <remarks>
+        /// <para>
+        /// This property may be changed until the RPC registry is "frozen"
+        /// when a connection is established using it.  
+        /// </para>
+        /// <para>
+        /// Fortunately, as <see cref="MessagePackSerializerOptions" />
+        /// is an immutable object, no locks need to be taken when using
+        /// it even if this property may be written to.
+        /// </para>
+        /// </remarks>
+        public MessagePackSerializerOptions SerializeOptions
+        {
+            get => _serializeOptions;
+            set
+            {
+                ThrowIfFrozen();
+                lock (_entries)
+                {
+                    ThrowIfFrozen();
+                    _serializeOptions = value ?? throw new ArgumentNullException(nameof(value));
+                }
+            }
+        }
 
         /// <summary>
         /// Whether the registry has been frozen and no more entries
@@ -115,6 +140,10 @@ namespace Hearty.Carp
         /// The asynchronous function that processes a request of the specified
         /// type and emits its reply.
         /// </param>
+        /// <remarks>
+        /// Registrations are no longer allowed after the RPC registry is "frozen",
+        /// when a connection is established using it.  
+        /// </remarks>
         public void Add<TRequest, TReply>(ushort typeCode, 
                                           RpcFunction<TRequest, TReply> func)
         {
