@@ -75,10 +75,10 @@ namespace Hearty.Work
 
         private WorkerHost(string name,
                            WebSocket webSocket,
-                           IJobSubmission impl)
+                           Func<RpcConnection, IJobSubmission> impl)
         {
             _rpc = new WebSocketRpc(webSocket, _rpcRegistry, this);
-            _impl = impl;
+            _impl = impl.Invoke(_rpc);
         }
 
         private ValueTask<RegisterWorkerReplyMessage>
@@ -95,6 +95,11 @@ namespace Hearty.Work
         /// over a newly established RPC connection using the
         /// Hearty protocol over WebSockets.
         /// </summary>
+        /// <param name="implFactory">
+        /// Provides the implementation of the job submission functions 
+        /// (that run from the local process).  It can optionally
+        /// communicate with the job server through two-way RPC.
+        /// </param>
         /// <param name="settings">
         /// Settings that the new worker is registered with in the
         /// job server.
@@ -105,15 +110,11 @@ namespace Hearty.Work
         /// new instance of <see cref="WorkerHost" /> will take
         /// ownership of this connection.
         /// </param>
-        /// <param name="impl">
-        /// Implementation of the job submission functions (that run from the
-        /// local process).
-        /// </param>
         /// <param name="cancellationToken">
         /// Can be triggered to cancel the operation.
         /// </param>
         public static async Task<WorkerHost>
-            StartAsync(IJobSubmission impl,
+            StartAsync(Func<RpcConnection, IJobSubmission> implFactory,
                        RegisterWorkerRequestMessage settings,
                        WebSocket webSocket,
                        CancellationToken cancellationToken)
@@ -124,7 +125,7 @@ namespace Hearty.Work
                     "The WebSocket connection passed to WorkerHost.StartAsync must be open. ");
             }
 
-            var self = new WorkerHost(settings.Name, webSocket, impl);
+            var self = new WorkerHost(settings.Name, webSocket, implFactory);
 
             var reply = await self.RegisterWorkerAsync(settings, cancellationToken)
                                   .ConfigureAwait(false);
@@ -134,7 +135,36 @@ namespace Hearty.Work
 
             return self;
         }
-        
+
+        /// <summary>
+        /// Register the new worker host and begin accepting work
+        /// over a newly established RPC connection using the
+        /// Hearty protocol over WebSockets.
+        /// </summary>
+        /// <param name="impl">
+        /// The implementation of the job submission functions 
+        /// (that run from the local process).  
+        /// </param>
+        /// <param name="settings">
+        /// Settings that the new worker is registered with in the
+        /// job server.
+        /// </param>
+        /// <param name="webSocket">
+        /// WebSocket connection to the job server to register the 
+        /// new worker host with.  If this method succeeds, the
+        /// new instance of <see cref="WorkerHost" /> will take
+        /// ownership of this connection.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be triggered to cancel the operation.
+        /// </param>
+        public static Task<WorkerHost>
+            StartAsync(IJobSubmission impl,
+                       RegisterWorkerRequestMessage settings,
+                       WebSocket webSocket,
+                       CancellationToken cancellationToken)
+            => StartAsync(_ => impl, settings, webSocket, cancellationToken);
+
         /// <summary>
         /// The string used to distinguish the sub-protocol over
         /// WebSockets used for worker registration and job submission.
@@ -150,9 +180,10 @@ namespace Hearty.Work
         /// Register the new worker host and begin accepting work
         /// by connecting to a Hearty server over WebSockets.
         /// </summary>
-        /// <param name="impl">
-        /// This object is invoked to executes work requests 
-        /// sent over the connection, once established.
+        /// <param name="implFactory">
+        /// Provides the implementation of the job submission functions 
+        /// (that run from the local process).  It can optionally
+        /// communicate with the job server through two-way RPC.
         /// </param>
         /// <param name="settings">
         /// Settings that the new worker is registered with in the
@@ -170,7 +201,7 @@ namespace Hearty.Work
         /// Can be triggered to stop connecting and cancel the operation.
         /// </param>
         public static async Task<WorkerHost> ConnectAndStartAsync
-            (IJobSubmission impl,
+            (Func<RpcConnection, IJobSubmission> implFactory,
              RegisterWorkerRequestMessage settings,
              Uri server,
              Action<ClientWebSocketOptions>? webSocketOptionsSetter,
@@ -196,7 +227,7 @@ namespace Hearty.Work
                         "The WebSocket endpoint being connected to does not speak the expected protocol for job workers. ");
                 }
 
-                return await StartAsync(impl, settings, webSocket, cancellationToken)
+                return await StartAsync(implFactory, settings, webSocket, cancellationToken)
                                 .ConfigureAwait(false);
             }
             catch
@@ -211,8 +242,76 @@ namespace Hearty.Work
         /// by connecting to a Hearty server over WebSockets.
         /// </summary>
         /// <param name="impl">
-        /// This object is invoked to executes work requests 
-        /// sent over the connection, once established.
+        /// The implementation of the job submission functions 
+        /// (that run from the local process).  
+        /// </param>
+        /// <param name="settings">
+        /// Settings that the new worker is registered with in the
+        /// job server.
+        /// </param>
+        /// <param name="server">
+        /// WebSocket URL to the Hearty server.
+        /// </param>
+        /// <param name="webSocketOptionsSetter">
+        /// If null, this action is invoked to customize the WebSocket
+        /// connection that is about to be made.  New 
+        /// WebSocket sub-protocols should not be added by this action.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be triggered to stop connecting and cancel the operation.
+        /// </param>
+        public static Task<WorkerHost> ConnectAndStartAsync
+            (IJobSubmission impl,
+             RegisterWorkerRequestMessage settings,
+             Uri server,
+             Action<ClientWebSocketOptions>? webSocketOptionsSetter,
+             CancellationToken cancellationToken)
+            => ConnectAndStartAsync(_ => impl, settings, server,
+                                    webSocketOptionsSetter, cancellationToken);
+
+        /// <summary>
+        /// Register the new worker host and begin accepting work
+        /// by connecting to a Hearty server over WebSockets.
+        /// </summary>
+        /// <param name="implFactory">
+        /// Provides the implementation of the job submission functions 
+        /// (that run from the local process).  It can optionally
+        /// communicate with the job server through two-way RPC.
+        /// </param>
+        /// <param name="settings">
+        /// Settings that the new worker is registered with in the
+        /// job server.
+        /// </param>
+        /// <param name="server">
+        /// WebSocket URL to the Hearty server.
+        /// </param>
+        /// <param name="webSocketOptionsSetter">
+        /// If null, this action is invoked to customize the WebSocket
+        /// connection that is about to be made.  New 
+        /// WebSocket sub-protocols should not be added by this action.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be triggered to stop connecting and cancel the operation.
+        /// </param>
+        public static Task<WorkerHost> ConnectAndStartAsync
+            (Func<RpcConnection, IJobSubmission> implFactory,
+             RegisterWorkerRequestMessage settings,
+             string server,
+             Action<ClientWebSocketOptions>? webSocketOptionsSetter,
+             CancellationToken cancellationToken)
+            => ConnectAndStartAsync(implFactory,
+                                    settings,
+                                    new Uri(server),
+                                    webSocketOptionsSetter,
+                                    cancellationToken);
+
+        /// <summary>
+        /// Register the new worker host and begin accepting work
+        /// by connecting to a Hearty server over WebSockets.
+        /// </summary>
+        /// <param name="impl">
+        /// The implementation of the job submission functions 
+        /// (that run from the local process).  
         /// </param>
         /// <param name="settings">
         /// Settings that the new worker is registered with in the
@@ -235,7 +334,7 @@ namespace Hearty.Work
              string server,
              Action<ClientWebSocketOptions>? webSocketOptionsSetter,
              CancellationToken cancellationToken)
-            => ConnectAndStartAsync(impl,
+            => ConnectAndStartAsync(_ => impl,
                                     settings,
                                     new Uri(server),
                                     webSocketOptionsSetter,
