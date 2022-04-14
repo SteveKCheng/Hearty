@@ -13,6 +13,7 @@
   <Import Project="..\Packaging.props" />
 
   <ItemGroup>
+    <Compile Include="JobWorkerRpcRegistry.cs" />
     <Compile Include="RpcExceptionSerializer.cs" />
     <Compile Include="IJobSubmission.cs" />
     <Compile Include="IWorkerRegistration.cs" />
