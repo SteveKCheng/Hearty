@@ -19,6 +19,7 @@
     <Compile Include="ClientJobQueue.cs" />
     <Compile Include="Promise.Serialization.cs" />
     <Compile Include="PromiseDataSchemas.cs" />
+    <Compile Include="TestWorkersGenerator.cs" />
     <Compile Include="ServedMediaTypes.cs" />
     <Compile Include="ContentFormatInfo.cs" />
     <Compile Include="ContentFormatInfo.Negotiation.cs" />
