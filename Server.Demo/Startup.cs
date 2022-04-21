@@ -24,6 +24,7 @@ using Hearty.Server.WebUi;
 using System.Diagnostics.Metrics;
 using OpenTelemetry.Metrics;
 using Microsoft.AspNetCore.Hosting.Server;
+using Hearty.Work;
 
 namespace Hearty.Server.Demo;
 
@@ -108,13 +109,18 @@ public class Startup
 
         services.AddSingleton(p =>
         {
-            var workersLogger = p.GetRequiredService<ILogger<MockPricingWorker>>();
-
             return new DisplaySpecialization
             {
                 JobCustomProperties = new string[] { "Instrument" },
-                WorkerFactory = r => new MockPricingWorker(workersLogger, r.Name)
+                TestWorkersGenerator = p.GetRequiredService<TestWorkersGenerator>()
             };
+        });
+
+        services.AddSingleton<TestWorkersGenerator>();
+        services.AddSingleton<WorkerFactory>(p =>
+        {
+            var logger = p.GetRequiredService<ILogger<MockPricingWorker>>();
+            return (m, _) => new MockPricingWorker(logger, m.Name);
         });
 
         services.AddSingleton<WorkerDistribution<PromisedWork, PromiseData>>(p =>

@@ -53,7 +53,7 @@ namespace Hearty.Server.WebUi
         /// appear under the "workers" page to create new hosts.
         /// This feature is meant for testing.
         /// </remarks>
-        public Func<RegisterWorkerRequestMessage, IJobSubmission>? WorkerFactory { get; init; }
+        public TestWorkersGenerator? TestWorkersGenerator { get; init; }
 
         /// <summary>
         /// Get <see cref="ServerUrl" /> with defaulting if it has not been set.

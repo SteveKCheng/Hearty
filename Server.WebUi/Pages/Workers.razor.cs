@@ -16,12 +16,6 @@ public partial class Workers
         => StartRefreshing(TimeoutBucket.After5Seconds);
 
     /// <summary>
-    /// Running count of all the workers created so far,
-    /// to generate unique names for them.
-    /// </summary>
-    private uint _countCreatedWorkers;
-
-    /// <summary>
     /// User's input on the Blazor page for the "degree of concurrency"
     /// of each test host to instantiate.
     /// </summary>
@@ -47,63 +41,16 @@ public partial class Workers
     /// hosts should be enabled.
     /// </summary>
     private bool IsHostCreationEnabled =>
-        _displaySpecialization.WorkerFactory is not null;
+        _displaySpecialization.TestWorkersGenerator is not null;
 
     /// <summary>
     /// Create fake worker hosts connecting to a WebSocket endpoint
     /// for job distribution from a Hearty server.
     /// </summary>
-    private async Task GenerateWorkersAsync()
+    private Task GenerateWorkersAsync()
     {
-        var url = _displaySpecialization.GetWorkersWebSocketsUrl(_navigationManager);
-        var workFactory = _displaySpecialization.WorkerFactory;
-
-        if (url is null || workFactory is null)
-            return;
-
-        if (!IsWebSocketsUrl(url))
-            throw new ArgumentException("Connection URL must be for the WebSockets protocol. ", nameof(url));
-
         int count = InputNumberOfWorkers;
         int concurrency = InputConcurrency;
-
-        if (count <= 0)
-            return;
-
-        _logger.LogInformation("{count} fake worker(s) will connect by WebSockets on URL: {url}",
-                               count, url);
-
-        uint oldCount = Interlocked.Add(ref _countCreatedWorkers, (uint)count) - (uint)count;
-
-        for (int i = 0; i < count; ++i)
-        {
-            var name = $"remote-worker-{++oldCount}";
-
-            var settings = new RegisterWorkerRequestMessage
-            {
-                Name = name,
-                Concurrency = (ushort)concurrency
-            };
-
-            _logger.LogInformation("Attempting to start fake worker #{workerName}", name);
-
-            try
-            {
-                await WorkerHost.ConnectAndStartAsync(
-                    workFactory.Invoke(settings),
-                    settings,
-                    url,
-                    null,
-                    CancellationToken.None);
-
-                _logger.LogInformation(
-                    "Successfully started fake worker #{workerName}", 
-                    name);
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Failed to start fake worker #{workerName}", name);
-            }
-        }
+        return _displaySpecialization.TestWorkersGenerator!.GenerateWorkersAsync(count, concurrency);
     }
 }
