@@ -19,7 +19,11 @@ namespace Hearty.Utilities
         /// <param name="source">The source bytes 
         /// that the stream should provide. </param>
         public MemoryReadingStream(ReadOnlySequence<byte> source)
-            => _source = source;
+        {
+            _source = source;
+            _position = source.GetPosition(0);
+            _offset = 0;
+        }
 
         /// <inheritdoc />
         public override bool CanRead => true;
@@ -65,6 +69,8 @@ namespace Hearty.Utilities
                                                    : (int)remaining;
             var slice = _source.Slice(_position, toRead);
             slice.CopyTo(buffer);
+
+            _position = _source.GetPosition(toRead, _position);
             _offset += toRead;
             return toRead;
         }
