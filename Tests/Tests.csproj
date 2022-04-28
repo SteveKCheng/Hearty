@@ -35,6 +35,7 @@
     <Compile Include="PromiseSerializationTests.cs" />
     <Compile Include="SchedulingTests.Exact.cs" />
     <Compile Include="SchedulingTests.Parallel.cs" />
+    <Compile Include="StreamTests.cs" />
     <Compile Include="WebSocketRpcTests.cs" />
   </ItemGroup>
 

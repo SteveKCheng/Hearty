@@ -78,34 +78,9 @@ So long lives this, and this gives life to thee. ");
         Assert.Equal(payload.IsComplete, payload2.IsComplete);
         Assert.Equal(payload.ContentType, payload2.ContentType);
 
-        Assert.True(SequenceEquals(payload.Body, payload2.Body));
+        Assert.True(StreamTests.SequenceEquals(payload.Body, payload2.Body));
 
         VerifyReserialization(payload2, buffer);
-    }
-
-    private static bool SequenceEquals(ReadOnlySequence<byte> a, ReadOnlySequence<byte> b)
-    {
-        if (a.Length != b.Length)
-            return false;
-
-        var readerA = new SequenceReader<byte>(a);
-        var readerB = new SequenceReader<byte>(b);
-
-        while (true)
-        {
-            var spanA = readerA.UnreadSpan;
-            var spanB = readerB.UnreadSpan;
-
-            int len = Math.Min(spanA.Length, spanB.Length);
-            if (len == 0)
-                return true;
-
-            if (!spanA[0..len].SequenceEqual(spanB[0..len]))
-                return false;
-
-            readerA.Advance(len);
-            readerB.Advance(len);
-        }
     }
 
     /// <summary>
@@ -166,7 +141,7 @@ So long lives this, and this gives life to thee. ");
         var payload1 = GetMessagePackPayload(data);
         var payload2 = GetMessagePackPayload(data2);
 
-        Assert.True(SequenceEquals(payload1, payload2));
+        Assert.True(StreamTests.SequenceEquals(payload1, payload2));
 
         VerifyReserialization(data2, buffer);
     }
