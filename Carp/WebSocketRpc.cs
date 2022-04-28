@@ -644,7 +644,44 @@ namespace Hearty.Carp
             writer.Clear();
 
             WriteHeader(writer, item.Header);
-            item.PackPayload(writer);
+
+            try
+            {
+                item.PackPayload(writer);
+            }
+            catch (Exception e)
+            {
+                if (item.Kind == RpcMessageKind.Request)
+                {
+                    // If packing the payload fails, e.g. because something
+                    // fails to serialize with MessagePack, we can report
+                    // only the current request as a failure instead of
+                    // tearing down the whole connection.
+                    item.Abort(e);
+                    return ValueTask.CompletedTask;
+                }
+                else if (item.Kind == RpcMessageKind.NormalReply)
+                {
+                    // For replies that fail to serialize, substitute
+                    // an exceptional reply message, which hopefully
+                    // does not fail either.
+                    var exceptionReply = new ExceptionMessage(item.Header.TypeCode,
+                                                              item.Header.Id,
+                                                              Registry,
+                                                              e);
+
+                    writer.Clear();
+                    var exceptionHeader = new RpcMessageHeader(RpcMessageKind.ExceptionalReply,
+                                                               item.Header.TypeCode,
+                                                               item.Header.Id);
+                    WriteHeader(writer, exceptionHeader);
+                    exceptionReply.PackPayload(writer);
+                }
+                else
+                {
+                    throw;
+                }
+            }
 
             if (item.Kind == RpcMessageKind.Request)
             {
