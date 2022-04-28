@@ -11,6 +11,9 @@ namespace Hearty.Utilities
     /// </summary>
     public sealed class MemoryReadingStream : Stream
     {
+        /// <summary>
+        /// The source bytes passed in by the user.
+        /// </summary>
         private readonly ReadOnlySequence<byte> _source;
 
         /// <summary>
@@ -40,7 +43,15 @@ namespace Hearty.Utilities
         /// <inheritdoc />
         public override bool CanTimeout => false;
 
+        /// <summary>
+        /// Current offset in number of bytes from the beginning of <see cref="_source" />.
+        /// </summary>
         private long _offset;
+
+        /// <summary>
+        /// Cached position within <see cref="_source" />,
+        /// corresponding to <see cref="_offset" />.
+        /// </summary>
         private SequencePosition _position;
 
         /// <inheritdoc />
@@ -52,7 +63,10 @@ namespace Hearty.Utilities
                 if (value < 0 || value > _source.Length)
                     throw new ArgumentOutOfRangeException(message: "Cannot seek to a position beyond the bounds of the in-memory data. ",
                                                           innerException: null);
-                _position = _source.GetPosition(value);
+
+                _position = (value >= _offset)
+                                ? _source.GetPosition(value - _offset, _position)
+                                : _source.GetPosition(value);
                 _offset = value;
             }
         }
@@ -105,7 +119,7 @@ namespace Hearty.Utilities
                 SeekOrigin.Begin => 0,
                 SeekOrigin.Current => _offset,
                 SeekOrigin.End => _source.Length,
-                _ => throw new ArgumentException(message: "SeekOrigin parameter is invalid",
+                _ => throw new ArgumentException(message: "SeekOrigin parameter is invalid. ",
                                                  paramName: nameof(origin))
             };
 
