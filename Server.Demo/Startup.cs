@@ -477,6 +477,6 @@ public class Startup
         if (streamLength != null && (int)bytesTotalRead != (int)streamLength)
             throw new InvalidDataException("Received fewer bytes from the input stream than what had been expected beforehand. ");
 
-        return bufferWriter.GetSequence();
+        return bufferWriter.GetWrittenSequence();
     }
 }

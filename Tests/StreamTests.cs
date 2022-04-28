@@ -22,7 +22,7 @@ public class StreamTests
             bufferWriter.Advance(1024);
         }
 
-        var source = bufferWriter.GetSequence();
+        var source = bufferWriter.GetWrittenSequence();
 
         var stream = new MemoryReadingStream(source);
         var buffer = new byte[source.Length + 400];

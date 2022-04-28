@@ -217,7 +217,7 @@ namespace Hearty.Utilities
         /// Get the sequence of data that has been written by the client and committed
         /// (via <see cref="Advance"/>).
         /// </summary>
-        public ReadOnlySequence<T> GetSequence()
+        public ReadOnlySequence<T> GetWrittenSequence()
         {
             CommitLastBuffer();
 

@@ -92,7 +92,7 @@ public sealed class PromiseExceptionalData : PromiseData
         var jsonWriter = new Utf8JsonWriter(bufferWriter);
         JsonSerializer.Serialize(jsonWriter, payload);
         jsonWriter.Flush();
-        return bufferWriter.GetSequence();
+        return bufferWriter.GetWrittenSequence();
     }
 
     /// <inheritdoc />
@@ -191,7 +191,7 @@ public sealed class PromiseExceptionalData : PromiseData
                                 initialBufferSize: 2048, doublingThreshold: 4);
                 MessagePackSerializer.Serialize(writer, _payload);
 
-                var payloadMsgPack = writer.GetSequence();
+                var payloadMsgPack = writer.GetWrittenSequence();
                 _payloadMsgPack = payloadMsgPack;
                 _hasPayloadMsgPack = true;
 
