@@ -56,6 +56,17 @@ namespace Hearty.Utilities
         /// <summary>
         /// Prepare to write to a growing sequence of buffers.
         /// </summary>
+        /// <param name="initialBufferSize">
+        /// The initial allocation size of buffers.
+        /// </param>
+        /// <param name="doublingThreshold">
+        /// How many times buffers of the current size
+        /// can get allocated before doubling the allocation size.
+        /// </param>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// <paramref name="initialBufferSize" /> is zero or negative, or too large;
+        /// or <paramref name="doublingThreshold" /> is too large. 
+        /// </exception>
         public SegmentedArrayBufferWriter(int initialBufferSize,
                                           int doublingThreshold)
         {

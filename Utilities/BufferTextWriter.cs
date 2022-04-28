@@ -14,11 +14,11 @@ using System.Threading.Tasks;
 namespace Hearty.Utilities;
 
 /// <summary>
-/// A <see cref="TextWriter"/> that writes to a reassignable instance of <see cref="IBufferWriter{T}"/>.
+/// Writes encoded text into an instance of <see cref="IBufferWriter{T}" />.
 /// </summary>
 /// <remarks>
-/// Using this is much more memory efficient than a <see cref="StreamWriter"/> when writing to many different
-/// <see cref="IBufferWriter{T}"/> because the same writer, with all its buffers, can be reused.
+/// This class uses memory more parsimoniously than layering <see cref="StreamWriter" />
+/// on top of <see cref="MemoryStream" />.
 /// </remarks>
 public sealed class BufferTextWriter : TextWriter
 {
