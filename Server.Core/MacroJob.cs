@@ -176,6 +176,8 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
     /// </summary>
     private readonly PromisedWork _work;
 
+    private int _itemsCount;
+
     int IRunningJob.EstimatedWait => _work.InitialWait;
 
     long IRunningJob.LaunchStartTime => 0; // FIXME
@@ -269,6 +271,15 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
 
         _listLinks = new(this);
         _isInvalid = Source.AddParticipant(this) ? 0 : -1;
+
+        _itemsCount = 1;
+        if (IsValid)
+        {
+            if (source.Expansion is ICountable c && (_itemsCount = c.Count) > 0)
+            {
+                source.JobsManager.Metrics.MicroJobsQueued.Add(_itemsCount);
+            }
+        }
     }
 
     public bool Cancel(bool background)
@@ -317,6 +328,8 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
         }
 
         _runningJobRegistration = _queue.RegisterRunningJob(this);
+
+        Source.JobsManager.Metrics.MacroJobsDequeued.Add(1);
 
         int count = 0;
         Exception? exception = null;
@@ -418,6 +431,12 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
                     break;
                 }
 
+                if (_itemsCount > 0)
+                {
+                    jobScheduling.Metrics.MicroJobsProcessed.Add(1);
+                    --_itemsCount;
+                }
+
                 // Do not schedule work if promise is already complete
                 if (message is not null)
                     yield return message;
@@ -460,6 +479,12 @@ internal sealed class MacroJobMessage : IAsyncEnumerable<JobMessage>
     /// </returns>
     private bool BasicCleanUp()
     {
+        if (_itemsCount > 0)
+        {
+            Source.JobsManager.Metrics.MicroJobsProcessed.Add(_itemsCount);
+            _itemsCount = -1;
+        }
+
         // We do not need to block on unregistering, because
         // the Cancel method already locks to prevent the
         // cancellation source from going away concurrently.

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -44,9 +43,9 @@ public class JobsManager : IRemoteJobCancellation
     private readonly IJobQueueSystem _jobQueues;
 
     /// <summary>
-    /// Counts the number of macro jobs successfully enqueued.
+    /// Metrics on the jobs managed by this instance are sent to this instance.
     /// </summary>
-    private readonly Counter<int>? _macroJobsCounter;
+    public JobServerMetrics Metrics { get; }
 
     /// <summary>
     /// Prepare the system to schedule jobs and assign them to workers.
@@ -55,7 +54,7 @@ public class JobsManager : IRemoteJobCancellation
     /// Receives log messages for significant events in the job scheduling
     /// system.
     /// </param>
-    /// <param name="meter">
+    /// <param name="metrics">
     /// Used to report metrics.
     /// </param>
     /// <param name="exceptionTranslator">
@@ -69,19 +68,12 @@ public class JobsManager : IRemoteJobCancellation
     public JobsManager(ILogger<JobsManager> logger,
                        PromiseExceptionTranslator exceptionTranslator,
                        IJobQueueSystem jobQueues,
-                       Meter? meter = null)
+                       JobServerMetrics? metrics = null)
     {
         _logger = logger;
         _exceptionTranslator = exceptionTranslator;
         _jobQueues = jobQueues;
-
-        if (meter is not null)
-        {
-            _macroJobsCounter = meter.CreateCounter<int>(
-                                    name: "macro-jobs", 
-                                    unit: "jobs",
-                                    description: "Number of macro jobs accepted");
-        }
+        Metrics = metrics ?? JobServerMetrics.Default;
 
         _unregisterClientJobAction = (future, _, clientToken) =>
                 this.UnregisterClientRequest(future.Input.Promise!.Id, 
@@ -798,7 +790,7 @@ public class JobsManager : IRemoteJobCancellation
                 {
                     queue.Enqueue(message);
                     message = null;
-                    _macroJobsCounter?.Add(1);
+                    Metrics.MacroJobsQueued.Add(1);
                 }
             }
             catch (Exception e)

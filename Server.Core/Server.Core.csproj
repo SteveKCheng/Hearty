@@ -17,6 +17,7 @@
     <Compile Include="BasicExceptionTranslator.cs" />
     <Compile Include="BasicPromiseStorage.cs" />
     <Compile Include="ClientJobQueue.cs" />
+    <Compile Include="JobServerMetrics.cs" />
     <Compile Include="Promise.Serialization.cs" />
     <Compile Include="PromiseDataSchemas.cs" />
     <Compile Include="TestWorkersGenerator.cs" />

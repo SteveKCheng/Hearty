@@ -28,6 +28,8 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
 
     private readonly SimpleExpiryQueue _expiryQueue;
 
+    private readonly JobServerMetrics _metrics;
+
     /// <inheritdoc cref="IJobQueueSystem.PriorityClassesCount" />
     public int PriorityClassesCount => _priorityClasses.Count;
 
@@ -168,8 +170,12 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     /// The set of workers that can accept jobs to execute
     /// as they come off the job queues.
     /// </param>
+    /// <param name="metrics">
+    /// Metrics on enqueued jobs will be recorded into here.
+    /// </param>
     public JobQueueSystem(int countPriorities,
-                          WorkerDistribution<PromisedWork, PromiseData> workerDistribution)
+                          WorkerDistribution<PromisedWork, PromiseData> workerDistribution,
+                          JobServerMetrics? metrics = null)
     {
         _expiryQueue = new SimpleExpiryQueue(60000, 20);
         _priorityClasses = new(GenerateMiddleQueueSystems(countPriorities));
@@ -187,6 +193,8 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
                                             _workerDistribution.AsChannel(),
                                             _cancelSource.Token), 
                                   _cancelSource.Token);
+
+        _metrics = metrics ?? JobServerMetrics.Default;
     }
 
     /// <summary>
@@ -214,7 +222,7 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     /// <exception cref="OperationCanceledException">
     /// <paramref name="cancellationToken"/> signals cancellation.
     /// </exception>
-    private static async Task RunJobsAsync(
+    private async Task RunJobsAsync(
         ChannelReader<ClientJobMessage> jobMessagesChannel,
         ChannelReader<JobVacancy<PromisedWork, PromiseData>> vacanciesChannel,
         CancellationToken cancellationToken)
@@ -256,9 +264,10 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     /// Register a job that has just been de-queued as running,
     /// then unregister it when the job finishes.
     /// </summary>
-    private static async Task RegisterJobWhileRunningAsync(ClientJobMessage clientJob)
+    private async Task RegisterJobWhileRunningAsync(ClientJobMessage clientJob)
     {
         using var _ = clientJob.Queue.RegisterRunningJob(clientJob.Job);
+        _metrics.CountJobsStarted.Add(1);
         try
         {
             await clientJob.Job.OutputTask.ConfigureAwait(false);
@@ -266,6 +275,7 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
         catch 
         { 
         }
+        _metrics.CountJobsFinished.Add(1);
     }
 
     /// <summary>
