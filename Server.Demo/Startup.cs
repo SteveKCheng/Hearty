@@ -75,7 +75,7 @@ public class Startup
             services.AddServerSideBlazor();
         }
 
-        services.AddSingleton<Meter>(p => new Meter("Hearty.Server.Demo"));
+        services.AddSingleton<JobServerMetrics>(p => new JobServerMetrics(new Meter("Hearty.Server.Demo")));
 
         services.AddOpenTelemetryMetrics(c =>
         {
