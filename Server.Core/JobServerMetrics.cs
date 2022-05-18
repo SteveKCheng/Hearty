@@ -35,6 +35,11 @@ public class JobServerMetrics
     internal Counter<int> CountJobsFinished { get; }
 
     /// <summary>
+    /// Dummy counter to work around bug in Prometheus exporter.
+    /// </summary>
+    private readonly Counter<int> _dummy;
+
+    /// <summary>
     /// Prepares instruments for collecting metrics as the job management
     /// system runs.
     /// </summary>
@@ -74,6 +79,11 @@ public class JobServerMetrics
                                 name: "jobs-finished",
                                 unit: "jobs",
                                 description: "Number of jobs ended after being launched");
+
+        _dummy = meter.CreateCounter<int>(
+                    name: "dummy");
+
+        _dummy.Add(1);
     }
 
     /// <summary>
