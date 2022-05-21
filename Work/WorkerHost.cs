@@ -395,6 +395,19 @@ public sealed class WorkerHost : IDisposable, IAsyncDisposable
     /// <summary>
     /// Cancel all pending requests and tear down the worker.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This method will shut down the connection,
+    /// and then dispose of the backing instance of 
+    /// <see cref="IJobSubmission" /> afterwards.
+    /// </para>
+    /// <para>
+    /// If the connection is closed involutarily, because the other side
+    /// closed it or the network fails, disposing the connection 
+    /// does nothing but this method may still be needed to be
+    /// called to dispose <see cref="IJobSubmission" />.
+    /// </para>
+    /// </remarks>
     public void Dispose()
     {
         DisposeAsync().AsTask().Wait();
@@ -403,6 +416,19 @@ public sealed class WorkerHost : IDisposable, IAsyncDisposable
     /// <summary>
     /// Cancel all pending requests and tear down the worker.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This method will shut down the connection asynchronously,
+    /// and then dispose of the backing instance of 
+    /// <see cref="IJobSubmission" /> asynchronously afterwards.
+    /// </para>
+    /// <para>
+    /// If the connection is closed involutarily, because the other side
+    /// closed it or the network fails, disposing the connection 
+    /// does nothing but this method may still be needed to be
+    /// called to dispose <see cref="IJobSubmission" />.
+    /// </para>
+    /// </remarks>
     public async ValueTask DisposeAsync()
     {
         // RpcConnection will cancel all pending requests
@@ -463,4 +489,24 @@ public sealed class WorkerHost : IDisposable, IAsyncDisposable
 
         return builder.Uri;
     }
+
+    /// <summary>
+    /// Event that fires when the connection closes for any reason.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="HasClosed" /> is guaranteed to be true 
+    /// when the event fires.  A handler for this event can
+    /// restart the worker host if the connection terminated
+    /// abruptly.  
+    /// </remarks>
+    public event EventHandler<RpcConnectionCloseEventArgs>? OnClose
+    {
+        add => _rpc.OnClose += value;
+        remove => _rpc.OnClose -= value;
+    }
+
+    /// <summary>
+    /// True when the connection has closed, whether gracefully or abruptly.
+    /// </summary>
+    public bool HasClosed => _rpc.HasClosed;
 }
