@@ -34,9 +34,7 @@ namespace Hearty;
 public readonly struct PromiseId : IComparable<PromiseId>
                                  , IEquatable<PromiseId>
                                  , IConvertible
-#if NET6_0_OR_GREATER
                                  , ISpanFormattable
-#endif
 {
     /// <summary>
     /// The 64-bit integer representing the promise ID.
@@ -193,20 +191,7 @@ public readonly struct PromiseId : IComparable<PromiseId>
     /// <inheritdoc />
     public bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format, IFormatProvider? provider)
     {
-#if NET6_0_OR_GREATER
         return destination.TryWrite(CultureInfo.InvariantCulture, $"{ServiceId:X8}/{SequenceNumber}", out charsWritten);
-#else
-        if (destination.Length < MaxChars)
-        {
-            charsWritten = 0;
-            return false;
-        }
-
-        var s = ToString();
-        s.AsSpan().CopyTo(destination);
-        charsWritten = s.Length;
-        return true;
-#endif
     }
 
     /// <inheritdoc />

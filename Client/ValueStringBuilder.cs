@@ -100,11 +100,7 @@ namespace Hearty.Client
 
             int remaining = _pos - index;
             _chars.Slice(index, remaining).CopyTo(_chars.Slice(index + count));
-            s
-#if !NET6_0_OR_GREATER
-                .AsSpan()
-#endif
-                .CopyTo(_chars.Slice(index));
+            s.CopyTo(_chars.Slice(index));
             _pos += count;
         }
 
@@ -147,11 +143,7 @@ namespace Hearty.Client
             if (pos > _chars.Length - s.Length)
                 Grow(s.Length);
 
-            s
-#if !NET6_0_OR_GREATER
-                .AsSpan()
-#endif
-                .CopyTo(_chars.Slice(pos));
+            s.CopyTo(_chars.Slice(pos));
             _pos += s.Length;
         }
 
@@ -188,7 +180,6 @@ namespace Hearty.Client
             return _chars.Slice(origPos, length);
         }
 
-#if NET6_0_OR_GREATER
         public void Append<T>(T value) where T : ISpanFormattable
             => Append<T>(value, string.Empty);
 
@@ -201,7 +192,6 @@ namespace Hearty.Client
 
             _pos += charsWritten;
         }
-#endif
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void GrowAndAppend(char c)

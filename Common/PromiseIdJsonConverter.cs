@@ -27,8 +27,6 @@ public class PromiseIdJsonConverter : JsonConverter<PromiseId>
         writer.WriteStringValue(asciiBuffer);
     }
 
-#if NET6_0_OR_GREATER
-
     /// <inheritdoc cref="JsonConverter{T}.ReadAsPropertyName" />
     public override PromiseId ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         => Read(ref reader, typeToConvert, options);
@@ -41,6 +39,4 @@ public class PromiseIdJsonConverter : JsonConverter<PromiseId>
         asciiBuffer = asciiBuffer[0..numBytes];
         writer.WritePropertyName(asciiBuffer);
     }
-
-#endif
 }

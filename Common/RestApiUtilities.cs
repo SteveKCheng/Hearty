@@ -33,7 +33,6 @@ namespace Hearty.Common
             return Invariant($"P{value.Days}DT{value.Hours}H{value.Minutes}M{value.Seconds}.{value.Milliseconds:D3}S");
         }
 
-#if NET6_0_OR_GREATER
         public static bool TryFormatExpiry(TimeSpan value, Span<char> destination, out int charsWritten)
         {
             return destination.TryWrite(
@@ -41,7 +40,6 @@ namespace Hearty.Common
                         $"P{value.Days}DT{value.Hours}H{value.Minutes}M{value.Seconds}.{value.Milliseconds:D3}S", 
                         out charsWritten);
         }
-#endif
 
         /// <summary>
         /// Read a named HTTP header, assuming it can only have

@@ -38,7 +38,7 @@ namespace Hearty.Utilities
         {
             count = Math.Max(Math.Min(count, short.MaxValue + 1), 1);
 
-            uint countLockObjects = RoundUpToPowerOf2((uint)count);
+            uint countLockObjects = BitOperations.RoundUpToPowerOf2((uint)count);
             var lockObjects = new object[countLockObjects];
             lockObjects[0] = lockObjects;
             for (uint i = 1; i < countLockObjects; ++i)
@@ -59,21 +59,6 @@ namespace Hearty.Utilities
         /// </returns>
         public object this[int index]
             => _lockObjects[(uint)index & ((uint)_lockObjects.Length - 1)];
-
-        private static uint RoundUpToPowerOf2(uint value)
-        {
-#if NET6_0
-            return BitOperations.RoundUpToPowerOf2(value);
-#else
-            --value;
-            value |= value >> 1;
-            value |= value >> 2;
-            value |= value >> 4;
-            value |= value >> 8;
-            value |= value >> 16;
-            return value + 1;
-#endif
-        }
     }
 
     /// <summary>

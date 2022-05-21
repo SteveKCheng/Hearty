@@ -453,11 +453,7 @@ namespace Hearty.Work
 
             var builder = new UriBuilder(siteUrl);
 
-#if NET6_0_OR_GREATER
             builder.Scheme = secure ? Uri.UriSchemeWss : Uri.UriSchemeNews;
-#else
-            builder.Scheme = secure ? "wss" : "ws";
-#endif
 
             ReadOnlySpan<char> subpath = builder.Path.EndsWith('/')
                                             ? WorkerHost.WebSocketsDefaultPath[1..]

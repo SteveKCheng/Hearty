@@ -47,23 +47,12 @@ namespace Hearty.Utilities
 
                 Source = null;
 
-#if NET6_0
                 if (source.TryReset())
                 {
                     _bag.Add(source);
                     return;
                 }
-#else
-                if (!source.IsCancellationRequested)
-                {
-                    source.CancelAfter(Timeout.Infinite);
-                    if (!source.IsCancellationRequested)
-                    {
-                        _bag.Add(source);
-                        return;
-                    }
-                }
-#endif
+
                 source.Dispose();
             }
 

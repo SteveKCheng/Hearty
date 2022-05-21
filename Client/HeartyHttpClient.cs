@@ -113,7 +113,6 @@ public partial class HeartyHttpClient : IHeartyClient
         return GetPromiseId(response.Headers);
     }
 
-#if NET6_0_OR_GREATER
     private readonly struct TimeSpanFormatWrapper : ISpanFormattable
     {
         public readonly TimeSpan TimeSpan;
@@ -126,7 +125,6 @@ public partial class HeartyHttpClient : IHeartyClient
         public bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format, IFormatProvider? provider)
             => RestApiUtilities.TryFormatExpiry(TimeSpan, destination, out charsWritten);
     }
-#endif
 
     private string CreateRequestUrl(string path,
                                     PromiseId? promiseId = null,
@@ -154,11 +152,7 @@ public partial class HeartyHttpClient : IHeartyClient
         {
             if (!path.EndsWith('/'))
                 builder.Append('/');
-#if NET6_0_OR_GREATER
             builder.Append(promiseId.Value);
-#else
-            builder.Append(promiseId.ToString());
-#endif
         }
 
         static void AppendQuerySeparator(ref ValueStringBuilder builder, ref int paramCount)
@@ -173,11 +167,7 @@ public partial class HeartyHttpClient : IHeartyClient
         {
             AppendQuerySeparator(ref builder, ref paramCount);
             builder.Append("timeout=");
-#if NET6_0_OR_GREATER
             builder.Append(new TimeSpanFormatWrapper(timeout.Value));
-#else
-            builder.Append(RestApiUtilities.FormatExpiry(timeout.Value));
-#endif
         }
 
         if (wantResult is not null)
@@ -205,11 +195,7 @@ public partial class HeartyHttpClient : IHeartyClient
         {
             AppendQuerySeparator(ref builder, ref paramCount);
             builder.Append("priority=");
-#if NET6_0_OR_GREATER
             builder.Append(priority);
-#else
-            builder.Append(priority.ToString(provider: null));
-#endif
         }
 
         return builder.ToString();
