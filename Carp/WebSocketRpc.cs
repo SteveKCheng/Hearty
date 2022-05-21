@@ -77,6 +77,18 @@ public class WebSocketRpc : RpcConnection
     /// </summary>
     private readonly Task _readPendingMessagesTask;
 
+
+    /// <summary>
+    /// Count that is atomically incremented when <see cref="_writePendingMessagesTask" />
+    /// or <see cref="_readPendingMessagesTask" /> is about to finish.
+    /// </summary>
+    /// <remarks>
+    /// This count is solely used to ensure the <see cref="RpcConnection.OnClose" />
+    /// event is fired when the last of the (two) tasks finishes, even if
+    /// they run concurrently.
+    /// </remarks>
+    private volatile int _mainTaskCompletions;
+
     /// <summary>
     /// ID (sequence number) for sending the next request message;
     /// atomically incremented each time.
@@ -320,7 +332,7 @@ public class WebSocketRpc : RpcConnection
 
             DrainPendingReplies(exception);
 
-            if (_readPendingMessagesTask.IsCompleted)
+            if (Interlocked.Increment(ref _mainTaskCompletions) == 2)
                 InvokeOnClose(exception);
         }
     }
@@ -457,7 +469,7 @@ public class WebSocketRpc : RpcConnection
             _readBuffers.Clear();
             DrainCancellations();
 
-            if (_writePendingMessagesTask.IsCompleted)
+            if (Interlocked.Increment(ref _mainTaskCompletions) == 2)
                 InvokeOnClose(GetSendChannelException());
         }
     }
