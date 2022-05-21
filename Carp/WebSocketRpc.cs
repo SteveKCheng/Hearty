@@ -231,8 +231,8 @@ public class WebSocketRpc : RpcConnection
     /// </summary>
     private Exception? GetSendChannelException()
     {
-        AggregateException? ae = _channel.Reader.Completion.Exception;
-        return ae?.InnerException;
+        var t = _channel.Reader.Completion;
+        return t.IsCompleted ? t.Exception?.InnerException : null;
     }
 
     /// <summary>
@@ -275,65 +275,70 @@ public class WebSocketRpc : RpcConnection
         {
             Exception? exception = GetSendChannelException();
 
-            // Need to drain _channel first to read status reliably
-            DrainPendingMessages(exception);
-
-            // CloseOutputAsync, i.e. sending the close message,
-            // is not allowed when the WebSocket connection is already
-            // closed or aborted.
-            //
-            // Note that WebSocketState.Closed only means the closing
-            // handshake is successful while a rude closing of the TCP
-            // connection or stream results in WebSocketState.Abort.
-            // WebSocketState.Closed should not happen because this
-            // function is responsible for half of the closing handshake,
-            // when it calls CloseOutputAsync below.)
-            var webSocketState = _webSocket.State;
-            if (webSocketState < WebSocketState.Closed)
+            try
             {
-                WebSocketCloseStatus closeStatus;
-                if (exception is not null)
+                // Need to drain _channel first to read status reliably
+                DrainPendingMessages(exception);
+
+                // CloseOutputAsync, i.e. sending the close message,
+                // is not allowed when the WebSocket connection is already
+                // closed or aborted.
+                //
+                // Note that WebSocketState.Closed only means the closing
+                // handshake is successful while a rude closing of the TCP
+                // connection or stream results in WebSocketState.Abort.
+                // WebSocketState.Closed should not happen because this
+                // function is responsible for half of the closing handshake,
+                // when it calls CloseOutputAsync below.)
+                var webSocketState = _webSocket.State;
+                if (webSocketState < WebSocketState.Closed)
                 {
-                    closeStatus = (exception as WebSocketRpcException)?.CloseStatus
-                                ?? WebSocketCloseStatus.InternalServerError;
-                }
-                else if (_remoteEndHasTerminated)
-                {
-                    closeStatus = _webSocket.CloseStatus ?? WebSocketCloseStatus.Empty;
-                }
-                else
-                {
-                    closeStatus = WebSocketCloseStatus.NormalClosure;
+                    WebSocketCloseStatus closeStatus;
+                    if (exception is not null)
+                    {
+                        closeStatus = (exception as WebSocketRpcException)?.CloseStatus
+                                    ?? WebSocketCloseStatus.InternalServerError;
+                    }
+                    else if (_remoteEndHasTerminated)
+                    {
+                        closeStatus = _webSocket.CloseStatus ?? WebSocketCloseStatus.Empty;
+                    }
+                    else
+                    {
+                        closeStatus = WebSocketCloseStatus.NormalClosure;
+                    }
+
+                    try
+                    {
+                        await _webSocket.CloseOutputAsync(closeStatus, null, CancellationToken.None)
+                                        .ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        // FIXME: should we retain this exception?
+                        try { _webSocket.Abort(); } catch { }
+                    }
                 }
 
-                try
+                // We should dispose the underlying streams at this point,
+                // WebSocket instance might not do so itself, from reading
+                // the implementation source code from source.dot.net.
+                //
+                // On the other hand, WebSocketState.Close does
+                // automatically cause disposal, i.e. when the
+                // closing handshake was successful.
+                else if (webSocketState == WebSocketState.Aborted)
                 {
-                    await _webSocket.CloseOutputAsync(closeStatus, null, CancellationToken.None)
-                                    .ConfigureAwait(false);
+                    _webSocket.Dispose();
                 }
-                catch
-                {
-                    // FIXME: should we retain this exception?
-                    try { _webSocket.Abort(); } catch { }
-                }
+
+                DrainPendingReplies(exception);
             }
-
-            // We should dispose the underlying streams at this point,
-            // WebSocket instance might not do so itself, from reading
-            // the implementation source code from source.dot.net.
-            //
-            // On the other hand, WebSocketState.Close does
-            // automatically cause disposal, i.e. when the
-            // closing handshake was successful.
-            else if (webSocketState == WebSocketState.Aborted)
+            finally
             {
-                _webSocket.Dispose();
+                if (Interlocked.Increment(ref _mainTaskCompletions) == 2)
+                    InvokeOnClose(exception);
             }
-
-            DrainPendingReplies(exception);
-
-            if (Interlocked.Increment(ref _mainTaskCompletions) == 2)
-                InvokeOnClose(exception);
         }
     }
 
@@ -466,11 +471,16 @@ public class WebSocketRpc : RpcConnection
         }
         finally
         {
-            _readBuffers.Clear();
-            DrainCancellations();
-
-            if (Interlocked.Increment(ref _mainTaskCompletions) == 2)
-                InvokeOnClose(GetSendChannelException());
+            try
+            {
+                _readBuffers.Clear();
+                DrainCancellations();
+            }
+            finally
+            {
+                if (Interlocked.Increment(ref _mainTaskCompletions) == 2)
+                    InvokeOnClose(GetSendChannelException());
+            }
         }
     }
 
