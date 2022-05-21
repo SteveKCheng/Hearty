@@ -18,10 +18,12 @@
     <Compile Include="IJobSubmission.cs" />
     <Compile Include="IWorkerRegistration.cs" />
     <Compile Include="WorkerHost.cs" />
+    <Compile Include="WorkerHostService.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="GitVersion.MsBuild" Version="5.10.1" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="6.0.0" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="all" />
   </ItemGroup>
     
