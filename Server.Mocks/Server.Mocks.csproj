@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
+    <OutputType>exe</OutputType>
     <Nullable>enable</Nullable>
     <RootNamespace>Hearty.Server.Mocks</RootNamespace>
     <AssemblyName>Hearty.Server.Mocks</AssemblyName>
@@ -17,16 +18,24 @@
     <Compile Include="MockPricingInput.cs" />
     <Compile Include="MockPricingOutput.cs" />
     <Compile Include="MockPricingWorker.cs" />
+    <Compile Include="Program.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="GitVersion.MsBuild" Version="5.10.1" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="6.0.1" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="6.0.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Work\Work.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
     
 </Project>

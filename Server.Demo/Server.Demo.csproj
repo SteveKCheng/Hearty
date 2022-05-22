@@ -13,7 +13,7 @@
     <ProjectReference Include="..\Scheduling\Scheduling.csproj" />
     <ProjectReference Include="..\Carp\Carp.csproj" />
     <ProjectReference Include="..\Server.Core\Server.Core.csproj" />
-    <ProjectReference Include="..\Server.Mocks\Server.Mocks.csproj" />
+    <ProjectReference Include="..\Server.Mocks\Server.Mocks.csproj" ExcludeAssets="contentFiles" />
     <ProjectReference Include="..\Server.WebApi\Server.WebApi.csproj" />
     <ProjectReference Include="..\Server.WebUi\Server.WebUi.csproj" />
   </ItemGroup>
