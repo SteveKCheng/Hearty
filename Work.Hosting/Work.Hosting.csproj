@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <Compile Include="WorkerHostService.cs" />
+    <Compile Include="WorkerHostServiceSettings.cs" />
   </ItemGroup>
 
   <ItemGroup>
