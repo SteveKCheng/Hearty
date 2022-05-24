@@ -1,10 +1,11 @@
-﻿using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Polly;
-using System;
+﻿using System;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Polly;
+using Hearty.Carp;
 
 namespace Hearty.Work;
 
@@ -14,12 +15,16 @@ namespace Hearty.Work;
 /// </summary>
 public sealed class WorkerHostService : IHostedService
 {
-    private WorkerHost? _workerHost;
 
     private readonly WorkerHostServiceSettings _settings;
     private readonly WorkerFactory _workerFactory;
     private readonly ILogger _logger;
     private readonly JobWorkerRpcRegistry? _rpcRegistry;
+
+    private readonly object _lockObj = new();
+    private Task<WorkerHost>? _workerHostTask;
+    private bool _hasStarted;
+    private CancellationTokenSource? _cancellationSource;
 
     /// <summary>
     /// Prepare to start a "long-running" service (as part of the
@@ -65,23 +70,31 @@ public sealed class WorkerHostService : IHostedService
         }
     }
 
-    /// <inheritdoc cref="IHostedService.StartAsync"/>
-    public async Task StartAsync(CancellationToken cancellationToken)
+    private Task<WorkerHost> ConnectAsync(CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Starting the worker host...");
+
         int concurrency = (_settings.Concurrency > 0) ? _settings.Concurrency
                                                       : Environment.ProcessorCount;
         string name = !string.IsNullOrEmpty(_settings.WorkerName) ? _settings.WorkerName
                                                                   : Dns.GetHostName();
 
         var policy = Policy.Handle<Exception>()
-                           .WaitAndRetryAsync(retryCount: 3, _ => TimeSpan.FromSeconds(5));
+                           .WaitAndRetryAsync(retryCount: 10, _ => TimeSpan.FromSeconds(5));
 
         int attempt = 0;
-        var workerHost = await policy.ExecuteAsync(() =>
+        return policy.ExecuteAsync(async (cancellationToken) =>
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Ensure that writes to the instance variables of this class 
+            // from StartAsync occur before WorkerHost_OnClose can possibly
+            // execute.
+            await Task.Yield();
+
             _logger.LogInformation("Attempting to connect: attempt {attempt}", ++attempt);
 
-            return WorkerHost.ConnectAndStartAsync(
+            var workerHost = await WorkerHost.ConnectAndStartAsync(
                 _workerFactory,
                 _rpcRegistry,
                 new RegisterWorkerRequestMessage
@@ -91,20 +104,95 @@ public sealed class WorkerHostService : IHostedService
                 },
                 _settings.ServerUrl!,
                 null,
-                cancellationToken);
-        }).ConfigureAwait(false);
+                cancellationToken).ConfigureAwait(false);
 
-        _workerHost = workerHost;
+            _logger.LogInformation("Successfully connected to job server. ");
+
+            workerHost.OnClose += WorkerHost_OnClose;
+
+            // Could happen if there is a race with the connection failing
+            // and the event handler being attached.
+            // FIXME: have workerHost be able to report the exception correctly
+            if (workerHost.HasClosed)
+                throw new Exception("Connection to job server failed right after it had been connected to. ");
+
+            return workerHost;
+        }, cancellationToken);
+    }
+
+
+    /// <inheritdoc cref="IHostedService.StartAsync"/>
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        var cancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        lock (_lockObj)
+        {
+            if (_hasStarted)
+                return Task.CompletedTask;
+
+            _workerHostTask = ConnectAsync(cancellationSource.Token);
+            _cancellationSource = cancellationSource;
+            _hasStarted = true;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void WorkerHost_OnClose(object? sender, RpcConnectionCloseEventArgs e)
+    {
+        var exception = e.Exception;
+        if (exception is null)
+            return;
+
+        _logger.LogError(exception, "Connection to job server failed. ");
+
+        var cancellationSource = new CancellationTokenSource();
+
+        lock (_lockObj)
+        {
+            if (!_hasStarted)
+                return;
+
+            _workerHostTask = ConnectAsync(cancellationSource.Token);
+            _cancellationSource = cancellationSource;
+        }
     }
 
     /// <inheritdoc cref="IHostedService.StopAsync"/>
-    public Task StopAsync(CancellationToken cancellationToken)
+    public async Task StopAsync(CancellationToken cancellationToken)
     {
-        var workerHost = _workerHost;
-        if (workerHost is null)
-            return Task.CompletedTask;
+        CancellationTokenSource cancellationSource;
+        Task<WorkerHost> workerHostTask;
 
-        return workerHost.DisposeAsync().AsTask();
+        lock (_lockObj)
+        {
+            if (!_hasStarted)
+                return;
+
+            cancellationSource = _cancellationSource!;
+            workerHostTask = _workerHostTask!;
+
+            _hasStarted = false;
+            _cancellationSource = null;
+            _workerHostTask = null;
+        }
+
+        _logger.LogInformation("Shutting down the running worker host... ");
+        cancellationSource.Cancel();
+
+        WorkerHost workerHost;
+        try
+        {
+            workerHost = await workerHostTask.WaitAsync(cancellationToken)
+                                             .ConfigureAwait(false);
+        }
+        catch
+        {
+            return;
+        }
+
+        await workerHost.DisposeAsync().ConfigureAwait(false);
     }
 }
 
