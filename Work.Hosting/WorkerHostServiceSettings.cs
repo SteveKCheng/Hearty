@@ -10,7 +10,7 @@ namespace Hearty.Work;
 /// This type is intended to be read from the JSON configuration 
 /// of the worker application/process, through "configuration model binding". 
 /// </remarks>
-public readonly struct WorkerHostServiceSettings
+public class WorkerHostServiceSettings
 {
     /// <summary>
     /// The URL to the job server's WebSocket endpoint.
