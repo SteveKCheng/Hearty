@@ -1,33 +1,30 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
+
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <Nullable>enable</Nullable>
     <RootNamespace>Hearty.Work</RootNamespace>
-    <AssemblyName>Hearty.Work</AssemblyName>
+    <AssemblyName>Hearty.Work.Hosting</AssemblyName>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
-    <Description>Library for implementing worker hosts in Hearty, and interfaces common to the job server and worker hosts</Description>
+    <Description>Manages long-running worker hosts from the Hearty framework</Description>
   </PropertyGroup>
 
   <Import Project="..\Packaging.props" />
 
   <ItemGroup>
-    <Compile Include="JobWorkerRpcRegistry.cs" />
-    <Compile Include="RpcExceptionSerializer.cs" />
-    <Compile Include="IJobSubmission.cs" />
-    <Compile Include="IWorkerRegistration.cs" />
-    <Compile Include="WorkerHost.cs" />
+    <Compile Include="WorkerHostService.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="GitVersion.MsBuild" Version="5.10.1" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="6.0.0" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="all" />
   </ItemGroup>
-    
+
   <ItemGroup>
-    <ProjectReference Include="..\Common\Common.csproj" />
-    <ProjectReference Include="..\Carp\Carp.csproj" />
+    <ProjectReference Include="..\Work\Work.csproj" />
   </ItemGroup>
 
 </Project>

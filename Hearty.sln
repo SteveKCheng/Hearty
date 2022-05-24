@@ -31,7 +31,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Server.WebUi", "Server.WebU
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BTree", "BTree\BTree.csproj", "{0950AFCF-7A8B-4E2D-AA79-3AB94164B255}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Server.FasterKV", "Server.FasterKV\Server.FasterKV.csproj", "{5368B4E2-1A92-46B3-9EFA-5EAC68DE99B4}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Server.FasterKV", "Server.FasterKV\Server.FasterKV.csproj", "{5368B4E2-1A92-46B3-9EFA-5EAC68DE99B4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Work.Hosting", "Work.Hosting\Work.Hosting.csproj", "{774998D7-7AEB-4120-AFFC-BB0179043BE2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -99,6 +101,10 @@ Global
 		{5368B4E2-1A92-46B3-9EFA-5EAC68DE99B4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5368B4E2-1A92-46B3-9EFA-5EAC68DE99B4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5368B4E2-1A92-46B3-9EFA-5EAC68DE99B4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{774998D7-7AEB-4120-AFFC-BB0179043BE2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{774998D7-7AEB-4120-AFFC-BB0179043BE2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{774998D7-7AEB-4120-AFFC-BB0179043BE2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{774998D7-7AEB-4120-AFFC-BB0179043BE2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
