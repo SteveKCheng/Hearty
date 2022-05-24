@@ -20,8 +20,10 @@ internal static class Program
                     var config = p.GetRequiredService<IConfiguration>();
                     var settings = config.Get<WorkerHostServiceSettings>();
                     var logger = p.GetRequiredService<ILogger<MockPricingWorker>>();
-                    WorkerFactory workerFactory = (message, rpc) => new MockPricingWorker(logger, message.Name);
-                    return new WorkerHostService(settings, workerFactory, rpcRegistry: null);
+                    return new WorkerHostService(settings,
+                                                 (message, rpc) => new MockPricingWorker(logger, message.Name), 
+                                                 p.GetRequiredService<ILogger<WorkerHostService>>(),
+                                                 rpcRegistry: null);
                 });
             })
             .UseConsoleLifetime()

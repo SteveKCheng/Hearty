@@ -1,4 +1,6 @@
 ﻿using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Polly;
 using System;
 using System.Net;
 using System.Threading;
@@ -16,6 +18,7 @@ public sealed class WorkerHostService : IHostedService
 
     private readonly WorkerHostServiceSettings _settings;
     private readonly WorkerFactory _workerFactory;
+    private readonly ILogger _logger;
     private readonly JobWorkerRpcRegistry? _rpcRegistry;
 
     /// <summary>
@@ -30,6 +33,9 @@ public sealed class WorkerHostService : IHostedService
     /// Instantiates the implementation of <see cref="IJobSubmission" />
     /// after connecting successfully with the job server.
     /// </param>
+    /// <param name="logger">
+    /// Logs when connections occur.
+    /// </param>
     /// <param name="rpcRegistry">
     /// The registry for the RPC connection to the job server.  Typically
     /// it is the server that defines custom functions that
@@ -42,6 +48,7 @@ public sealed class WorkerHostService : IHostedService
     /// <exception cref="ArgumentException"></exception>
     public WorkerHostService(WorkerHostServiceSettings settings,
                              WorkerFactory workerFactory,
+                             ILogger<WorkerHostService> logger,
                              JobWorkerRpcRegistry? rpcRegistry = null)
     {
         ArgumentNullException.ThrowIfNull(workerFactory);
@@ -49,6 +56,7 @@ public sealed class WorkerHostService : IHostedService
         _settings = settings;
         _workerFactory = workerFactory;
         _rpcRegistry = rpcRegistry;
+        _logger = logger;
 
         if (string.IsNullOrEmpty(_settings.ServerUrl))
         {
@@ -65,17 +73,28 @@ public sealed class WorkerHostService : IHostedService
         string name = !string.IsNullOrEmpty(_settings.WorkerName) ? _settings.WorkerName
                                                                   : Dns.GetHostName();
 
-        _workerHost = await WorkerHost.ConnectAndStartAsync(
-                        _workerFactory,
-                        _rpcRegistry,
-                        new RegisterWorkerRequestMessage
-                        {
-                            Concurrency = checked((ushort)concurrency),
-                            Name = name
-                        },
-                        _settings.ServerUrl!,
-                        null,
-                        cancellationToken).ConfigureAwait(false);
+        var policy = Policy.Handle<Exception>()
+                           .WaitAndRetryAsync(retryCount: 3, _ => TimeSpan.FromSeconds(5));
+
+        int attempt = 0;
+        var workerHost = await policy.ExecuteAsync(() =>
+        {
+            _logger.LogInformation("Attempting to connect: attempt {attempt}", ++attempt);
+
+            return WorkerHost.ConnectAndStartAsync(
+                _workerFactory,
+                _rpcRegistry,
+                new RegisterWorkerRequestMessage
+                {
+                    Concurrency = checked((ushort)concurrency),
+                    Name = name
+                },
+                _settings.ServerUrl!,
+                null,
+                cancellationToken);
+        }).ConfigureAwait(false);
+
+        _workerHost = workerHost;
     }
 
     /// <inheritdoc cref="IHostedService.StopAsync"/>
