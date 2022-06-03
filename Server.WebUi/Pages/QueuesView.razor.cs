@@ -9,7 +9,7 @@ namespace Hearty.Server.WebUi.Pages;
 /// <summary>
 /// Blazor component to display the queues on the job server.
 /// </summary>
-public sealed partial class Queues : TimedRefreshComponent
+public sealed partial class QueuesView : TimedRefreshComponent
 {
     /// <inheritdoc />
     protected override void OnInitialized() 
