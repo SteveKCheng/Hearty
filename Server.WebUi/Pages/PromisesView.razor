@@ -1,10 +1,5 @@
-﻿@page "/ui/promises"
+﻿@inject PromiseStorage _promiseStorage
 
-@inject PromiseStorage _promiseStorage
-
-<h1>Promises</h1>
-
-<div class="content">
 <table class="table">
     <thead>
         <tr>
@@ -33,7 +28,6 @@
         }
     </tbody>
 </table>
-</div>
 
 @code {
     private List<PromiseId> _promiseIds = new();
