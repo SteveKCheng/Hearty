@@ -9,7 +9,7 @@ namespace Hearty.Server.WebUi.Pages;
 /// <summary>
 /// Blazor page listing the current worker hosts connected to the job server.
 /// </summary>
-public partial class Workers
+public partial class WorkersView
 {
     /// <inheritdoc />
     protected override void OnInitialized()
