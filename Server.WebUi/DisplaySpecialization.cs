@@ -46,16 +46,6 @@ namespace Hearty.Server.WebUi
         public Uri? WorkersWebSocketsUrl { get; init; }
 
         /// <summary>
-        /// Generates the implementation object for a mock worker host.
-        /// </summary>
-        /// <remarks>
-        /// Setting this delegate (to non-null) causes a button to
-        /// appear under the "workers" page to create new hosts.
-        /// This feature is meant for testing.
-        /// </remarks>
-        public TestWorkersGenerator? TestWorkersGenerator { get; init; }
-
-        /// <summary>
         /// Get <see cref="ServerUrl" /> with defaulting if it has not been set.
         /// </summary>
         internal string GetServerUrl(NavigationManager navigationManager)

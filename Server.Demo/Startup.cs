@@ -111,8 +111,7 @@ public class Startup
         {
             return new DisplaySpecialization
             {
-                JobCustomProperties = new string[] { "Instrument" },
-                TestWorkersGenerator = p.GetRequiredService<TestWorkersGenerator>()
+                JobCustomProperties = new string[] { "Instrument" }
             };
         });
 

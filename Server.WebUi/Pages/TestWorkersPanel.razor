@@ -1,0 +1,24 @@
+﻿@inject TestWorkersGenerator _testWorkersGenerator
+
+<div class="create-workers">
+
+    <table>
+        <tr>
+            <th>Number of workers</th>
+            <td><input type="number" id="concurrency" min="1" max="50" step="1"
+                        @bind="@InputNumberOfWorkers" /></td>
+        </tr>
+        <tr>
+            <th>Degree of concurrency</th>
+            <td><input type="number" id="concurrency" min="1" max="50" step="1"
+                        @bind="@InputConcurrency" /></td>
+        </tr>
+    </table>
+
+    <p>
+        <button class="btn btn-primary" @onclick="GenerateWorkersAsync">
+            Generate new workers
+        </button>
+    </p>
+
+</div>

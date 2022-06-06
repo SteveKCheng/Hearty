@@ -2,10 +2,7 @@
 @using Microsoft.Extensions.Logging
 
 @inherits TimedRefreshComponent
-@inject ILogger<WorkersView> _logger
-@inject DisplaySpecialization _displaySpecialization
 @inject WorkerDistribution<PromisedWork, PromiseData> _workerDistribution
-@inject NavigationManager _navigationManager
 
 <Grid Items="@_workerDistribution.Values">
 
@@ -23,28 +20,8 @@
     </TemplateColumn>
 </Grid>
 
-@if (IsHostCreationEnabled)
-{
-    <div class="create-workers">
-
-        <table>
-            <tr>
-                <th>Number of workers</th>
-                <td><input type="number" id="concurrency" min="1" max="50" step="1"
-                            @bind="@InputNumberOfWorkers" /></td>
-            </tr>
-            <tr>
-                <th>Degree of concurrency</th>
-                <td><input type="number" id="concurrency" min="1" max="50" step="1"
-                            @bind="@InputConcurrency" /></td>
-            </tr>
-        </table>
-
-        <p>
-            <button class="btn btn-primary" @onclick="GenerateWorkersAsync">
-                Generate new workers
-            </button>
-        </p>
-
-    </div>
+@code {
+    /// <inheritdoc />
+    protected override void OnInitialized()
+        => StartRefreshing(TimeoutBucket.After5Seconds);
 }
