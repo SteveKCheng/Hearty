@@ -266,6 +266,10 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
         catch (OperationCanceledException e) when (e.CancellationToken == cancellationToken)
         {
         }
+        catch (Exception e)
+        {
+            _logger.LogCritical(e, "An exception occurred in dispatching jobs from their queues to run. ");
+        }
     }
 
     /// <summary>
