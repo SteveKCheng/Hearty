@@ -136,7 +136,8 @@ public class Startup
         services.AddSingleton<IJobQueueSystem>(
             p => new JobQueueSystem(
                         countPriorities: 10, 
-                        p.GetRequiredService<WorkerDistribution<PromisedWork, PromiseData>>()));
+                        p.GetRequiredService<WorkerDistribution<PromisedWork, PromiseData>>(),
+                        p.GetRequiredService<ILogger<JobQueueSystem>>()));
 
         services.AddSingleton<IRemoteJobCancellation>(p => p.GetRequiredService<JobsManager>());
         services.AddSingleton<PromiseExceptionTranslator>(BasicExceptionTranslator.Instance);

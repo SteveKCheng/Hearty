@@ -6,6 +6,7 @@ using Hearty.Scheduling;
 using Hearty.Common;
 using System.Security.Claims;
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
 
 namespace Hearty.Server;
 
@@ -27,6 +28,8 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     private readonly WorkerDistribution<PromisedWork, PromiseData> _workerDistribution;
 
     private readonly SimpleExpiryQueue _expiryQueue;
+
+    private readonly ILogger _logger;
 
     private readonly JobServerMetrics _metrics;
 
@@ -170,13 +173,18 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
     /// The set of workers that can accept jobs to execute
     /// as they come off the job queues.
     /// </param>
+    /// <param name="logger">
+    /// Logs status and error messages.
+    /// </param>
     /// <param name="metrics">
     /// Metrics on enqueued jobs will be recorded into here.
     /// </param>
     public JobQueueSystem(int countPriorities,
                           WorkerDistribution<PromisedWork, PromiseData> workerDistribution,
+                          ILogger<JobQueueSystem> logger,
                           JobServerMetrics? metrics = null)
     {
+        _logger = logger;
         _expiryQueue = new SimpleExpiryQueue(60000, 20);
         _priorityClasses = new(GenerateMiddleQueueSystems(countPriorities));
         _workerDistribution = workerDistribution;
