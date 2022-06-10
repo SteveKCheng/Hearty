@@ -13,6 +13,25 @@ namespace Hearty.Work;
 /// Incorporates <see cref="WorkerHost" /> as a "long-running" service
 /// that is managed by .NET's "generic hosting".
 /// </summary>
+/// <remarks>
+/// <para>
+/// The worker will try restarting itself if the connection
+/// to the job server fails.
+/// </para>
+/// <para>
+/// Since the protocol between the worker and the job server is
+/// stateful, reliable recovery from connection failures is only possible
+/// by restarting <see cref="WorkerHost" /> entirely.
+/// However, implementations of <see cref="IJobSubmission" />
+/// may attempt to checkpoint current computation state, either locally
+/// or on the job server itself (through the same RPC connection),
+/// so that when the job server re-submits the same jobs, workers can
+/// pick from where the jobs left off before the connection failure.
+/// </para>
+/// <para>
+/// Retries are implemented with the help of the Polly library.
+/// </para>
+/// </remarks>
 public sealed class WorkerHostService : IHostedService
 {
     private readonly WorkerHostServiceSettings _settings;
