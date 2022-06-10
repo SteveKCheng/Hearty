@@ -48,4 +48,15 @@ public class WorkerHostServiceSettings
     /// the containing the application is left alone.
     /// </remarks>
     public bool StopHostWhenServerCloses { get; init; } = true;
+
+    /// <summary>
+    /// Number of times to retry connecting to the job server before
+    /// giving up.
+    /// </summary>
+    public int ConnectionRetries { get; init; } = 10;
+
+    /// <summary>
+    /// Amount of time to wait, in milliseconds, between connection retries.
+    /// </summary>
+    public int ConnectionRetryInterval { get; init; } = 5000;
 }

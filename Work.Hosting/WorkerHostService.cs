@@ -15,7 +15,6 @@ namespace Hearty.Work;
 /// </summary>
 public sealed class WorkerHostService : IHostedService
 {
-
     private readonly WorkerHostServiceSettings _settings;
     private readonly WorkerFactory _workerFactory;
     private readonly ILogger _logger;
@@ -77,8 +76,10 @@ public sealed class WorkerHostService : IHostedService
         }
     }
 
-    private Task<WorkerHost> ConnectAsync(CancellationToken cancellationToken)
+    private async Task<WorkerHost> ConnectAsync(CancellationToken cancellationToken)
     {
+        await Task.Yield();
+
         _logger.LogInformation("Starting the worker host...");
 
         int concurrency = (_settings.Concurrency > 0) ? _settings.Concurrency
@@ -87,44 +88,56 @@ public sealed class WorkerHostService : IHostedService
                                                                   : Dns.GetHostName();
 
         var policy = Policy.Handle<Exception>()
-                           .WaitAndRetryAsync(retryCount: 10, _ => TimeSpan.FromSeconds(5));
+                           .WaitAndRetryAsync(retryCount: _settings.ConnectionRetries, 
+                                              _ => TimeSpan.FromMilliseconds(_settings.ConnectionRetryInterval));
 
         int attempt = 0;
-        return policy.ExecuteAsync(async (cancellationToken) =>
+
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            var workerHost = await policy.ExecuteAsync(async (cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
 
-            // Ensure that writes to the instance variables of this class 
-            // from StartAsync occur before WorkerHost_OnClose can possibly
-            // execute.
-            await Task.Yield();
+                // Ensure that writes to the instance variables of this class 
+                // from StartAsync occur before WorkerHost_OnClose can possibly
+                // execute.
+                await Task.Yield();
 
-            _logger.LogInformation("Attempting to connect: attempt {attempt}", ++attempt);
+                _logger.LogInformation("Attempting to connect: attempt {attempt}", ++attempt);
 
-            var workerHost = await WorkerHost.ConnectAndStartAsync(
-                _workerFactory,
-                _rpcRegistry,
-                new RegisterWorkerRequestMessage
-                {
-                    Concurrency = checked((ushort)concurrency),
-                    Name = name
-                },
-                _settings.ServerUrl!,
-                null,
-                cancellationToken).ConfigureAwait(false);
+                var workerHost = await WorkerHost.ConnectAndStartAsync(
+                    _workerFactory,
+                    _rpcRegistry,
+                    new RegisterWorkerRequestMessage
+                    {
+                        Concurrency = checked((ushort)concurrency),
+                        Name = name
+                    },
+                    _settings.ServerUrl!,
+                    null,
+                    cancellationToken).ConfigureAwait(false);
 
-            _logger.LogInformation("Successfully connected to job server. ");
+                _logger.LogInformation("Successfully connected to job server. ");
 
-            workerHost.OnClose += WorkerHost_OnClose;
+                workerHost.OnClose += WorkerHost_OnClose;
 
-            // Could happen if there is a race with the connection failing
-            // and the event handler being attached.
-            // FIXME: have workerHost be able to report the exception correctly
-            if (workerHost.HasClosed)
-                throw new Exception("Connection to job server failed right after it had been connected to. ");
+                // Could happen if there is a race with the connection failing
+                // and the event handler being attached.
+                // FIXME: have workerHost be able to report the exception correctly
+                if (workerHost.HasClosed)
+                    throw new Exception("Connection to job server failed right after it had been connected to. ");
+
+                return workerHost;
+            }, cancellationToken).ConfigureAwait(false);
 
             return workerHost;
-        }, cancellationToken);
+        }
+        catch
+        {
+            RequestHostToStop();
+            throw;
+        }
     }
 
 
@@ -146,14 +159,18 @@ public sealed class WorkerHostService : IHostedService
         return Task.CompletedTask;
     }
 
+    private void RequestHostToStop()
+    {
+        if (_settings.StopHostWhenServerCloses)
+            _appLifetime.StopApplication();
+    }
+
     private void WorkerHost_OnClose(object? sender, RpcConnectionCloseEventArgs e)
     {
         var exception = e.Exception;
         if (exception is null)
         {
-            if (_settings.StopHostWhenServerCloses)
-                _appLifetime.StopApplication();
-
+            RequestHostToStop();
             return;
         }
 
