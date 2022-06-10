@@ -205,8 +205,17 @@ public sealed class WorkerHostService : IHostedService
 
     private void RequestHostToStop()
     {
-        if (_settings.StopHostWhenServerCloses)
+        bool stopHost = _settings.StopHostWhenServerCloses;
+
+        if (stopHost)
+        {
+            _logger.LogInformation("The host application will be requested to stop because the server voluntarily closed the connection. ");
             _appLifetime.StopApplication();
+        }
+        else
+        {
+            _logger.LogWarning("The server has voluntarily closed the connection.  This worker host service will become inoperative. ");
+        }
     }
 
     private void WorkerHost_OnClose(object? sender, RpcConnectionCloseEventArgs e)
