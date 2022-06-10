@@ -15,16 +15,12 @@ internal static class Program
         var host = Host.CreateDefaultBuilder(args)
             .ConfigureServices((context, services) =>
             {
-                services.AddHostedService<WorkerHostService>(p =>
-                {
-                    var config = p.GetRequiredService<IConfiguration>();
-                    var settings = config.Get<WorkerHostServiceSettings>();
-                    var logger = p.GetRequiredService<ILogger<MockPricingWorker>>();
-                    return new WorkerHostService(settings,
-                                                 (message, rpc) => new MockPricingWorker(logger, message.Name), 
-                                                 p.GetRequiredService<ILogger<WorkerHostService>>(),
-                                                 rpcRegistry: null);
-                });
+                services.AddSingleton<WorkerFactory>((IServiceProvider p) =>
+                    (message, rpc) => new MockPricingWorker(p.GetRequiredService<ILogger<MockPricingWorker>>(), message.Name));
+                services.AddSingleton<WorkerHostServiceSettings>(p =>
+                    p.GetRequiredService<IConfiguration>().Get<WorkerHostServiceSettings>());
+
+                services.AddHostedService<WorkerHostService>();
             })
             .UseConsoleLifetime()
             .Build();
