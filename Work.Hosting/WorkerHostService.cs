@@ -19,6 +19,7 @@ public sealed class WorkerHostService : IHostedService
     private readonly WorkerHostServiceSettings _settings;
     private readonly WorkerFactory _workerFactory;
     private readonly ILogger _logger;
+    private IHostApplicationLifetime _appLifetime;
     private readonly JobWorkerRpcRegistry? _rpcRegistry;
 
     private readonly object _lockObj = new();
@@ -41,6 +42,10 @@ public sealed class WorkerHostService : IHostedService
     /// <param name="logger">
     /// Logs when connections occur.
     /// </param>
+    /// <param name="appLifetime">
+    /// Used to request the host to quit if the job server closes down
+    /// the connection gracefully.
+    /// </param>
     /// <param name="rpcRegistry">
     /// The registry for the RPC connection to the job server.  Typically
     /// it is the server that defines custom functions that
@@ -54,6 +59,7 @@ public sealed class WorkerHostService : IHostedService
     public WorkerHostService(WorkerHostServiceSettings settings,
                              WorkerFactory workerFactory,
                              ILogger<WorkerHostService> logger,
+                             IHostApplicationLifetime appLifetime,
                              JobWorkerRpcRegistry? rpcRegistry = null)
     {
         ArgumentNullException.ThrowIfNull(workerFactory);
@@ -62,6 +68,7 @@ public sealed class WorkerHostService : IHostedService
         _workerFactory = workerFactory;
         _rpcRegistry = rpcRegistry;
         _logger = logger;
+        _appLifetime = appLifetime;
 
         if (string.IsNullOrEmpty(_settings.ServerUrl))
         {
@@ -143,7 +150,12 @@ public sealed class WorkerHostService : IHostedService
     {
         var exception = e.Exception;
         if (exception is null)
+        {
+            if (_settings.StopHostWhenServerCloses)
+                _appLifetime.StopApplication();
+
             return;
+        }
 
         _logger.LogError(exception, "Connection to job server failed. ");
 

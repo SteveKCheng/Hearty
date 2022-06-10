@@ -38,4 +38,14 @@ public class WorkerHostServiceSettings
     /// when the worker registers with the job server.
     /// </remarks>
     public int Concurrency { get; init; }
+
+    /// <summary>
+    /// If true, the application host is requested to stop when the server 
+    /// closes its side of the connection gracefully.
+    /// </summary>
+    /// <remarks>
+    /// If false, only <see cref="WorkerHostService" /> stops but 
+    /// the containing the application is left alone.
+    /// </remarks>
+    public bool StopHostWhenServerCloses { get; init; } = true;
 }
