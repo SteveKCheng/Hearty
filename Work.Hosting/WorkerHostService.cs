@@ -76,6 +76,31 @@ public sealed class WorkerHostService : IHostedService
         }
     }
 
+    /// <summary>
+    /// The exception from the last attempt at connecting to the job server if it failed.
+    /// </summary>
+    /// <remarks>
+    /// This property evaluates to null if no connection has been attempted, 
+    /// if the connection is successful, or if a (re-)connection is ongoing.
+    /// </remarks>
+    public Exception? ConnectionFailure
+    {
+        get
+        {
+            var workerHostTask = _workerHostTask;
+            if (_workerHostTask is not null && _workerHostTask.IsCompleted)
+                return _workerHostTask.Exception?.InnerException;
+            else
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// True if <see cref="StartAsync(CancellationToken)" /> has been called,
+    /// even if the connection fails (afterwards).
+    /// </summary>
+    public bool HasStarted => _hasStarted;
+
     private async Task<WorkerHost> ConnectAsync(CancellationToken cancellationToken)
     {
         await Task.Yield();
@@ -215,12 +240,10 @@ public sealed class WorkerHostService : IHostedService
         {
             workerHost = await workerHostTask.WaitAsync(cancellationToken)
                                              .ConfigureAwait(false);
+            await workerHost.DisposeAsync().ConfigureAwait(false);
         }
         catch
         {
-            return;
         }
-
-        await workerHost.DisposeAsync().ConfigureAwait(false);
     }
 }
