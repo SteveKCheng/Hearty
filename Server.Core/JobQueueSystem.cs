@@ -269,6 +269,7 @@ public sealed class JobQueueSystem : IJobQueueSystem, IAsyncDisposable, IDisposa
         catch (Exception e)
         {
             _logger.LogCritical(e, "An exception occurred in dispatching jobs from their queues to run. ");
+            throw;
         }
     }
 
