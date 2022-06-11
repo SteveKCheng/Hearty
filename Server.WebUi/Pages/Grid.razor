@@ -30,20 +30,24 @@
                     @RenderColumnHeaders
                 </tr>
             </thead>
-            <tbody>
-                @if (Virtualize)
-                {
+
+            @if (Virtualize)
+            {
+                <tbody class="virtualized" style="--virtualized-row-height: @(ItemSize)px">
                     <Virtualize @ref="@_virtualizeComponent"
                                 TItem="KeyValuePair<int, TGridItem>"
                                 ItemSize="@ItemSize"
                                 ItemsProvider="@ProvideVirtualizedItems"
                                 ItemContent="@(item => builder => RenderRow(builder, item.Key, item.Value))" />
-                }
-                else
-                {
+                </tbody>
+            }
+            else
+            {
+                <tbody>
                     @RenderRows
-                }
-            </tbody>
+                </tbody>
+            }
+
         </table>
     </Defer>
 </CascadingValue>

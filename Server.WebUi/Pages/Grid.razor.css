@@ -190,3 +190,9 @@ td.grid-col-center {
 td.grid-col-right {
     text-align: right;
 }
+
+tbody.virtualized tr {
+    overflow: hidden;
+    height: var(--virtualized-row-height);
+    white-space: nowrap;
+}
