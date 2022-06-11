@@ -7,21 +7,27 @@
 <Grid Items="@_workerDistribution.Values">
 
     <PropertyColumn Title="Worker Name"
-                    Property="@(worker => worker.Name)" />
+                    Property="@(worker => worker.Name)" 
+                    Class="worker-name"
+                    />
 
     <PropertyColumn Title="Capacity"
-                    Property="@(worker => worker.AvailableResources)" />
+                    Property="@(worker => worker.AvailableResources)"
+                    Class="available"
+                    />
 
-    <TemplateColumn Title="Disconnect">
-        @if (@context is IAsyncDisposable disposable)
-        {
-            <button @onclick="() => disposable.DisposeAsync()">🗙</button>    
-        }
-    </TemplateColumn>
+    @if (AllowDisconnect)
+    {
+        <TemplateColumn Title="Disconnect" Class="disconnect">
+            @if (@context is IAsyncDisposable disposable)
+            {
+                <button @onclick="() => disposable.DisposeAsync()">🗙</button>    
+            }
+        </TemplateColumn>
+    }
+    else
+    {
+        <TemplateColumn Title="" Class="disconnect" />
+    }
+
 </Grid>
-
-@code {
-    /// <inheritdoc />
-    protected override void OnInitialized()
-        => StartRefreshing(TimeoutBucket.After5Seconds);
-}

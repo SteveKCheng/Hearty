@@ -1,0 +1,19 @@
+﻿/*
+ * Styles to be inherited by the child Grid component
+ */
+
+::deep .worker-name {
+
+}
+
+::deep .capacity {
+
+}
+
+::deep .available {
+
+}
+
+::deep .disconnect {
+
+}
