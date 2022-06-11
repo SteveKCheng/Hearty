@@ -33,10 +33,10 @@
 
             @if (Virtualize)
             {
-                <tbody class="virtualized" style="--virtualized-row-height: @(ItemSize)px">
+                <tbody class="virtualized" style="--virtualized-row-height: @(RowHeight)px">
                     <Virtualize @ref="@_virtualizeComponent"
                                 TItem="KeyValuePair<int, TGridItem>"
-                                ItemSize="@ItemSize"
+                                ItemSize="@RowHeight"
                                 ItemsProvider="@ProvideVirtualizedItems"
                                 ItemContent="@(item => builder => RenderRow(builder, item.Key, item.Value))" />
                 </tbody>

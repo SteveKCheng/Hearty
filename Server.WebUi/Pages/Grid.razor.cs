@@ -43,6 +43,10 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
     [Parameter] 
     public RenderFragment? ChildContent { get; set; }
     
+    /// <summary>
+    /// Whether the grid is to be virtualized, i.e. the rows of the
+    /// grid are to be rendered to HTML only when visible in the Web browser.
+    /// </summary>
     [Parameter] 
     public bool Virtualize { get; set; }
 
@@ -53,8 +57,12 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
     [Parameter] 
     public bool ResizableColumns { get; set; }
 
+    /// <summary>
+    /// The fixed height of each row when the grid is to be virtualized,
+    /// in CSS pixels.
+    /// </summary>
     [Parameter] 
-    public float ItemSize { get; set; } = 50;
+    public float RowHeight { get; set; } = 50;
 
     /// <summary>
     /// Derives the key on each row to enable DOM differencing by Blazor.
