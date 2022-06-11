@@ -3,17 +3,17 @@
  */
 
 ::deep .worker-name {
-
+    width: 6em;
 }
 
 ::deep .capacity {
-
+    width: 3em;
 }
 
 ::deep .available {
-
+    width: 3em;
 }
 
 ::deep .disconnect {
-
+    width: 5em;
 }

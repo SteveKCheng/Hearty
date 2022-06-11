@@ -4,6 +4,8 @@
 @inherits TimedRefreshComponent
 @inject WorkerDistribution<PromisedWork, PromiseData> _workerDistribution
 
+<div><!-- Work around bug in Blazor's CSS isolation -->
+
 <Grid Items="@_workerDistribution.Values">
 
     <PropertyColumn Title="Worker Name"
@@ -31,3 +33,5 @@
     }
 
 </Grid>
+
+</div>
