@@ -13,9 +13,14 @@
                     Class="worker-name"
                     />
 
-    <PropertyColumn Title="Capacity"
+    <PropertyColumn Title="Available"
                     Property="@(worker => worker.AvailableResources)"
                     Class="available"
+                    />
+
+    <PropertyColumn Title="Capacity"
+                    Property="@(worker => worker.TotalResources)"
+                    Class="capacity"
                     />
 
     @if (AllowDisconnect)
