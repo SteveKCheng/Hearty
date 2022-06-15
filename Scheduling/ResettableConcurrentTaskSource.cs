@@ -71,6 +71,7 @@ internal class ResettableConcurrentTaskSource : IValueTaskSource
     }
 
     private CancellationTokenRegistration _cancellationRegistration;
+    private CancellationToken _cancellationToken;
     private ValueTaskContinuation _continuation;
     private uint _state;
     protected Exception? _exception;
@@ -263,7 +264,7 @@ internal class ResettableConcurrentTaskSource : IValueTaskSource
             case Stage.Faulted:
                 throw _exception!;
             case Stage.Cancelled:
-                throw new OperationCanceledException();
+                throw new OperationCanceledException(_cancellationToken);
             default:
                 ThrowForUnexpectedStage("This task source cannot report a result while it is still incomplete. ",
                                         stage, currentToken);
@@ -283,15 +284,19 @@ internal class ResettableConcurrentTaskSource : IValueTaskSource
     {
         var token = Prepare();
 
+        _cancellationToken = default;
+
         // Registering for the cancellation should not throw exceptions but
         // defend against them because we do not complete control what happens.
         try
         {
-            _cancellationRegistration = cancellationToken.Register(s => {
+            _cancellationRegistration = cancellationToken.Register((s, t) => {
                 var self = Unsafe.As<ResettableConcurrentTaskSource>(s!);
                 var oldStage = Stage.Preparing | Stage.Pending | Stage.HasContinuation;
                 if (self.TryTransition(ref oldStage, Stage.Activating, out var token))
                 {
+                    _cancellationToken = t;
+
                     var c = self.TakeContinuation();
                     self.TransitionInfallibly(Stage.Cancelled, token);
 
@@ -321,6 +326,7 @@ internal class ResettableConcurrentTaskSource : IValueTaskSource
         {
             var cancellationRegistration = _cancellationRegistration;
             _cancellationRegistration = default;
+            _cancellationToken = default;
             storage = result;
 
             var c = TakeContinuation();
