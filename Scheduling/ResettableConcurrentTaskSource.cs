@@ -240,6 +240,20 @@ internal class ResettableConcurrentTaskSource : IValueTaskSource
     protected T GetResultCore<T>(short token, ref T storage)
     {
         var stage = GetStage(out var currentToken);
+
+        // Rarely, if attaching the continuation races with this
+        // task source being completed, the continuation may get
+        // executed while this task source is still "activating"
+        // and has not published its result yet.  The time window
+        // when this occurs is very small, and does not involve
+        // any blocking operations.  We just spin when that happens.
+        var spinWait = new SpinWait();
+        while (stage == Stage.Activating)
+        {
+            spinWait.SpinOnce();
+            stage = GetStage(out currentToken);
+        }
+
         ThrowWhenTokenMismatches(currentToken, token);
 
         switch (stage)
