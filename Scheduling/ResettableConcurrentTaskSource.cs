@@ -231,23 +231,30 @@ internal class ResettableConcurrentTaskSource : IValueTaskSource
     {
         var token = Prepare();
 
-        _cancellationRegistration = cancellationToken.Register(s => {
-            var self = Unsafe.As<ResettableConcurrentTaskSource>(s!);
-            var oldStage = Stage.Preparing | Stage.Pending | Stage.HasContinuation;
-            if (self.TryTransition(ref oldStage, Stage.Activating, out var token))
-            {
-                var c = self.TakeContinuation();
-                self.TransitionInfallibly(Stage.Cancelled, token);
+        // Registering for the cancellation should not throw exceptions but
+        // defend against them because we do not complete control what happens.
+        try
+        {
+            _cancellationRegistration = cancellationToken.Register(s => {
+                var self = Unsafe.As<ResettableConcurrentTaskSource>(s!);
+                var oldStage = Stage.Preparing | Stage.Pending | Stage.HasContinuation;
+                if (self.TryTransition(ref oldStage, Stage.Activating, out var token))
+                {
+                    var c = self.TakeContinuation();
+                    self.TransitionInfallibly(Stage.Cancelled, token);
 
-                if (oldStage == Stage.HasContinuation)
-                    c.InvokeIgnoringExecutionContext(forceAsync: true);
-            }
-        }, this);
-
-        // Transition fails if cancellationToken synchronously runs
-        // the callback above.
-        if (!TryTransition(Stage.Preparing, Stage.Pending))
-            cancellationToken.ThrowIfCancellationRequested();
+                    if (oldStage == Stage.HasContinuation)
+                        c.InvokeIgnoringExecutionContext(forceAsync: true);
+                }
+            }, this);
+        }
+        finally
+        {
+            // Transition fails if cancellationToken synchronously runs
+            // the callback above.
+            if (!TryTransition(Stage.Preparing, Stage.Pending))
+                cancellationToken.ThrowIfCancellationRequested();
+        }
 
         return token;
     }
