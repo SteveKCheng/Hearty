@@ -173,16 +173,8 @@ internal class ResettableConcurrentTaskSource : IValueTaskSource
         return c;
     }
 
-    private Stage GetStage(out short token)
+    private static Stage DecodeStage(uint state, out short token)
     {
-        uint state = _state;
-        token = (short)(state & 0xFFFF);
-        return (Stage)(ushort)(state >> 16);
-    }
-
-    private Stage GetStageVolatileRead(out short token)
-    {
-        uint state = Volatile.Read(ref _state);
         token = (short)(state & 0xFFFF);
         return (Stage)(ushort)(state >> 16);
     }
@@ -192,7 +184,7 @@ internal class ResettableConcurrentTaskSource : IValueTaskSource
     /// </summary>
     protected ValueTaskSourceStatus GetStatus(short token)
     {
-        var stage = GetStage(out var currentToken);
+        var stage = DecodeStage(_state, out var currentToken);
         ThrowWhenTokenMismatches(currentToken, token);
 
         return stage switch
@@ -208,11 +200,11 @@ internal class ResettableConcurrentTaskSource : IValueTaskSource
     /// Implements <see cref="IValueTaskSource.OnCompleted" />.
     /// </summary>
     protected void OnCompleted(Action<object?> action,
-                               object? state,
+                               object? actionState,
                                short token,
                                ValueTaskSourceOnCompletedFlags flags)
     {
-        var stage = GetStage(out var currentToken);
+        var stage = DecodeStage(_state, out var currentToken);
         ThrowWhenTokenMismatches(currentToken, token);
 
         if (stage == Stage.HasContinuation)
@@ -221,7 +213,7 @@ internal class ResettableConcurrentTaskSource : IValueTaskSource
                                     stage, currentToken);
         }
 
-        var continuation = new ValueTaskContinuation(action, state, flags);
+        var continuation = new ValueTaskContinuation(action, actionState, flags);
         _continuation = continuation;
 
         if (!TryTransition(Stage.Pending, Stage.HasContinuation))
@@ -247,7 +239,9 @@ internal class ResettableConcurrentTaskSource : IValueTaskSource
     /// </returns>
     protected T GetResultCore<T>(short token, ref T storage)
     {
-        var stage = GetStageVolatileRead(out var currentToken);
+        // Volatile.Read needed because the published result
+        // needs to be read afterwards.
+        var stage = DecodeStage(Volatile.Read(ref _state), out var currentToken);
 
         // Rarely, if attaching the continuation races with this
         // task source being completed, the continuation may get
@@ -259,7 +253,7 @@ internal class ResettableConcurrentTaskSource : IValueTaskSource
         while (stage == Stage.Activating)
         {
             spinWait.SpinOnce();
-            stage = GetStageVolatileRead(out currentToken);
+            stage = DecodeStage(Volatile.Read(ref _state), out currentToken);
         }
 
         ThrowWhenTokenMismatches(currentToken, token);
