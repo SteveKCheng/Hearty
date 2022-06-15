@@ -325,7 +325,7 @@ internal class ResettableConcurrentTaskSource : IValueTaskSource
         var oldStage = Stage.Pending | Stage.HasContinuation;
         if (TryTransition(ref oldStage, Stage.Activating, out var token))
         {
-            var cancellationRegistration = _cancellationRegistration;
+            using var cancellationRegistration = _cancellationRegistration;
             _cancellationRegistration = default;
             _cancellationToken = default;
             storage = result;
@@ -335,8 +335,6 @@ internal class ResettableConcurrentTaskSource : IValueTaskSource
 
             if (oldStage == Stage.HasContinuation)
                 c.InvokeIgnoringExecutionContext(forceAsync: false);
-
-            cancellationRegistration.Dispose();
 
             return true;
         }
