@@ -75,6 +75,32 @@ internal class ResettableConcurrentTaskSource : IValueTaskSource
     private uint _state;
     protected Exception? _exception;
 
+    private static void ThrowForUnexpectedStage(string message, Stage stage, short token)
+    {
+        var stageText = stage switch
+        {
+            Stage.Success => nameof(Stage.Success),
+            Stage.Cancelled => nameof(Stage.Cancelled),
+            Stage.Faulted => nameof(Stage.Faulted),
+            Stage.Preparing => nameof(Stage.Preparing),
+            Stage.Pending => nameof(Stage.Pending),
+            Stage.HasContinuation => nameof(Stage.HasContinuation),
+            Stage.Activating => nameof(Stage.Activating),
+            _ => "(corrupted)"
+        };
+
+        throw new InvalidOperationException($"{message}Current state: {stageText}, token: {token}");
+    }
+
+    private static void ThrowWhenTokenMismatches(short token, short expected)
+    {
+        if (token != expected)
+        {
+            throw new InvalidOperationException(
+                $"The token value for this task source does not match what the caller expects. Current token: {token}, expected token: {expected}");
+        }
+    }
+
     /// <summary>
     /// Prepare to reset this task source, incrementing the version.
     /// </summary>
@@ -92,7 +118,10 @@ internal class ResettableConcurrentTaskSource : IValueTaskSource
             var stage = (Stage)(ushort)(state >> 16);
 
             if (stage > Stage.Faulted)
-                throw new InvalidOperationException();
+            {
+                ThrowForUnexpectedStage("This task source cannot be reset before it has completed. ", 
+                                        stage, (short)token);
+            }
 
             unchecked { ++token; }
             oldState = state;
@@ -156,8 +185,7 @@ internal class ResettableConcurrentTaskSource : IValueTaskSource
     protected ValueTaskSourceStatus GetStatus(short token)
     {
         var stage = GetStage(out var currentToken);
-        if (currentToken != token)
-            throw new InvalidOperationException();
+        ThrowWhenTokenMismatches(currentToken, token);
 
         return stage switch
         {
@@ -177,8 +205,13 @@ internal class ResettableConcurrentTaskSource : IValueTaskSource
                                ValueTaskSourceOnCompletedFlags flags)
     {
         var stage = GetStage(out var currentToken);
-        if (currentToken != token || stage == Stage.HasContinuation)
-            throw new InvalidOperationException();
+        ThrowWhenTokenMismatches(currentToken, token);
+
+        if (stage == Stage.HasContinuation)
+        {
+            ThrowForUnexpectedStage("This task source may not have more than one continuation attached (i.e. awaited more than once). ",
+                                    stage, currentToken);
+        }
 
         var continuation = new ValueTaskContinuation(action, state, flags);
         _continuation = continuation;
@@ -207,16 +240,21 @@ internal class ResettableConcurrentTaskSource : IValueTaskSource
     protected T GetResultCore<T>(short token, ref T storage)
     {
         var stage = GetStage(out var currentToken);
-        if (currentToken != token)
-            throw new InvalidOperationException();
+        ThrowWhenTokenMismatches(currentToken, token);
 
-        return stage switch
+        switch (stage)
         {
-            Stage.Success => storage,
-            Stage.Faulted => throw _exception!,
-            Stage.Cancelled => throw new OperationCanceledException(),
-            _ => throw new InvalidOperationException()
-        };
+            case Stage.Success: 
+                return storage;
+            case Stage.Faulted:
+                throw _exception!;
+            case Stage.Cancelled:
+                throw new OperationCanceledException();
+            default:
+                ThrowForUnexpectedStage("This task source cannot report a result while it is still incomplete. ",
+                                        stage, currentToken);
+                return default!;    // never reached
+        }
     }
 
     /// <summary>
