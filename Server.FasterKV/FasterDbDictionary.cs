@@ -145,16 +145,23 @@ public partial class FasterDbDictionary<TKey, TValue>
     /// </remarks>
     private sealed class FunctionsImpl : FunctionsBase<TKey, TValue, TValue, TValue, Empty>
     {
-        public FunctionsImpl() : base(locking: false) { }
+        public override bool SingleReader(ref TKey key, ref TValue input, ref TValue value, ref TValue output, ref ReadInfo readInfo)
+        {
+            output = value;
+            return true;
+        }
 
-        public override void SingleReader(ref TKey key, ref TValue input, ref TValue value, ref TValue output)
-            => output = value;
+        public override bool ConcurrentReader(ref TKey key, ref TValue input, ref TValue value, ref TValue output, ref ReadInfo readInfo)
+        {
+            output = value;
+            return true;
+        }
 
-        public override void ConcurrentReader(ref TKey key, ref TValue input, ref TValue value, ref TValue output)
-            => output = value;
-
-        public override void SingleWriter(ref TKey key, ref TValue src, ref TValue dst)
-            => dst = src;
+        public override bool SingleWriter(ref TKey key, ref TValue input, ref TValue src, ref TValue dst, ref TValue output, ref UpsertInfo upsertInfo, WriteReason reason)
+        {
+            dst = src;
+            return true;
+        }
 
         /// <summary>
         /// Disallow in-place modifications for upsert.
@@ -162,7 +169,7 @@ public partial class FasterDbDictionary<TKey, TValue>
         /// <remarks>
         /// FASTER FV calls this method when upsert finds an existing entry in its mutable region.
         /// </remarks>
-        public override bool ConcurrentWriter(ref TKey key, ref TValue src, ref TValue dst)
+        public override bool ConcurrentWriter(ref TKey key, ref TValue input, ref TValue src, ref TValue dst, ref TValue output, ref UpsertInfo upsertInfo)
             => false;
 
         /// <summary>
@@ -172,7 +179,7 @@ public partial class FasterDbDictionary<TKey, TValue>
         /// The existing entry is not modified for "TryAdd"; this method only needs
         /// to copy the existing value out.
         /// </remarks>
-        public override bool InPlaceUpdater(ref TKey key, ref TValue input, ref TValue value, ref TValue output)
+        public override bool InPlaceUpdater(ref TKey key, ref TValue input, ref TValue value, ref TValue output, ref RMWInfo rmwInfo)
         {
             output = value;
             return true;
@@ -181,24 +188,26 @@ public partial class FasterDbDictionary<TKey, TValue>
         /// <summary>
         /// Should not actually be called because <see cref="NeedCopyUpdate" /> always returns false.
         /// </summary>
-        public override void CopyUpdater(ref TKey key, ref TValue input, ref TValue oldValue, ref TValue newValue, ref TValue output)
+        public override bool CopyUpdater(ref TKey key, ref TValue input, ref TValue oldValue, ref TValue newValue, ref TValue output, ref RMWInfo rmwInfo)
         {
             output = newValue = oldValue;
+            return true;
         }
 
         /// <summary>
         /// Turn off copy-update since the "RMW" operation does not actually modify
         /// any existing value.
         /// </summary>
-        public override bool NeedCopyUpdate(ref TKey key, ref TValue input, ref TValue oldValue, ref TValue output)
+        public override bool NeedCopyUpdate(ref TKey key, ref TValue input, ref TValue oldValue, ref TValue output, ref RMWInfo rmwInfo)
             => false;
 
         /// <summary>
         /// Fake "RMW" operation for TryAdd, when it is to (speculatively) create a new entry.
         /// </summary>
-        public override unsafe void InitialUpdater(ref TKey key, ref TValue input, ref TValue value, ref TValue output)
+        public override bool InitialUpdater(ref TKey key, ref TValue input, ref TValue value, ref TValue output, ref RMWInfo rmwInfo)
         {
             output = value = input;
+            return true;
         }
     }
 
@@ -290,10 +299,10 @@ public partial class FasterDbDictionary<TKey, TValue>
                                     ref Unsafe.AsRef(desiredValue));
         (Status status, storedValue) = task.Wait().Complete();
 
-        if (status == Status.ERROR)
+        if (status.IsFaulted)
             throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
 
-        bool hasAdded = (status == Status.NOTFOUND);
+        bool hasAdded = status.NotFound;
         if (hasAdded)
             Interlocked.Increment(ref _itemsCount);
 
@@ -336,11 +345,11 @@ public partial class FasterDbDictionary<TKey, TValue>
             var task = session.UpsertAsync(ref key, ref value);
             Status status = task.Wait().Complete();
 
-            bool hasAdded = (status == Status.NOTFOUND);
+            bool hasAdded = status.NotFound;
             if (hasAdded)
                 Interlocked.Increment(ref _itemsCount);
 
-            if (status == Status.ERROR)
+            if (status.IsFaulted)
                 throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
         }
     }
@@ -413,10 +422,10 @@ public partial class FasterDbDictionary<TKey, TValue>
         var task = session.DeleteAsync(ref key);
         Status status = task.Wait().Complete();
 
-        if (status == Status.ERROR)
+        if (status.IsFaulted)
             throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
 
-        bool hasDeleted = (status != Status.NOTFOUND);
+        bool hasDeleted = !status.NotFound;
         if (hasDeleted)
             Interlocked.Decrement(ref _itemsCount);
 
@@ -438,10 +447,10 @@ public partial class FasterDbDictionary<TKey, TValue>
                                      ref input);
         (Status status, value) = task.Wait().Complete();
 
-        if (status == Status.NOTFOUND)
+        if (status.NotFound)
             return false;
 
-        if (status == Status.ERROR)
+        if (status.IsFaulted)
             throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
 
         return true;

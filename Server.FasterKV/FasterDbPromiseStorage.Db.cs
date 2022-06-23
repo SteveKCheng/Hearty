@@ -73,19 +73,28 @@ public sealed partial class FasterDbPromiseStorage
         /// </summary>
         private readonly IPromiseDataFixtures _fixtures;
 
-        public FunctionsImpl(IPromiseDataFixtures fixtures) : base(locking: false)
+        public FunctionsImpl(IPromiseDataFixtures fixtures)
         {
             _fixtures = fixtures;
         }
 
-        public override void SingleReader(ref PromiseId key, ref DbInput input, ref PromiseBlob value, ref Promise? output)
-            => output = value.RestoreObject(_fixtures);
+        public override bool SingleReader(ref PromiseId key, ref DbInput input, ref PromiseBlob value, ref Promise? output, ref ReadInfo readInfo)
+        {
+            output = value.RestoreObject(_fixtures);
+            return true;
+        }
 
-        public override void ConcurrentReader(ref PromiseId key, ref DbInput input, ref PromiseBlob value, ref Promise? output)
-            => output = value.RestoreObject(_fixtures);
+        public override bool ConcurrentReader(ref PromiseId key, ref DbInput input, ref PromiseBlob value, ref Promise? output, ref ReadInfo readInfo)
+        {
+            output = value.RestoreObject(_fixtures);
+            return true;
+        }
 
-        public override void SingleWriter(ref PromiseId key, ref PromiseBlob src, ref PromiseBlob dst)
-            => src.CopyTo(ref dst);
+        public override bool SingleWriter(ref PromiseId key, ref DbInput input, ref PromiseBlob src, ref PromiseBlob dst, ref Promise? output, ref UpsertInfo upsertInfo, WriteReason writeReason)
+        {
+            src.CopyTo(ref dst);
+            return true;
+        }
 
         /// <summary>
         /// Disallow in-place modifications for upsert.
@@ -93,7 +102,7 @@ public sealed partial class FasterDbPromiseStorage
         /// <remarks>
         /// FASTER FV calls this method when upsert finds an existing entry in its mutable region.
         /// </remarks>
-        public override bool ConcurrentWriter(ref PromiseId key, ref PromiseBlob src, ref PromiseBlob dst)
+        public override bool ConcurrentWriter(ref PromiseId key, ref DbInput input, ref PromiseBlob src, ref PromiseBlob dst, ref Promise? output, ref UpsertInfo upsertInfo)
             => false;
 
         /// <summary>
@@ -105,7 +114,7 @@ public sealed partial class FasterDbPromiseStorage
         /// it is poorly documented.  It seems that this method must
         /// return a result consistent with <see cref="NeedCopyUpdate" />.
         /// </remarks>
-        public override bool InPlaceUpdater(ref PromiseId key, ref DbInput input, ref PromiseBlob value, ref Promise? output)
+        public override bool InPlaceUpdater(ref PromiseId key, ref DbInput input, ref PromiseBlob value, ref Promise? output, ref RMWInfo rmwInfo)
             => false;
 
         /// <summary>
@@ -113,20 +122,26 @@ public sealed partial class FasterDbPromiseStorage
         /// both because the new entry may change the size and also reading does
         /// not tolerate concurrent modifications.
         /// </summary>
-        public override bool NeedCopyUpdate(ref PromiseId key, ref DbInput input, ref PromiseBlob oldValue, ref Promise? output)
+        public override bool NeedCopyUpdate(ref PromiseId key, ref DbInput input, ref PromiseBlob oldValue, ref Promise? output, ref RMWInfo rmwInfo)
             => true;
 
         /// <summary>
         /// Called by FASTER KV for creating a entry to replace an existing one.
         /// </summary>
-        public override void CopyUpdater(ref PromiseId key, ref DbInput input, ref PromiseBlob oldValue, ref PromiseBlob newValue, ref Promise? output)
-            => newValue.SaveSerialization(input.Serialization);
+        public override bool CopyUpdater(ref PromiseId key, ref DbInput input, ref PromiseBlob oldValue, ref PromiseBlob newValue, ref Promise? output, ref RMWInfo rmwInfo)
+        {
+            newValue.SaveSerialization(input.Serialization);
+            return true;
+        }
 
         /// <summary>
         /// Called by FASTER KV for creating a new entry.
         /// </summary>
-        public override unsafe void InitialUpdater(ref PromiseId key, ref DbInput input, ref PromiseBlob value, ref Promise? output)
-            => value.SaveSerialization(input.Serialization);
+        public override bool InitialUpdater(ref PromiseId key, ref DbInput input, ref PromiseBlob value, ref Promise? output, ref RMWInfo rmwInfo)
+        {
+            value.SaveSerialization(input.Serialization);
+            return true;
+        }
     }
 
     /// <summary>
@@ -260,8 +275,7 @@ public sealed partial class FasterDbPromiseStorage
             Session = parent._db
                             .For(parent._functions)
                             .NewSession<FunctionsImpl>(
-                                sessionId: null,
-                                threadAffinitized: false,
+                                sessionName: null,
                                 parent._sessionVarLenSettings);
         }
 
@@ -311,7 +325,7 @@ public sealed partial class FasterDbPromiseStorage
         var task = session.ReadAsync(ref key, ref input);
         (Status status, Promise? promise) = task.Wait().Complete();
 
-        if (status == Status.ERROR)
+        if (status.IsFaulted)
             throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
 
         return promise;
@@ -337,10 +351,10 @@ public sealed partial class FasterDbPromiseStorage
         var task = session.RMWAsync(ref key, ref input);
         (Status status, _) = task.Wait().Complete();
         
-        if (status == Status.ERROR)
+        if (status.IsFaulted)
             throw new Exception("Adding an item to Faster KV resulted in an error. ");
 
-        return status == Status.NOTFOUND;
+        return status.NotFound;
     }
 
     /// <summary>
