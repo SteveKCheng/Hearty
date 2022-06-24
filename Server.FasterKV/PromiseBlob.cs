@@ -198,4 +198,12 @@ internal struct PromiseBlob
             blob = PromiseSerializationHeader.AllocateForBlob(buffer.Length);
         }
     }
+
+    public static PromiseBlob CreatePlaceholder(long length)
+    {
+        return new PromiseBlob
+        {
+            _header = PromiseSerializationHeader.AllocateForBlob(checked((int)length))
+        };
+    }
 }

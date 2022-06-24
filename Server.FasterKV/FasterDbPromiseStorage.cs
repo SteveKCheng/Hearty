@@ -88,7 +88,8 @@ public sealed partial class FasterDbPromiseStorage
                     variableLengthStructSettings: new()
                     {
                         valueLength = blobHooks
-                    });
+                    },
+                    disableLocking: true);
 
             _sessionVarLenSettings = new()
             {

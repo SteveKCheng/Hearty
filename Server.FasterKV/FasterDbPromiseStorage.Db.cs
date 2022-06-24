@@ -85,14 +85,15 @@ public sealed partial class FasterDbPromiseStorage
         }
 
         public override bool ConcurrentReader(ref PromiseId key, ref DbInput input, ref PromiseBlob value, ref Promise? output, ref ReadInfo readInfo)
-        {
-            output = value.RestoreObject(_fixtures);
-            return true;
-        }
+            => SingleReader(ref key, ref input, ref value, ref output, ref readInfo);
 
         public override bool SingleWriter(ref PromiseId key, ref DbInput input, ref PromiseBlob src, ref PromiseBlob dst, ref Promise? output, ref UpsertInfo upsertInfo, WriteReason writeReason)
         {
-            src.CopyTo(ref dst);
+            if (writeReason == WriteReason.Upsert)
+                dst.SaveSerialization(input.Serialization);
+            else
+                src.CopyTo(ref dst);
+                
             return true;
         }
 
@@ -115,7 +116,7 @@ public sealed partial class FasterDbPromiseStorage
         /// return a result consistent with <see cref="NeedCopyUpdate" />.
         /// </remarks>
         public override bool InPlaceUpdater(ref PromiseId key, ref DbInput input, ref PromiseBlob value, ref Promise? output, ref RMWInfo rmwInfo)
-            => false;
+            => throw new NotImplementedException();
 
         /// <summary>
         /// Always requiring new allocations to update an entry,
@@ -123,25 +124,19 @@ public sealed partial class FasterDbPromiseStorage
         /// not tolerate concurrent modifications.
         /// </summary>
         public override bool NeedCopyUpdate(ref PromiseId key, ref DbInput input, ref PromiseBlob oldValue, ref Promise? output, ref RMWInfo rmwInfo)
-            => true;
+            => throw new NotImplementedException();
 
         /// <summary>
         /// Called by FASTER KV for creating a entry to replace an existing one.
         /// </summary>
         public override bool CopyUpdater(ref PromiseId key, ref DbInput input, ref PromiseBlob oldValue, ref PromiseBlob newValue, ref Promise? output, ref RMWInfo rmwInfo)
-        {
-            newValue.SaveSerialization(input.Serialization);
-            return true;
-        }
+            => throw new NotImplementedException();
 
         /// <summary>
         /// Called by FASTER KV for creating a new entry.
         /// </summary>
         public override bool InitialUpdater(ref PromiseId key, ref DbInput input, ref PromiseBlob value, ref Promise? output, ref RMWInfo rmwInfo)
-        {
-            value.SaveSerialization(input.Serialization);
-            return true;
-        }
+            => throw new NotImplementedException();
     }
 
     /// <summary>
@@ -320,10 +315,7 @@ public sealed partial class FasterDbPromiseStorage
         using var pooledSession = _sessionPool.GetForCurrentThread();
         var session = pooledSession.Target.Session;
 
-        DbInput input = default; // value is not used
-
-        var task = session.ReadAsync(ref key, ref input);
-        (Status status, Promise? promise) = task.Wait().Complete();
+        Status status = session.Read(key, out Promise? promise);
 
         if (status.IsFaulted)
             throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
@@ -347,10 +339,15 @@ public sealed partial class FasterDbPromiseStorage
         // is what FASTER KV calls an "upsert", but its API for
         // upsert does not allow specifying DbInput, so we rely on
         // "RMW" instead.
-        var input = new DbInput { Serialization = serialization };
-        var task = session.RMWAsync(ref key, ref input);
-        (Status status, _) = task.Wait().Complete();
-        
+        //var input = new DbInput { Serialization = serialization };
+
+        Promise? output = null; // unused;
+
+        Status status = session.Upsert(key,
+                                       new DbInput { Serialization = serialization },
+                                       PromiseBlob.CreatePlaceholder(serialization.TotalLength),
+                                       ref output);
+
         if (status.IsFaulted)
             throw new Exception("Adding an item to Faster KV resulted in an error. ");
 
