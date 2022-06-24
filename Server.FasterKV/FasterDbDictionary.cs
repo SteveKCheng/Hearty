@@ -300,7 +300,7 @@ public partial class FasterDbDictionary<TKey, TValue>
         (Status status, storedValue) = task.Wait().Complete();
 
         if (status.IsFaulted)
-            throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
+            throw new FasterException("Failed in storing for a key from a dictionary backed by FASTER KV. ");
 
         bool hasAdded = status.NotFound;
         if (hasAdded)
@@ -342,15 +342,14 @@ public partial class FasterDbDictionary<TKey, TValue>
             using var pooledSession = _sessionPool.GetForCurrentThread();
             var session = pooledSession.Target.Session;
 
-            var task = session.UpsertAsync(ref key, ref value);
-            Status status = task.Wait().Complete();
+            Status status = session.Upsert(ref key, ref value);
 
             bool hasAdded = status.NotFound;
             if (hasAdded)
                 Interlocked.Increment(ref _itemsCount);
 
             if (status.IsFaulted)
-                throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
+                throw new FasterException("Failed to store into a dictionary backed by FASTER KV. ");
         }
     }
 
@@ -423,7 +422,7 @@ public partial class FasterDbDictionary<TKey, TValue>
         Status status = task.Wait().Complete();
 
         if (status.IsFaulted)
-            throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
+            throw new FasterException("Failed to remove a key from a dictionary backed by FASTER KV. ");
 
         bool hasDeleted = !status.NotFound;
         if (hasDeleted)
@@ -451,7 +450,7 @@ public partial class FasterDbDictionary<TKey, TValue>
             return false;
 
         if (status.IsFaulted)
-            throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
+            throw new FasterException("Failed to retrieve for a key from a dictionary backed by FASTER KV. ");
 
         return true;
     }
