@@ -315,7 +315,11 @@ public sealed partial class FasterDbPromiseStorage
         using var pooledSession = _sessionPool.GetForCurrentThread();
         var session = pooledSession.Target.Session;
 
-        Status status = session.Read(key, out Promise? promise);
+        // session.Read can return "pending" if I/O to secondary storage
+        // is required.  Using ReadAsync avoids that complication.
+        (Status status, Promise? promise) = session.ReadAsync(ref key)
+                                                   .Wait()
+                                                   .Complete();
 
         if (status.IsFaulted)
             throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
@@ -335,14 +339,11 @@ public sealed partial class FasterDbPromiseStorage
         using var pooledSession = _sessionPool.GetForCurrentThread();
         var session = pooledSession.Target.Session;
 
-        // Set the entry in the database.  Semantically this operation
-        // is what FASTER KV calls an "upsert", but its API for
-        // upsert does not allow specifying DbInput, so we rely on
-        // "RMW" instead.
-        //var input = new DbInput { Serialization = serialization };
-
         Promise? output = null; // unused;
 
+        // Unlike reads, upserts in Faster KV cannot return "pending"
+        // (see https://github.com/microsoft/FASTER/issues/355#issuecomment-713199732)
+        // so can safely call this synchronous method.
         Status status = session.Upsert(key,
                                        new DbInput { Serialization = serialization },
                                        PromiseBlob.CreatePlaceholder(serialization.TotalLength),
