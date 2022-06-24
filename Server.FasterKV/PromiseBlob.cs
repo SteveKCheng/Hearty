@@ -199,11 +199,21 @@ internal struct PromiseBlob
         }
     }
 
-    public static PromiseBlob CreatePlaceholder(long length)
+    /// <summary>
+    /// Set the length field inside <see cref="PromiseBlob" /> but initialize
+    /// everything else inside to zero.
+    /// </summary>
+    /// <remarks>
+    /// The awkward state of the returned object is to needed
+    /// to work around limitations in Faster KV's API: on upsert operations,
+    /// it assumes the value to be written is directly passed in.  
+    /// (Faster KV does not assume such on doing RMW operations.)
+    /// </remarks>
+    public static PromiseBlob CreatePlaceholder(int length)
     {
         return new PromiseBlob
         {
-            _header = PromiseSerializationHeader.AllocateForBlob(checked((int)length))
+            _header = PromiseSerializationHeader.AllocateForBlob(length)
         };
     }
 }

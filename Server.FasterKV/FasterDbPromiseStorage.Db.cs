@@ -11,7 +11,7 @@ namespace Hearty.Server.FasterKV;
 public sealed partial class FasterDbPromiseStorage
 {
     /// <summary>
-    /// Promises represented in serialized form in the Faster KV database.
+    /// Promises represented in serialized form in the FASTER KV database.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -87,6 +87,10 @@ public sealed partial class FasterDbPromiseStorage
         public override bool ConcurrentReader(ref PromiseId key, ref DbInput input, ref PromiseBlob value, ref Promise? output, ref ReadInfo readInfo)
             => SingleReader(ref key, ref input, ref value, ref output, ref readInfo);
 
+        /// <summary>
+        /// Called by FASTER KV when inserting new data, updating data to a new slot, or when copying
+        /// data to a new slot.
+        /// </summary>
         public override bool SingleWriter(ref PromiseId key, ref DbInput input, ref PromiseBlob src, ref PromiseBlob dst, ref Promise? output, ref UpsertInfo upsertInfo, WriteReason writeReason)
         {
             if (writeReason == WriteReason.Upsert)
@@ -102,6 +106,7 @@ public sealed partial class FasterDbPromiseStorage
         /// </summary>
         /// <remarks>
         /// FASTER FV calls this method when upsert finds an existing entry in its mutable region.
+        /// By returning false, FASTER KV is forced to always allocate a new entry.
         /// </remarks>
         public override bool ConcurrentWriter(ref PromiseId key, ref DbInput input, ref PromiseBlob src, ref PromiseBlob dst, ref Promise? output, ref UpsertInfo upsertInfo)
             => false;
@@ -322,7 +327,7 @@ public sealed partial class FasterDbPromiseStorage
                                                    .Complete();
 
         if (status.IsFaulted)
-            throw new Exception("Retrieving a key from Faster KV resulted in an error. ");
+            throw new FasterException("Failed to request an item from a promise storage backed by FASTER KV. ");
 
         return promise;
     }
@@ -339,18 +344,17 @@ public sealed partial class FasterDbPromiseStorage
         using var pooledSession = _sessionPool.GetForCurrentThread();
         var session = pooledSession.Target.Session;
 
+        var input = new DbInput { Serialization = serialization };
+        PromiseBlob dummyValue = PromiseBlob.CreatePlaceholder(checked((int)serialization.TotalLength));
         Promise? output = null; // unused;
 
-        // Unlike reads, upserts in Faster KV cannot return "pending"
+        // Unlike reads, upserts in FASTER KV cannot return "pending"
         // (see https://github.com/microsoft/FASTER/issues/355#issuecomment-713199732)
         // so can safely call this synchronous method.
-        Status status = session.Upsert(key,
-                                       new DbInput { Serialization = serialization },
-                                       PromiseBlob.CreatePlaceholder(serialization.TotalLength),
-                                       ref output);
+        Status status = session.Upsert(ref key, ref input, ref dummyValue, ref output);
 
         if (status.IsFaulted)
-            throw new Exception("Adding an item to Faster KV resulted in an error. ");
+            throw new FasterException("Failed to an item to a promise storage backed by FASTER KV. ");
 
         return status.NotFound;
     }
