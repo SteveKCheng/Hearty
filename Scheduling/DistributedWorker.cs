@@ -199,25 +199,34 @@ internal sealed class DistributedWorker<TInput, TOutput>
                 ThrowIfAlreadyDisposed();
                 _currentJobs.Add(executionId, runningJob);
             }
-                
+        }
+        catch
+        {
+            ReplenishResource();
+            throw;
+        }
+
+        try
+        {
             try
             {
                 return await _executor.ExecuteJobAsync(executionId, runningJob, cancellationToken)
                                       .ConfigureAwait(false);
             }
-            catch (Exception e) when (_failedJobFallback != null)
-            {
-                return await _failedJobFallback.Invoke(e, runningJob, cancellationToken)
-                                               .ConfigureAwait(false);
-            }
             finally
             {
+                // When the job fails, should we have _failedJobFallback to call, 
+                // whatever that function does is considered to be not part of this
+                // worker's job, even though its return value (expected to be never
+                // synchronous) is forwarded back to our caller.
                 RemoveCurrentJob(executionId);
+                ReplenishResource();
             }
         }
-        finally
+        catch (Exception e) when (_failedJobFallback != null)
         {
-            ReplenishResource();
+            return await _failedJobFallback.Invoke(e, runningJob, cancellationToken)
+                                           .ConfigureAwait(false);
         }
     }
 
