@@ -86,6 +86,13 @@ public readonly struct PromisedWork
         OutputDeserializer { get; init; }
 
     /// <summary>
+    /// Transforms an exception that is thrown from running the job
+    /// into <see cref="PromiseData" />.
+    /// </summary>
+    public PromiseExceptionTranslator?
+        ExceptionTranslator { get; init; }
+
+    /// <summary>
     /// A condensed string representation, expected to be
     /// unique within a context, of the promise or the work.
     /// </summary>
@@ -158,6 +165,7 @@ public readonly struct PromisedWork
         InitialWait = default;
         InputSerializer = inputSerializer;
         OutputDeserializer = Payload.JobOutputDeserializer;
+        ExceptionTranslator = null;
         DisplayPropertyRetrieval = null;
     }
 

@@ -84,6 +84,7 @@ internal sealed class RemoteWorkerProxy : IJobWorker<PromisedWork, PromiseData>
         CancellationSourcePool.Use combinedCancellation = default;
         CancellationTokenRegistration jobCancellationReg = default;
         CancellationTokenRegistration workerCancellationReg = default;
+        var exceptionTranslator = runningJob.Input.ExceptionTranslator;
 
         try
         {
@@ -123,6 +124,10 @@ internal sealed class RemoteWorkerProxy : IJobWorker<PromisedWork, PromiseData>
                                                      reply.Data))
                                          .ConfigureAwait(false);
             return output;
+        }
+        catch (Exception e) when (exceptionTranslator is not null)
+        {
+            return exceptionTranslator.Invoke(runningJob.Input.PromiseId, e);
         }
         finally
         {
