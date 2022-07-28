@@ -39,7 +39,7 @@ public sealed class RemoteWorkException : Exception
     /// The inner exception type for <see cref="RemoteWorkException" />
     /// that reports information 
     /// </summary>
-    private sealed class InnerExceptionImpl : Exception
+    internal sealed class InnerExceptionImpl : Exception
     {
         private readonly ExceptionPayload _payload;
 
@@ -58,4 +58,28 @@ public sealed class RemoteWorkException : Exception
         /// <inheritdoc />
         public override string Message => _payload.Description ?? String.Empty;
     }
+}
+
+/// <summary>
+/// Reports a cancelled operation from a remote procedure call.
+/// </summary>
+/// <remarks>
+/// This object has a similar shape to <see cref="RemoteWorkException" />,
+/// but is derived from <see cref="OperationCanceledException" />
+/// for compatibility with the .NET ecosystem.
+/// </remarks>
+public sealed class RemoteWorkCancelledException : OperationCanceledException
+{
+    internal RemoteWorkCancelledException(ExceptionPayload payload)
+        : base("An operation that was run on a remote worker has been cancelled. ",
+               new RemoteWorkException.InnerExceptionImpl(payload))
+    {
+        Payload = payload;
+    }
+
+    /// <summary>
+    /// The serializable form of the exception data
+    /// received from the remote host.
+    /// </summary>
+    public ExceptionPayload Payload { get; }
 }

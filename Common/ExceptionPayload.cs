@@ -98,6 +98,12 @@ public class ExceptionPayload
     /// </summary>
     public static ExceptionPayload CreateFromException(Exception exception)
     {
+        // Unwrap an exception that was produced by ToException()
+        if (exception is RemoteWorkException wrapped)
+            return wrapped.Payload;
+        else if (exception is RemoteWorkCancelledException wrapped2)
+            return wrapped2.Payload;
+
         return new ExceptionPayload
         {
             Language = DotNetLanguage,
@@ -115,7 +121,7 @@ public class ExceptionPayload
     public Exception ToException()
     {
         if (Cancelling)
-            return new OperationCanceledException();
+            return new RemoteWorkCancelledException(this);
 
         return new RemoteWorkException(this);
     }
