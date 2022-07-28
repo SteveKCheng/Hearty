@@ -59,7 +59,8 @@ public class JobsManager : IRemoteJobCancellation
     /// </param>
     /// <param name="exceptionTranslator">
     /// Translates .NET exceptions when they occur as a result of 
-    /// executing the work for promises.
+    /// executing the work for promises, when <see cref="PromisedWork.ExceptionTranslator" />
+    /// is not able to do so.
     /// </param>
     /// <param name="jobQueues">
     /// Accepts client jobs after they have been registered and de-duplicated

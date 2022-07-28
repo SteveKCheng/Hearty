@@ -89,6 +89,24 @@ public readonly struct PromisedWork
     /// Transforms an exception that is thrown from running the job
     /// into <see cref="PromiseData" />.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Exceptions thrown from executing this work can be caught by
+    /// this translator.  In rare cases, exceptions may still be
+    /// thrown in the processing outside of that "catch" block;
+    /// then those exceptions must be caught elsewhere,
+    /// e.g. from <see cref="JobsManager" />.
+    /// </para>
+    /// <para>
+    /// If the translator is null, then any thrown exception
+    /// from executing this work will be propagated through.
+    /// </para>
+    /// <para>
+    /// The state object that is passed into the translator
+    /// is <see cref="Data" />.
+    /// </para>
+    /// </remarks>
+
     public PromiseExceptionTranslator?
         ExceptionTranslator { get; init; }
 
