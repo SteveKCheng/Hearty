@@ -129,7 +129,8 @@ namespace Hearty.Server.WebApi
         /// Translate a .NET exception to an HTTP response to the client as best
         /// as possible.
         /// </summary>
-        private static async Task TranslateExceptionToHttpResponseAsync(PromiseExceptionTranslator translator,
+        private static async Task TranslateExceptionToHttpResponseAsync(object state,
+                                                                        PromiseExceptionTranslator translator,
                                                                         Exception exception,
                                                                         HttpResponse httpResponse)
         {
@@ -141,7 +142,8 @@ namespace Hearty.Server.WebApi
             {
                 httpResponse.StatusCode = StatusCodes.Status400BadRequest;
 
-                var output = translator.Invoke(null, exception);
+                var output = await translator.Invoke(state, null, exception)
+                                             .ConfigureAwait(false);
 
                 httpResponse.ContentType = output.ContentType;
                 httpResponse.ContentLength = output.ContentLength;
@@ -270,7 +272,8 @@ namespace Hearty.Server.WebApi
             catch (Exception e)
             {
                 // FIXME remove the Promise object here
-                await TranslateExceptionToHttpResponseAsync(services.ExceptionTranslator, 
+                await TranslateExceptionToHttpResponseAsync(httpContext,
+                                                            services.ExceptionTranslator, 
                                                             e, 
                                                             httpResponse)
                     .ConfigureAwait(false);

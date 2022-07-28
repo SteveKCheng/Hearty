@@ -21,6 +21,10 @@ namespace Hearty.Server;
 /// readily used in dependency injection.
 /// </para>
 /// </remarks>
+/// <param name="state">
+/// State object that has been associated when this
+/// translator was registered.
+/// </param>
 /// <param name="promiseId">
 /// The ID for the promise whose processing threw the exception,
 /// if any.
@@ -31,10 +35,11 @@ namespace Hearty.Server;
 /// <returns>
 /// A (partial) representation of the exception that can
 /// be stored in a promise (and transferred to remote clients,
-/// or persisted).
+/// or persisted).  Asynchronous returns are allowed but most
+/// implementations are expected to be synchronous.
 /// </returns>
-public delegate PromiseData 
-    PromiseExceptionTranslator(PromiseId? promiseId, Exception exception);
+public delegate ValueTask<PromiseData>
+    PromiseExceptionTranslator(object state, PromiseId? promiseId, Exception exception);
 
 /// <summary>
 /// Holds a result that is provided asynchronously, that can be queried by remote clients.
@@ -327,7 +332,8 @@ public sealed partial class Promise
         }
         catch (Exception e)
         {
-            output = exceptionTranslator.Invoke(Id, e);
+            output = await exceptionTranslator.Invoke(this, Id, e)
+                                              .ConfigureAwait(false);
         }
 
         PostResultInternal(output);

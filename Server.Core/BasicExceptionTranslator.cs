@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using Hearty.Common;
 
 namespace Hearty.Server;
@@ -9,13 +10,13 @@ namespace Hearty.Server;
 /// </summary>
 public static class BasicExceptionTranslator
 {
-    private static PromiseData Translate(PromiseId? promiseId, Exception exception)
+    private static ValueTask<PromiseData> Translate(object state, PromiseId? promiseId, Exception exception)
     {
-        // Unwrap exceptions from worker hosts executing the job
-        if (exception is RemoteWorkException remoteWorkException)
-            return new PromiseExceptionalData(remoteWorkException.Payload);
-        else
-            return new PromiseExceptionalData(exception);
+        PromiseData promiseData = (exception is RemoteWorkException remoteWorkException)
+                                    ? new PromiseExceptionalData(remoteWorkException.Payload)
+                                    : new PromiseExceptionalData(exception);
+
+        return ValueTask.FromResult(promiseData);
     }
 
     /// <summary>

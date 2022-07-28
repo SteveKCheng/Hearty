@@ -127,7 +127,10 @@ internal sealed class RemoteWorkerProxy : IJobWorker<PromisedWork, PromiseData>
         }
         catch (Exception e) when (exceptionTranslator is not null)
         {
-            return exceptionTranslator.Invoke(runningJob.Input.PromiseId, e);
+            return await exceptionTranslator.Invoke(runningJob.Input.Data,
+                                                    runningJob.Input.PromiseId,
+                                                    e)
+                                            .ConfigureAwait(false);
         }
         finally
         {
