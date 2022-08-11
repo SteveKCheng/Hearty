@@ -161,18 +161,27 @@ public sealed partial class FasterDbPromiseStorage
         Task.Factory.StartNew(o =>
         {
             var promise = Unsafe.As<Promise>(o!);
-            bool canSerialize = promise.TryPrepareSerialization(out var info) &&
-                                info.TotalLength <= MaxSerializationLength;
+            var id = promise.Id;
 
-            if (canSerialize)
+            try
             {
-                LogPromiseSaved(_logger, promise.Id);
-                bool isAdded = DbSetValue(promise.Id, info);
+                bool canSerialize = promise.TryPrepareSerialization(out var info) &&
+                                    info.TotalLength <= MaxSerializationLength;
 
-                // If this is the first time the promise is added to the
-                // database, demote to a weak reference in _objects.
-                if (isAdded)
-                    SaveWeakReference(promise);
+                if (canSerialize)
+                {
+                    LogPromiseSaved(_logger, id);
+                    bool isAdded = DbSetValue(id, info);
+
+                    // If this is the first time the promise is added to the
+                    // database, demote to a weak reference in _objects.
+                    if (isAdded)
+                        SaveWeakReference(promise);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to save promise with ID {id}", id);
             }
         }, args.Subject);
     }
