@@ -261,8 +261,7 @@ public partial class FasterDbPromiseStorage
                 ++cleanedEntries;
             }
 
-            _logger.LogDebug("Removed {cleaned} expired entries for in-memory promises out of {total} total entries. ",
-                             cleanedEntries, totalEntries);
+            LogCleanedWeakReferences(_logger, cleanedEntries, totalEntries);
         }
         catch (Exception e)
         {
@@ -274,4 +273,8 @@ public partial class FasterDbPromiseStorage
             _hasActivatedCleanUp = 0;
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Debug,
+                   Message = "Removed {cleaned} expired entries for in-memory promises out of {total} total entries. ")]
+    private static partial void LogCleanedWeakReferences(ILogger logger, int cleaned, int total);
 }
