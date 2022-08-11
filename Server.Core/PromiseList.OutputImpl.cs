@@ -228,9 +228,9 @@ public partial class PromiseList
             if (promise is null)
                 throw new InvalidOperationException($"Promise with ID {promiseId} does not exist even though it has been put as part of the results. ");
 
-            var result = await promise.GetResultAsync(dummyClient,
-                                                      null, cancellationToken)
-                                      .ConfigureAwait(false);
+            using var result = await promise.GetResultAsync(dummyClient,
+                                                            null, cancellationToken)
+                                            .ConfigureAwait(false);
             var output = result.NormalOutput;
 
             if (_ignoreCancelledResults &&

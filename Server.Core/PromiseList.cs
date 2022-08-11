@@ -152,8 +152,8 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
     /// </param>
     private async Task WaitForPromiseAsync(int index, Promise promise)
     {
-        var result = await promise.GetResultAsync(dummyClient, null, default)
-                                  .ConfigureAwait(false);
+        using var result = await promise.GetResultAsync(dummyClient, null, default)
+                                        .ConfigureAwait(false);
 
         var outstandingPromises = _outstandingPromises;
         if (outstandingPromises is null)
