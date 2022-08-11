@@ -63,6 +63,7 @@ public sealed partial class FasterDbPromiseStorage
                                   in FasterDbFileOptions fileOptions)
         : base(logger)
     {
+        ArgumentNullException.ThrowIfNull(schemas);
         _schemas = schemas;
         _promiseUpdateEventHandler = this.PromiseHasUpdated;
 

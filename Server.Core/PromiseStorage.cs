@@ -43,6 +43,7 @@ public abstract class PromiseStorage
     /// </param>
     protected PromiseStorage(ILogger logger)
     {
+        ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
     }
 
