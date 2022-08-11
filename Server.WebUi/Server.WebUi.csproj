@@ -17,14 +17,12 @@
   <ItemGroup>
     <PackageReference Include="GitVersion.MsBuild" Version="5.10.1" PrivateAssets="all" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="6.0.5" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="6.0.8" />
   </ItemGroup>
 
-  <Target Name="AddGitMetadaAssemblyAttributes"
-          BeforeTargets="CoreGenerateAssemblyInfo">
+  <Target Name="AddGitMetadaAssemblyAttributes" BeforeTargets="CoreGenerateAssemblyInfo">
     <ItemGroup>
-      <AssemblyAttribute Include="Hearty.Server.WebUi.Infrastructure.ContainingPackageAttribute"
-                         Condition="$(PackageId) != ''">
+      <AssemblyAttribute Include="Hearty.Server.WebUi.Infrastructure.ContainingPackageAttribute" Condition="$(PackageId) != ''">
         <_Parameter1>$(PackageId)</_Parameter1>
       </AssemblyAttribute>
     </ItemGroup>
