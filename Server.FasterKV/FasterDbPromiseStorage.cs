@@ -2,7 +2,9 @@
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 
 namespace Hearty.Server.FasterKV;
 
@@ -150,26 +152,29 @@ public sealed partial class FasterDbPromiseStorage
     /// Called when <see cref="Promise.OnUpdate" /> fires,
     /// to save updated results to the database.
     /// </summary>
+    /// <remarks>
+    /// The serialization and saving of the results is deferred to a background
+    /// task.
+    /// </remarks>
     private void PromiseHasUpdated(object? sender, Promise.UpdateEventArgs args)
     {
-        var promise = args.Subject;
-
-        //
-        // FIXME Do we need to defer this work to a task queue?
-        //
-
-        bool canSerialize = promise.TryPrepareSerialization(out var info) &&
-                            info.TotalLength <= MaxSerializationLength;
-
-        if (canSerialize)
+        Task.Factory.StartNew(o =>
         {
-            bool isAdded = DbSetValue(promise.Id, info);
+            var promise = Unsafe.As<Promise>(o!);
+            bool canSerialize = promise.TryPrepareSerialization(out var info) &&
+                                info.TotalLength <= MaxSerializationLength;
 
-            // If this is the first time the promise is added to the
-            // database, demote to a weak reference in _objects.
-            if (isAdded)
-                SaveWeakReference(promise);
-        }
+            if (canSerialize)
+            {
+                LogPromiseSaved(_logger, promise.Id);
+                bool isAdded = DbSetValue(promise.Id, info);
+
+                // If this is the first time the promise is added to the
+                // database, demote to a weak reference in _objects.
+                if (isAdded)
+                    SaveWeakReference(promise);
+            }
+        }, args.Subject);
     }
 
     /// <inheritdoc />
@@ -214,4 +219,8 @@ public sealed partial class FasterDbPromiseStorage
     [LoggerMessage(Level = LogLevel.Information,
                    Message = "Attempt to retrieved promise with ID {id} which does not currently exist")]
     private static partial void LogMissingPromise(ILogger logger, PromiseId id);
+
+    [LoggerMessage(Level = LogLevel.Debug,
+                   Message = "Saving contents of promise with ID {id} to the database")]
+    private static partial void LogPromiseSaved(ILogger logger, PromiseId id);
 }
