@@ -2,7 +2,6 @@
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Hearty.Server.FasterKV;
@@ -130,18 +129,7 @@ public sealed partial class FasterDbPromiseStorage
         if (canSerialize)
             DbSetValue(promise.Id, info);
 
-        var gcHandle = GCHandle.Alloc(promise, canSerialize ? GCHandleType.Weak
-                                                            : GCHandleType.Normal);
-        try
-        {
-            if (!_objects.TryAdd(promise.Id, gcHandle))
-                throw new InvalidOperationException("The promise with the newly generated ID already exists.  This should not happen. ");
-        }
-        catch
-        {
-            gcHandle.Free();
-            throw;
-        }
+        SaveNewReference(promise, canSerialize);
 
         if (!promise.HasCompleteOutput)
             promise.OnUpdate += _promiseUpdateEventHandler;
@@ -179,92 +167,31 @@ public sealed partial class FasterDbPromiseStorage
             // If this is the first time the promise is added to the
             // database, demote to a weak reference in _objects.
             if (isAdded)
-            {
-                var gcHandle = GCHandle.Alloc(promise, GCHandleType.Weak);
-                try
-                {
-                    // We just want to exchange the old GC handle with 
-                    // the new one, and discard the old one:
-                    //
-                    //   var gcHandleOld = _objects[promise.Id];
-                    //   _objects[promise.Id] = gcHandle;
-                    //   gcHandleOld.Free();
-                    //
-                    // but there is no method in ConcurrentDictionary
-                    // for the "exchange" of values, so we call
-                    // AddOrUpdate instead.  The "Add" case should never
-                    // happen.
-                    _objects.AddOrUpdate(
-                        promise.Id,
-                        static (_, newValue) => newValue,
-                        static (_, oldValue, newValue) =>
-                        {
-                            oldValue.Free();
-                            return newValue;
-                        },
-                        gcHandle);
-                }
-                catch
-                {
-                    gcHandle.Free();
-                    throw;
-                }
-            }
+                SaveWeakReference(promise);
         }
     }
 
     /// <inheritdoc />
     public override Promise? GetPromiseById(PromiseId id)
     {
-        GCHandle gcHandle;
-        Promise? promise;
+        var promise = TryGetLiveObject(id);
 
-        // Get the live .NET object if it exists.
-        if (_objects.TryGetValue(id, out gcHandle))
+        if (promise is null)
         {
-            promise = Unsafe.As<Promise?>(gcHandle.Target);
+            ScheduleCleaningIfNeeded();
+
+            // Otherwise, try getting from the database.
+            // If it exists, de-serialize the data and then register
+            // the live .NET object.
+            promise = DbTryGetValue(id);
             if (promise is not null)
-                return promise;
+            {
+                promise = SaveWeakReference(promise);
+                promise.OnUpdate += _promiseUpdateEventHandler;
+            }
         }
 
-        ScheduleCleaningIfNeeded();
-
-        // Otherwise, try getting from the database.
-        // If it exists, de-serialize the data and then register
-        // the live .NET object.
-        promise = DbTryGetValue(id);
-        if (promise is not null)
-        {
-            gcHandle = GCHandle.Alloc(promise, GCHandleType.Weak);
-
-            Promise? promiseLast = null;
-            try
-            {
-                // Retry loop for the rare occurrence when another thread tries
-                // to update, and also its Promise object expires soon after.
-                do
-                {
-                    var gcHandleLast = _objects.AddOrUpdate(
-                        id,
-                        static (_, newValue) => newValue,
-                        static (_, oldValue, newValue)
-                            => oldValue.Target is null ? newValue : oldValue,
-                        gcHandle);
-
-                    promiseLast = Unsafe.As<Promise?>(gcHandleLast.Target);
-                } while (promiseLast is null);
-            }
-            finally
-            {
-                if (!object.ReferenceEquals(promise, promiseLast))
-                    gcHandle.Free();
-            }
-
-            promiseLast.OnUpdate += _promiseUpdateEventHandler;
-            return promiseLast;
-        }
-
-        return null;
+        return promise;
     }
 
     /// <inheritdoc />

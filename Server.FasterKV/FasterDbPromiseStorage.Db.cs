@@ -421,59 +421,11 @@ public sealed partial class FasterDbPromiseStorage
 
             _lastGarbageCollectionCount = count;
 
-            Task.Factory.StartNew(state => ((FasterDbPromiseStorage)state!).CleanExpiredGCHandles(),
+            Task.Factory.StartNew(state => ((FasterDbPromiseStorage)state!).CleanExpiredWeakReferences(),
                                   this,
                                   CancellationToken.None,
                                   TaskCreationOptions.DenyChildAttach,
                                   TaskScheduler.Default);
-        }
-    }
-
-    /// <summary>
-    /// Scan the <see cref="_objects" /> dictionary and delete entries
-    /// containing expired GC handles.
-    /// </summary>
-    private void CleanExpiredGCHandles()
-    {
-        try
-        {
-            int totalEntries = 0;
-            int cleanedEntries = 0;
-
-            foreach (var (id, gcHandle) in _objects)
-            {
-                ++totalEntries;
-
-                // Handle not expired yet
-                if (gcHandle.Target is not null)
-                    continue;
-
-                if (!_objects.TryRemove(id, out var gcHandle2))
-                    continue;
-
-                // Oops, some other thread raced to revive the entry.
-                // Better add it back.
-                if (gcHandle2.Target is not null)
-                {
-                    _objects.TryAdd(id, gcHandle2);
-                    continue;
-                }
-
-                gcHandle2.Free();
-                ++cleanedEntries;
-            }
-
-            _logger.LogDebug("Removed {cleaned} expired entries for in-memory promises out of {total} total entries. ",
-                             cleanedEntries, totalEntries);
-        }
-        catch (Exception e)
-        {
-            _logger.LogCritical(e, 
-                "An error occurred while cleaning up entries for expired in-memory promises. ");
-        }
-        finally
-        {
-            _hasActivatedCleanUp = 0;
         }
     }
 }
