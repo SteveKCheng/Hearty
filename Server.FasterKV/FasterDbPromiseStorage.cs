@@ -175,6 +175,7 @@ public sealed partial class FasterDbPromiseStorage
     /// <inheritdoc />
     public override Promise? GetPromiseById(PromiseId id)
     {
+        bool materialized = false;
         var promise = TryGetLiveObject(id);
 
         if (promise is null)
@@ -185,13 +186,18 @@ public sealed partial class FasterDbPromiseStorage
             // If it exists, de-serialize the data and then register
             // the live .NET object.
             promise = DbTryGetValue(id);
-            if (promise is not null)
+            if (promise is null)
             {
-                promise = SaveWeakReference(promise);
-                promise.OnUpdate += _promiseUpdateEventHandler;
+                LogMissingPromise(_logger, id);
+                return null;
             }
+
+            materialized = true;
+            promise = SaveWeakReference(promise);
+            promise.OnUpdate += _promiseUpdateEventHandler;
         }
 
+        LogPromiseRetrieved(_logger, id, wasLive: !materialized);
         return promise;
     }
 
@@ -200,4 +206,12 @@ public sealed partial class FasterDbPromiseStorage
     {
         throw new NotImplementedException();
     }
+
+    [LoggerMessage(Level = LogLevel.Debug,
+                   Message = "Retrieved promise with ID {id}, was live (cached in memory) = {wasLive}")]
+    private static partial void LogPromiseRetrieved(ILogger logger, PromiseId id, bool wasLive);
+
+    [LoggerMessage(Level = LogLevel.Information,
+                   Message = "Attempt to retrieved promise with ID {id} which does not currently exist")]
+    private static partial void LogMissingPromise(ILogger logger, PromiseId id);
 }
