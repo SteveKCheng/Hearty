@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using Microsoft.Extensions.Logging;
 
 namespace Hearty.Server.FasterKV;
@@ -30,6 +31,36 @@ public partial class FasterDbPromiseStorage
     /// </para>
     /// </remarks>
     private readonly ConcurrentDictionary<PromiseId, object> _liveObjects = new();
+
+    /// <summary>
+    /// Pooled instances of the weak reference objects.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Weak reference objects are heavier than desired because they have
+    /// finalizers, so they are pooled when possible.
+    /// </para>
+    /// <para>
+    /// Unfortunately, Microsoft.Extensions.ObjectPool cannot be used because 
+    /// it requires the class of the pooled objects to have a parameterless constructor.
+    /// </para>
+    /// </remarks>
+    private readonly ConcurrentBag<WeakReference<Promise>> _weakRefPool = new();
+
+    /// <summary>
+    /// Count of the total number of items inside <see cref="_weakRefPool" />.
+    /// </summary>
+    /// <remarks>
+    /// This count is approximate in so far as the increment/decrement operations
+    /// may race.  That is still good enough as the count is only used to 
+    /// prevent retaining too many objects in the pool.
+    /// </remarks>
+    private int _weakRefPooledCount;
+
+    /// <summary>
+    /// (Soft) limit on the total number of items inside <see cref="_weakRefPool" />.
+    /// </summary>
+    private const int MaxWeakRefPooledCount = 16384;
 
     /// <summary>
     /// Get the (unique) in-memory promise object for the given ID
@@ -126,10 +157,52 @@ public partial class FasterDbPromiseStorage
 #endif
     }
 
+    /// <summary>
+    /// Obtain a weak reference to a given promise object.
+    /// </summary>
+    /// <remarks>
+    /// The weak reference object may be pooled.  Returning it to the
+    /// pool is not mandatory.  For example, if a weak reference
+    /// object is speculatively created, and a (rare) conflict 
+    /// (with another thread) occurs when storing into the cache of 
+    /// live objects, the weak reference object can just be dropped 
+    /// on the floor.  .NET's normal garbage collection will take care of it.
+    /// </remarks>
+    /// <param name="promise">
+    /// The promise that the weak reference object should point to.
+    /// </param>
+    /// <returns>
+    /// A weak reference object taken from a pool, or newly constructed.
+    /// </returns>
     private WeakReference<Promise> CreateWeakReference(Promise promise)
-        => new WeakReference<Promise>(promise);
+    {
+        if (_weakRefPool.TryTake(out var weakRef))
+        {
+            Interlocked.Decrement(ref _weakRefPooledCount);
+            weakRef.SetTarget(promise);
+        }
+        else
+        {
+            weakRef = new WeakReference<Promise>(promise);
+        }
 
-    private void DiscardWeakReference(WeakReference<Promise> weakRef) { }
+        return weakRef;
+    }
+
+    /// <summary>
+    /// Discard a weak reference object, possibly putting it back into the pool.
+    /// </summary>
+    /// <param name="weakRef">
+    /// The weak reference object, whose target should be currently nothing.
+    /// </param>
+    private void DiscardWeakReference(WeakReference<Promise> weakRef)
+    {
+        if (_weakRefPooledCount > MaxWeakRefPooledCount)
+            return;
+
+        Interlocked.Increment(ref _weakRefPooledCount);
+        _weakRefPool.Add(weakRef);
+    }
 
     /// <summary>
     /// Store a new entry in the cache of live objects.
