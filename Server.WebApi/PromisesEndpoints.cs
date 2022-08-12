@@ -282,7 +282,6 @@ namespace Hearty.Server.WebApi
 
                 var parameters = new QueryParameters
                 {
-                    PromiseId = promiseId,
                     Timeout = timeout,
                     AcceptedContentTypes = httpRequest.Headers.Accept,
                     AcceptedInnerContentTypes = httpRequest.Headers[HeartyHttpHeaders.AcceptItem],
@@ -291,7 +290,7 @@ namespace Hearty.Server.WebApi
 
                 IPromiseClientInfo clientInfo = new BasicPromiseClientInfo();
 
-                await RespondToGetPromiseAsync(services, httpResponse,
+                await RespondToGetPromiseAsync(services, promiseId, httpResponse,
                                                parameters,
                                                clientInfo, cancellationToken)
                                 .ConfigureAwait(false);
@@ -405,13 +404,12 @@ namespace Hearty.Server.WebApi
 
             var parameters = new QueryParameters
             {
-                PromiseId = promiseId,
                 Timeout = timeout,
                 AcceptedContentTypes = httpRequest.Headers.Accept,
                 AcceptedInnerContentTypes = httpRequest.Headers[HeartyHttpHeaders.AcceptItem]
             };
 
-            return RespondToGetPromiseAsync(services, httpResponse, 
+            return RespondToGetPromiseAsync(services, promiseId, httpResponse, 
                                             parameters, 
                                             client, cancellationToken);
         }
@@ -448,19 +446,42 @@ namespace Hearty.Server.WebApi
         }
 
         /// <summary>
-        /// Input parameters from the client's query 
-        /// to <see cref="RespondToGetPromiseAsync" />.
+        /// Selects what sub-part of a promise is to be queried
+        /// and how to emit it in <see cref="WriteAsHttpResponseAsync" />.
         /// </summary>
-        private readonly struct QueryParameters
+        public readonly struct QueryParameters
         {
-            public PromiseId PromiseId { get; init; }
-
+            /// <summary>
+            /// Time interval to (asynchronously) wait when the 
+            /// requested promise is not yet completed.
+            /// </summary>
+            /// <remarks>
+            /// A zero timeout means the query returns immediately
+            /// indicating an error or no data when the promise
+            /// is not yet completed.
+            /// </remarks>
             public TimeSpan Timeout { get; init; }
 
+            /// <summary>
+            /// The content types that may be returned to the client.
+            /// </summary>
             public StringValues AcceptedContentTypes { get; init; }
 
+            /// <summary>
+            /// The content types for the items in a container
+            /// that may be returned to the client.
+            /// </summary>
             public StringValues AcceptedInnerContentTypes { get; init; }
 
+            /// <summary>
+            /// Whether the originating HTTP request has the POST method 
+            /// or another method that is considered to be non-idempotent
+            /// or modifying.
+            /// </summary>
+            /// <remarks>
+            /// This property affects the HTTP headers that are emitted
+            /// in response.
+            /// </remarks>
             public bool IsPost { get; init; }
         }
 
@@ -484,12 +505,11 @@ namespace Hearty.Server.WebApi
 
             var parameters = new QueryParameters
             {
-                PromiseId = promiseId,
                 Timeout = timeout,
                 AcceptedContentTypes = httpRequest.Headers.Accept
             };
 
-            return RespondToGetPromiseAsync(services, httpResponse,
+            return RespondToGetPromiseAsync(services, promiseId, httpResponse,
                                             parameters,
                                             client, cancellationToken);
         }
@@ -526,14 +546,42 @@ namespace Hearty.Server.WebApi
                                               : StatusCodes.Status404NotFound;
         }
 
-        private static async Task RespondToGetPromiseAsync(Services services,
-                                                           HttpResponse httpResponse,
-                                                           QueryParameters parameters,
-                                                           IPromiseClientInfo client,
-                                                           CancellationToken cancellationToken)
+        /// <summary>
+        /// Write the contents of a <see cref="Promise" /> as a response
+        /// to an HTTP request.
+        /// </summary>
+        /// <remarks>
+        /// This function is made public so that applications using the Hearty
+        /// framework can supply their own custom endpoints, that may look
+        /// up, or create, <see cref="Promise" /> in some other way, but
+        /// follow the same "standard" conventions to send its contents over
+        /// the HTTP protocol.
+        /// </remarks>
+        /// <param name="promise">
+        /// The desired promise object.  If null, the response will be
+        /// HTTP error 404.
+        /// </param>
+        /// <param name="httpResponse">
+        /// Where the HTTP headers and body will be written to.
+        /// </param>
+        /// <param name="parameters">
+        /// Parameters that select what exactly to output from <paramref name="promise" />.
+        /// </param>
+        /// <param name="client">
+        /// Represents the (remote) HTTP client.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// Can be triggered to cancel the response, usually from
+        /// <see cref="HttpContext.RequestAborted" />.
+        /// </param>
+        public static async Task WriteAsHttpResponseAsync(
+            this Promise? promise,
+            HttpResponse httpResponse,
+            QueryParameters parameters,
+            IPromiseClientInfo client,
+            CancellationToken cancellationToken)
         {
-            var promise = services.PromiseStorage.GetPromiseById(parameters.PromiseId);
-            if (promise == null)
+            if (promise is null)
             {
                 httpResponse.StatusCode = StatusCodes.Status404NotFound;
                 return;
@@ -541,8 +589,8 @@ namespace Hearty.Server.WebApi
 
             if (parameters.IsPost)
             {
-                httpResponse.Headers[HeartyHttpHeaders.PromiseId] 
-                    = parameters.PromiseId.ToString();
+                httpResponse.Headers[HeartyHttpHeaders.PromiseId]
+                    = promise.Id.ToString();
             }
 
             if (parameters.Timeout == TimeSpan.Zero && !promise.HasOutput)
@@ -551,8 +599,8 @@ namespace Hearty.Server.WebApi
                 return;
             }
 
-            using var result = await promise.GetResultAsync(client, 
-                                                            parameters.Timeout, 
+            using var result = await promise.GetResultAsync(client,
+                                                            parameters.Timeout,
                                                             cancellationToken)
                                             .ConfigureAwait(false);
             var output = result.NormalOutput;
@@ -573,7 +621,7 @@ namespace Hearty.Server.WebApi
             var writeRequest = new PromiseWriteRequest
             {
                 Format = format,
-                InnerFormat = formatInfo.IsContainer 
+                InnerFormat = formatInfo.IsContainer
                                 ? parameters.AcceptedInnerContentTypes
                                 : StringValues.Empty
             };
@@ -591,6 +639,22 @@ namespace Hearty.Server.WebApi
                         .ConfigureAwait(false);
 
             await httpResponse.BodyWriter.CompleteAsync();
+        }
+
+
+        private static Task RespondToGetPromiseAsync(Services services,
+                                                     PromiseId promiseId,
+                                                     HttpResponse httpResponse,
+                                                     QueryParameters parameters,
+                                                     IPromiseClientInfo client,
+                                                     CancellationToken cancellationToken)
+        {
+            var promise = services.PromiseStorage.GetPromiseById(promiseId);
+            return WriteAsHttpResponseAsync(promise,
+                                                   httpResponse,
+                                                   parameters,
+                                                   client,
+                                                   cancellationToken);
         }
     }
 }
