@@ -244,8 +244,12 @@ public sealed class PromiseExceptionalData : PromiseData
     /// <param name="buffer">
     /// The buffer of bytes to de-serialize from.
     /// </param>
+    /// <param name="inputData">
+    /// Ignored but required as part of the signature of <see cref="PromiseDataDeserializer" />.
+    /// </param>
     public static PromiseExceptionalData Deserialize(IPromiseDataFixtures fixtures,
-                                                     ReadOnlySpan<byte> buffer)
+                                                     ReadOnlySpan<byte> buffer,
+                                                     PromiseData? inputData)
     {
         // Need to copy the buffer since we save the MessagePack serialization
         // inside the new object.

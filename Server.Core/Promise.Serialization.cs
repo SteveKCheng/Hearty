@@ -105,7 +105,8 @@ public sealed partial class Promise
             {
                 var deserializer = schemas[header.InputSchemaCode];
                 inputData = deserializer.Invoke(fixtures,
-                                                data[0..(int)header.InputLength]);
+                                                data[0..(int)header.InputLength],
+                                                null);
                 data = data[(int)header.InputLength..];
             }
 
@@ -113,7 +114,8 @@ public sealed partial class Promise
             {
                 var deserializer = schemas[header.OutputSchemaCode];
                 outputData = deserializer.Invoke(fixtures,
-                                                 data[0..(int)header.OutputLength]);
+                                                 data[0..(int)header.OutputLength],
+                                                 inputData);
             }
         }
         catch (Exception e) when (e is not OutOfMemoryException)

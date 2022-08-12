@@ -187,8 +187,12 @@ public sealed class Payload : PromiseData
     /// <param name="buffer">
     /// The buffer of bytes to de-serialize from.
     /// </param>
+    /// <param name="inputData">
+    /// Ignored but required as part of the signature of <see cref="PromiseDataDeserializer" />.
+    /// </param>
     public static Payload Deserialize(IPromiseDataFixtures fixtures, 
-                                      ReadOnlySpan<byte> buffer)
+                                      ReadOnlySpan<byte> buffer,
+                                      PromiseData? inputData)
     {
         int contentTypeStringLength = BinaryPrimitives.ReadInt32LittleEndian(buffer);
         buffer = buffer[sizeof(int)..];

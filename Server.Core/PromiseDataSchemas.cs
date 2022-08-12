@@ -119,6 +119,12 @@ public sealed class PromiseDataSchemas : IReadOnlyDictionary<ushort, PromiseData
 /// This buffer must be sized to exactly the number of bytes that had
 /// been reported in <see cref="PromiseDataSerializationInfo.PayloadLength" />.
 /// </param>
+/// <param name="input">
+/// If the promise data to be revived is an output, this argument points
+/// to the already revived input data, if any.  This argument is provided
+/// for the benefit of some implementations of <see cref="PromiseData" /> 
+/// objects that need to refer back to the input data object.
+/// </param>
 /// <remarks>
 /// <para>
 /// De-serialization needs to be optimized for data that comes 
@@ -148,7 +154,8 @@ public sealed class PromiseDataSchemas : IReadOnlyDictionary<ushort, PromiseData
 /// The re-materialized instance of <see cref="PromiseData" />.
 /// </returns>
 public delegate PromiseData PromiseDataDeserializer(IPromiseDataFixtures fixtures,
-                                                    ReadOnlySpan<byte> buffer);
+                                                    ReadOnlySpan<byte> buffer,
+                                                    PromiseData? input);
 
 /// <summary>
 /// Writes out the serialized (promise) data into a buffer, synchronously.

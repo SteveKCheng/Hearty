@@ -658,8 +658,12 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
     /// <param name="buffer">
     /// The buffer of bytes to de-serialize from.
     /// </param>
+    /// <param name="inputData">
+    /// Ignored but required as part of the signature of <see cref="PromiseDataDeserializer" />.
+    /// </param>
     public static PromiseList Deserialize(IPromiseDataFixtures fixtures, 
-                                          ReadOnlySpan<byte> buffer)
+                                          ReadOnlySpan<byte> buffer,
+                                          PromiseData? inputData)
     {
         var promiseStorage = fixtures.PromiseStorage;
 
@@ -706,7 +710,7 @@ public partial class PromiseList : PromiseData, IPromiseListBuilder
         {
             var exceptionBuffer = buffer.Slice(headerOffset + idBufferSize + ordinalBufferSize,
                                                exceptionLength);
-            exceptionData = PromiseExceptionalData.Deserialize(fixtures, exceptionBuffer);
+            exceptionData = PromiseExceptionalData.Deserialize(fixtures, exceptionBuffer, null);
         }
 
         self._promiseIds.TryComplete(count, exceptionData);

@@ -70,7 +70,7 @@ So long lives this, and this gives life to thee. ");
         info.Serializer!.Invoke(info, buffer);
 
         // De-serialize it back
-        var payload2 = Payload.Deserialize(_fixtures, buffer);
+        var payload2 = Payload.Deserialize(_fixtures, buffer, null);
 
         // Compare
         Assert.Equal(payload.IsFailure, payload2.IsFailure);
@@ -121,7 +121,7 @@ So long lives this, and this gives life to thee. ");
         var buffer = new byte[info.PayloadLength];
         info.Serializer!.Invoke(info, buffer);
 
-        var data2 = PromiseExceptionalData.Deserialize(_fixtures, buffer);
+        var data2 = PromiseExceptionalData.Deserialize(_fixtures, buffer, null);
 
         Assert.Equal(data.IsCancellation, data2.IsCancellation);
         Assert.Equal(data.IsTransient, data2.IsTransient);
@@ -168,7 +168,7 @@ So long lives this, and this gives life to thee. ");
         var buffer = new byte[info.PayloadLength];
         info.Serializer!.Invoke(info, buffer);
 
-        var promiseList2 = PromiseList.Deserialize(_fixtures, buffer);
+        var promiseList2 = PromiseList.Deserialize(_fixtures, buffer, null);
 
         Assert.True(promiseList2.IsComplete);
 
