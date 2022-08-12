@@ -172,7 +172,14 @@ public partial class FasterDbPromiseStorage
             // is to be returned, and it has not expired in between when
             // it was checked inside updateValueFactory above and here.
             if (otherWeakRef.TryGetTarget(out var q) && q.Id == id)
+            {
+                // Our speculatively-created weakRef has not been exposed
+                // outside, so it may be safely discarded here.
+                weakRef.SetTarget(null!);
+                DiscardWeakReference(weakRef);
+
                 return q;
+            }
         }
     }
 
