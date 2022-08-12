@@ -44,8 +44,14 @@ public partial class FasterDbPromiseStorage
     /// Unfortunately, Microsoft.Extensions.ObjectPool cannot be used because 
     /// it requires the class of the pooled objects to have a parameterless constructor.
     /// </para>
+    /// <para>
+    /// <see cref="ConcurrentQueue{T}"/> seems to be the fastest 
+    /// standard thread-safe collection available for the access patterns used
+    /// here: a weak reference object is usually recycled from a different
+    /// thread than the one that re-takes it eventually.
+    /// </para>
     /// </remarks>
-    private readonly ConcurrentBag<WeakReference<Promise>> _weakRefPool = new();
+    private readonly ConcurrentQueue<WeakReference<Promise>> _weakRefPool = new();
 
     /// <summary>
     /// Count of the total number of items inside <see cref="_weakRefPool" />.
@@ -176,7 +182,7 @@ public partial class FasterDbPromiseStorage
     /// </returns>
     private WeakReference<Promise> CreateWeakReference(Promise promise)
     {
-        if (_weakRefPool.TryTake(out var weakRef))
+        if (_weakRefPool.TryDequeue(out var weakRef))
         {
             Interlocked.Decrement(ref _weakRefPooledCount);
             weakRef.SetTarget(promise);
@@ -201,7 +207,7 @@ public partial class FasterDbPromiseStorage
             return;
 
         Interlocked.Increment(ref _weakRefPooledCount);
-        _weakRefPool.Add(weakRef);
+        _weakRefPool.Enqueue(weakRef);
     }
 
     /// <summary>
