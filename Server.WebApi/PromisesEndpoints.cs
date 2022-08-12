@@ -42,7 +42,8 @@ namespace Hearty.Server.WebApi
                        string routeKey,
                        Func<PromiseRequest, ValueTask<PromiseId>> executor)
         {
-            var services = endpoints.GetServices();
+            var services = new Services(endpoints.ServiceProvider);
+
             routeKey = routeKey.Trim('/');
             return endpoints.MapPost(
                     "/requests/" + routeKey,
@@ -85,25 +86,20 @@ namespace Hearty.Server.WebApi
             /// <see cref="JobQueueKey.Owner" />.
             /// </summary>
             public JobQueueOwnerRetriever? JobQueueOwnerRetrieval { get; init; }
-        }
 
-        /// <summary>
-        /// Retrieve the <see cref="PromiseStorage" /> instance
-        /// that has been dependency-injected in the ASP.NET Core application.
-        /// </summary>
-        private static Services
-            GetServices(this IEndpointRouteBuilder endpoints)
-        {
-            var p = endpoints.ServiceProvider;
-            return new Services
+            /// <summary>
+            /// Collect the services used by methods of <see cref="PromisesEndpoints" />
+            /// that have been dependency-injected in the ASP.NET Core application.
+            /// </summary>
+            public Services(IServiceProvider p)
             {
-                PromiseStorage = p.GetRequiredService<PromiseStorage>(),
-                PathsDirectory = p.GetRequiredService<PathsDirectory>(),
-                ExceptionTranslator = p.GetRequiredService<PromiseExceptionTranslator>(),
+                PromiseStorage = p.GetRequiredService<PromiseStorage>();
+                PathsDirectory = p.GetRequiredService<PathsDirectory>();
+                ExceptionTranslator = p.GetRequiredService<PromiseExceptionTranslator>();
                 RemoteCancellation = p.GetService<IRemoteJobCancellation>()
-                                        ?? _dummyRemoteCancellation,
-                JobQueueOwnerRetrieval = p.GetService<JobQueueOwnerRetriever>()
-            };
+                                        ?? _dummyRemoteCancellation;
+                JobQueueOwnerRetrieval = p.GetService<JobQueueOwnerRetriever>();
+            }
         }
 
         /// <summary>
@@ -320,7 +316,7 @@ namespace Hearty.Server.WebApi
         public static IEndpointConventionBuilder
             MapGetPromiseById(this IEndpointRouteBuilder endpoints)
         {
-            var services = endpoints.GetServices();
+            var services = new Services(endpoints.ServiceProvider);
 
             // FIXME This should be managed by a cache
             IPromiseClientInfo clientInfo = new BasicPromiseClientInfo();
@@ -342,7 +338,8 @@ namespace Hearty.Server.WebApi
         public static IEndpointConventionBuilder
             MapCancelJobById(this IEndpointRouteBuilder endpoints)
         {
-            var services = endpoints.GetServices();
+            var services = new Services(endpoints.ServiceProvider);
+
             return endpoints.MapDelete(
                     "/promises/{serviceId}/{sequenceNumber}",
                     httpContext => CancelJobAsync(services, httpContext, kill: false));
@@ -360,7 +357,8 @@ namespace Hearty.Server.WebApi
         public static IEndpointConventionBuilder
             MapKillJobById(this IEndpointRouteBuilder endpoints)
         {
-            var services = endpoints.GetServices();
+            var services = new Services(endpoints.ServiceProvider);
+
             return endpoints.MapDelete(
                     "/jobs/{serviceId}/{sequenceNumber}/",
                     httpContext => CancelJobAsync(services, httpContext, kill: true));
@@ -377,7 +375,7 @@ namespace Hearty.Server.WebApi
         public static IEndpointConventionBuilder
             MapGetPromiseByPath(this IEndpointRouteBuilder endpoints)
         {
-            var services = endpoints.GetServices();
+            var services = new Services(endpoints.ServiceProvider);
 
             // FIXME This should be managed by a cache
             IPromiseClientInfo clientInfo = new BasicPromiseClientInfo();
