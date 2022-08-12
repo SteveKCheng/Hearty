@@ -112,38 +112,67 @@ public partial class FasterDbPromiseStorage
     private Promise SaveWeakReference(Promise promise)
     {
         var id = promise.Id;
+        var weakRef = CreateWeakReference(promise);
 
+        // Retry loop for the rare occurrence that the loop body tries
+        // to return an existing weak reference, but it expires midway.
         while (true)
         {
-            // Set the entry's value to be a weak reference unless it already is one.
-            var weakRef = UnsafeCastToWeakReference(_liveObjects.AddOrUpdate(
-                                key: id,
-                                addValueFactory: (id, arg) 
-                                    => CreateWeakReference(arg),
-                                updateValueFactory: (id, old, arg)
-                                    => old is Promise p ? CreateWeakReference(p) : old,
-                                factoryArgument: promise));
-
-            // Return the promise object held by the weak reference.
+            // Update the cache entry for id to point to weakRef,
+            // unless there is an existing strong or weak reference
+            // that points to another Promise object.  In the latter case,
+            // return the weak reference to that other Promise object
+            // unless it has expired.
             //
-            // If the weak reference is existing, has expired, and
-            // another thread raced to re-use it to hold another
-            // promise, we need to retry the whole operation.
-            if (weakRef.TryGetTarget(out var newPromise))
-            {
-                if (newPromise.Id == id)
-                    return newPromise;
-            }
+            // If an existing weak reference object is being replaced,
+            // we do not attempt to recycle it back to the pool.  It
+            // is not easy to do so without introducing race conditions.
+            // We prefer creating more garbage objects in uncommon cases
+            // than to complicate the code even more.
+            //
+            // Removing an existing weak reference object first (with
+            // _liveObjects.TryRemove) also does not work, as that can lead
+            // to an "ABA" problem: the weak reference object may be recycled,
+            // then re-used and stored into the same entry by a different thread,
+            // so that this thread might erroneously remove a live entry!
+            var otherWeakRef = UnsafeCastToWeakReference(_liveObjects.AddOrUpdate(
+                key: id,
+                addValueFactory: static object (id, arg) => arg.weakRef,
+                updateValueFactory: object (id, old, arg) =>
+                {
+                    if (object.ReferenceEquals(old, arg.promise))
+                    {
+                        // Common case: demote a strong reference to
+                        // a weak one when saving the promise's contents
+                        return arg.weakRef;
+                    }
+                    else if (old is Promise p)
+                    {
+                        // Not common: there is a strong reference to
+                        // a different Promise object (for the same ID)
+                        return CreateWeakReference(p);
+                    }
+                    else
+                    {
+                        // Leave in existing weak reference unless it has expired
+                        var oldWeakRef = UnsafeCastToWeakReference(old);
+                        if (oldWeakRef.TryGetTarget(out var q) && q.Id == id)
+                            return oldWeakRef;
+                        else
+                            return arg.weakRef;
+                    }
+                },
+                factoryArgument: (weakRef, promise)));
 
-            // If the weak reference is existing but has expired, 
-            // attempt to clean it up, and then retry the whole operation.
-            // If another thread races to clean up the weak reference,
-            // we can safely ignore it.
-            else
-            {
-                if (_liveObjects.TryRemove(new KeyValuePair<PromiseId, object>(id, weakRef)))
-                    DiscardWeakReference(weakRef);
-            }
+            // Fast, common case: weakRef has been successfully stored.
+            if (object.ReferenceEquals(otherWeakRef, weakRef))
+                return promise;
+
+            // Less common case: otherWeakRef, an existing weak reference,
+            // is to be returned, and it has not expired in between when
+            // it was checked inside updateValueFactory above and here.
+            if (otherWeakRef.TryGetTarget(out var q) && q.Id == id)
+                return q;
         }
     }
 
