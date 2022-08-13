@@ -9,7 +9,6 @@ using Hearty.Common;
 
 namespace Hearty;
 
-
 /// <summary>
 /// A long-lived identifier for a promise.
 /// </summary>
@@ -99,16 +98,16 @@ public readonly struct PromiseId : IComparable<PromiseId>
     /// as returned by <see cref="ToString()" />.
     /// </summary>
     public static bool TryParse(ReadOnlySpan<char> input,
-                                out PromiseId promiseId)
+                                out PromiseId result)
     {
-        promiseId = default;
+        result = default;
         if (input.Length < 10 || input[8] != '/')
         {
-            promiseId = default;
+            result = default;
             return false;
         }
 
-        return TryParse(input[0..8], input[9..], out promiseId);
+        return TryParse(input[0..8], input[9..], out result);
     }
 
     /// <summary>
@@ -116,20 +115,31 @@ public readonly struct PromiseId : IComparable<PromiseId>
     /// </summary>
     public static bool TryParse(ReadOnlySpan<char> serviceIdStr, 
                                 ReadOnlySpan<char> sequenceNumberStr,
-                                out PromiseId promiseId)
+                                out PromiseId result)
     {
         if (uint.TryParse(serviceIdStr, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var serviceId))
         {
             if (uint.TryParse(sequenceNumberStr, NumberStyles.None, CultureInfo.InvariantCulture, out var sequenceNumber))
             {
-                promiseId = new PromiseId(serviceId, sequenceNumber);
+                result = new PromiseId(serviceId, sequenceNumber);
                 return true;
             }
         }
 
-        promiseId = default;
+        result = default;
         return false;
     }
+
+    /// <summary>
+    /// Attempt to parse a promise ID from its string representation
+    /// as returned by <see cref="ToString()" />.
+    /// </summary>
+    /// <remarks>
+    /// This method trivially wraps <see cref="TryParse(ReadOnlySpan{char}, out PromiseId)" /> 
+    /// to allow easy parameter binding in the ASP.NET Core framework.
+    /// </remarks>
+    public static bool TryParse(string input, out PromiseId result)
+        => TryParse(input.AsSpan(), out result);
 
     /// <summary>
     /// Compares promise IDs as integers.
