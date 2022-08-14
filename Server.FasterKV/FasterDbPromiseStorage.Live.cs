@@ -41,32 +41,13 @@ public partial class FasterDbPromiseStorage
     /// finalizers, so they are pooled when possible.
     /// </para>
     /// <para>
-    /// Unfortunately, Microsoft.Extensions.ObjectPool cannot be used because 
-    /// it requires the class of the pooled objects to have a parameterless constructor.
-    /// </para>
-    /// <para>
-    /// <see cref="ConcurrentQueue{T}"/> seems to be the fastest 
-    /// standard thread-safe collection available for the access patterns used
-    /// here: a weak reference object is usually recycled from a different
-    /// thread than the one that re-takes it eventually.
+    /// <see cref="BoundedConcurrentQueue{T}" /> is a very fast queue
+    /// that should be even faster than <see cref="ConcurrentQueue{T}"/>,
+    /// which is in turn faster than <see cref="ConcurrentBag{T}" />.
     /// </para>
     /// </remarks>
-    private readonly ConcurrentQueue<WeakReference<Promise>> _weakRefPool = new();
-
-    /// <summary>
-    /// Count of the total number of items inside <see cref="_weakRefPool" />.
-    /// </summary>
-    /// <remarks>
-    /// This count is approximate in so far as the increment/decrement operations
-    /// may race.  That is still good enough as the count is only used to 
-    /// prevent retaining too many objects in the pool.
-    /// </remarks>
-    private int _weakRefPooledCount;
-
-    /// <summary>
-    /// (Soft) limit on the total number of items inside <see cref="_weakRefPool" />.
-    /// </summary>
-    private const int MaxWeakRefPooledCount = 16384;
+    private readonly BoundedConcurrentQueue<WeakReference<Promise>> _weakRefPool 
+        = new(capacity: Math.Min(Environment.ProcessorCount * 64, 16384));
 
     /// <summary>
     /// Get the (unique) in-memory promise object for the given ID
@@ -219,14 +200,9 @@ public partial class FasterDbPromiseStorage
     private WeakReference<Promise> CreateWeakReference(Promise promise)
     {
         if (_weakRefPool.TryDequeue(out var weakRef))
-        {
-            Interlocked.Decrement(ref _weakRefPooledCount);
             weakRef.SetTarget(promise);
-        }
         else
-        {
             weakRef = new WeakReference<Promise>(promise);
-        }
 
         return weakRef;
     }
@@ -239,11 +215,7 @@ public partial class FasterDbPromiseStorage
     /// </param>
     private void DiscardWeakReference(WeakReference<Promise> weakRef)
     {
-        if (_weakRefPooledCount > MaxWeakRefPooledCount)
-            return;
-
-        Interlocked.Increment(ref _weakRefPooledCount);
-        _weakRefPool.Enqueue(weakRef);
+        _weakRefPool.TryEnqueue(weakRef);
     }
 
     /// <summary>
