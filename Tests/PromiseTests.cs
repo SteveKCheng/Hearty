@@ -197,7 +197,13 @@ public sealed class PromiseTests
 
             cancelSource.CancelAfter(TimeSpan.FromMilliseconds(Random.Shared.Next(250)));
 
-            var outputs = await Task.WhenAll(tasks);
+            try
+            {
+                var outputs = await Task.WhenAll(tasks);
+            }
+            catch (OperationCanceledException) 
+            { 
+            }
             //Assert.All(outputs, output => Assert.NotNull(output));
         });
     }
