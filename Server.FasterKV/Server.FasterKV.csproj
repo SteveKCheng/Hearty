@@ -21,6 +21,7 @@
     <Compile Include="FasterDbPromiseStorage.Db.cs" />
     <Compile Include="FasterDbPromiseStorage.cs" />
     <Compile Include="FasterDbPromiseStorage.Live.cs" />
+    <Compile Include="BoundedConcurrentQueue.cs" />
     <Compile Include="PromiseBlob.cs" />
     <Compile Include="TaskExtensions.cs" />
     <Compile Include="ThreadLocalObjectPool.cs" />
