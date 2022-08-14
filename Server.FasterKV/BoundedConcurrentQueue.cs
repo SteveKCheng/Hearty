@@ -104,8 +104,8 @@ internal struct BoundedConcurrentQueue<T>
         // Round up the capacity to the nearest power of 2.
         // Also require that there be at least (about) 4 cache-lines'
         // worth of capacity to mitigate false sharing.
-        int minCapacity = Math.Max(256 / Unsafe.SizeOf<T>(), 2);
-        _log2Capacity = BitOperations.Log2((uint)Math.Max(capacity, minCapacity) - 1) + 1;
+        capacity = Math.Max(capacity, 256 / Unsafe.SizeOf<T>());
+        _log2Capacity = BitOperations.Log2(2 * (uint)capacity - 1);
 
         capacity = 1 << _log2Capacity;
 
