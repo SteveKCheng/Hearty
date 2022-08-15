@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.IO;
 using System.Net.Http;
+using HttpStatusCode = System.Net.HttpStatusCode;
 using Microsoft.Net.Http.Headers;
 using Microsoft.AspNetCore.WebUtilities;
 using Hearty.Common;
@@ -140,12 +141,14 @@ public partial class HeartyHttpClient
         /// </summary>
         /// <param name="requestState">
         /// The last value of <see cref="_requestState" /> that has been read.
+        /// This argument will be updated if this method needs to change that
+        /// member (by atomic compare-and-exchange).
         /// </param>
         /// <returns>
         /// The task that completes when the job completes, or null
         /// if no job has run yet (or it has been reset).
         /// </returns>
-        private Task? GetTaskForStartedJob(object? requestState)
+        private Task? GetTaskForStartedJob(ref object? requestState)
         {
             while (true)
             {
@@ -177,7 +180,10 @@ public partial class HeartyHttpClient
                                                                _jobRequest);
 
                     if (object.ReferenceEquals(requestState, _jobRequest))
+                    {
+                        requestState = _jobRequest;
                         return newTaskSource.Task;
+                    }
 
                     // If the current call races with another one doing the same,
                     // drop the speculatively-created TaskCompleteSource and retry. 
@@ -189,9 +195,10 @@ public partial class HeartyHttpClient
         public async IAsyncEnumerator<KeyValuePair<int, T>> 
             GetAsyncEnumerator(CancellationToken cancellationToken = default)
         {
-            // This default value is never read but is needed to avoid a
-            // false alarm from the C# compiler's definite assignment analysis.
-            PromiseId promiseId = default;  
+            // The default values here are never read but are needed to avoid
+            // false alarms from the C# compiler's definite assignment analysis.
+            PromiseId promiseId = default;
+            object? oldState = null;
 
             HttpResponseMessage? response = null;
 
@@ -200,8 +207,8 @@ public partial class HeartyHttpClient
 
             if (jobRequest is not null)
             {
-                var oldState = Interlocked.CompareExchange(ref _requestState, jobRequest, null);
-                var requestTask = GetTaskForStartedJob(oldState);
+                oldState = Interlocked.CompareExchange(ref _requestState, jobRequest, null);
+                var requestTask = GetTaskForStartedJob(ref oldState);
 
                 // The job is to be posted for the first time.
                 if (requestTask is null)
@@ -231,6 +238,7 @@ public partial class HeartyHttpClient
                     oldState = Interlocked.Exchange(ref _requestState, Task.CompletedTask);
                     if (oldState is TaskCompletionSource promiseIdSourceForSuccess)
                         promiseIdSourceForSuccess.SetResult();
+                    oldState = Task.CompletedTask;
                 }
 
                 // The job has already been posted once.  Wait until that
@@ -264,6 +272,21 @@ public partial class HeartyHttpClient
                                                       HttpCompletionOption.ResponseHeadersRead,
                                                       cancellationToken)
                                            .ConfigureAwait(false);
+
+                if (response.StatusCode == HttpStatusCode.NotFound &&
+                    jobRequest is not null && _retryOnFailure)
+                {
+                    // Try re-submitting the job, the next time this method is called,
+                    // if the server does not hold the promise, e.g. if it has
+                    // restarted and lost all of its previous data in memory.
+                    //
+                    // We must compare with oldState here to avoid swapping out the
+                    // wrong value if multiple calls to this method race.
+                    Interlocked.CompareExchange(ref _requestState, null, oldState);
+
+                    // The following statement will throw an exception.
+                }
+
                 response.EnsureSuccessStatusCode();
             }
 
