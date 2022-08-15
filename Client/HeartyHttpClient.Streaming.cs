@@ -227,10 +227,18 @@ public partial class HeartyHttpClient
                     }
                     catch (Exception e)
                     {
-                        oldState = Interlocked.Exchange(ref _requestState, 
-                                                        _retryOnFailure ? null : Task.FromException(e));
+                        // Errors do not stick when _retryOnFailure is true and
+                        // the exception is not a (user-triggered) cancellation.
+                        var exceptionTask = !_retryOnFailure ||
+                                            (e is OperationCanceledException oce &&
+                                             oce.CancellationToken == _jobCancellationToken)
+                                          ? Task.FromException(e)
+                                          : null;
+
+                        oldState = Interlocked.Exchange(ref _requestState, exceptionTask);
                         if (oldState is TaskCompletionSource promiseIdSourceForFailure)
                             promiseIdSourceForFailure.SetException(e);
+
                         throw;
                     }
 
