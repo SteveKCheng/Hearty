@@ -54,7 +54,9 @@ public partial class HeartyHttpClient
         request.Headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, ExceptionPayload.JsonMediaType);
         reader.AddAcceptHeaders(request.Headers, HeartyHttpHeaders.AcceptItem);
 
-        return new ItemStream<T>(this, request, reader, cancellationToken);
+        return new ItemStream<T>(this, request, reader, 
+                                 retryOnFailure: true, 
+                                 cancellationToken);
     }
 
     /// <summary>
@@ -63,12 +65,44 @@ public partial class HeartyHttpClient
     /// </summary>
     private sealed class ItemStream<T> : IAsyncEnumerable<KeyValuePair<int, T>>
     {
+        /// <summary>
+        /// Object shared by multiple calls to <see cref="GetAsyncEnumerator" />
+        /// that need to post the job before the items can be enumerated.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This member variable is manipulated by atomic compare-and-exchange
+        /// operations to allow the concurrent enumeration.  The value stored
+        /// here can be of four types:
+        /// <list type="bullet">
+        /// <item>Null, meaning there is no job that can be re-used yet. </item>
+        /// <item><see cref="Task"/>, indicating that the posted job has come
+        /// back.  Failure is indicated by an instance wrapping an exception. </item>
+        /// <item><see cref="TaskCompletionSource" />, whose <see cref="TaskCompletionSource.Task" />
+        /// member can be awaited for the job to be posted.
+        /// </item>
+        /// <item>The same as <see cref="_jobRequest" />, meaning the job 
+        /// has been started, but there is only one awaiter (which can await
+        /// the request directly).  This state is an optimization to not
+        /// create <see cref="TaskCompletionSource" /> in the very common case
+        /// that there is only one awaiter.
+        /// </item>
+        /// </list>
+        /// </para>
+        /// </remarks>
         private object? _requestState;
+
         private PromiseId _promiseId;
         private readonly HttpRequestMessage? _jobRequest;
         private readonly HeartyHttpClient _client;
         private readonly PayloadReader<T> _reader;
         private readonly CancellationToken _jobCancellationToken;
+
+        /// <summary>
+        /// If true, do not cache failures from submitting an HTTP request
+        /// to the job server, allowing it to be re-tried.
+        /// </summary>
+        private readonly bool _retryOnFailure;
 
         /// <summary>
         /// Construct for reading an existing promise with known ID.
@@ -80,6 +114,7 @@ public partial class HeartyHttpClient
             _promiseId = promiseId;
             _reader = reader;
             _client = client;
+            _retryOnFailure = false;    // irrelevant
         }
 
         /// <summary>
@@ -89,11 +124,13 @@ public partial class HeartyHttpClient
         public ItemStream(HeartyHttpClient client,
                           HttpRequestMessage jobRequest,
                           PayloadReader<T> reader,
+                          bool retryOnFailure,
                           CancellationToken jobCancellationToken)
         {
             _jobRequest = jobRequest;
             _reader = reader;
             _client = client;
+            _retryOnFailure = retryOnFailure;
             _jobCancellationToken = jobCancellationToken;
         }
 
@@ -101,24 +138,49 @@ public partial class HeartyHttpClient
         /// Get or create the task to await when the job has already been
         /// posted once.
         /// </summary>
-        private Task GetTaskForStartedJob(object oldState)
+        /// <param name="requestState">
+        /// The last value of <see cref="_requestState" /> that has been read.
+        /// </param>
+        /// <returns>
+        /// The task that completes when the job completes, or null
+        /// if no job has run yet (or it has been reset).
+        /// </returns>
+        private Task? GetTaskForStartedJob(object? requestState)
         {
             while (true)
             {
-                if (oldState is Task oldTask)
+                if (requestState is null)
                 {
+                    // No job has started yet, or it has just been reset.
+                    return null;
+                }
+                else if (requestState is Task oldTask)
+                {
+                    // Job has been posted as complete already.
                     return oldTask;
                 }
-                else if (oldState is TaskCompletionSource oldTaskSource)
+                else if (requestState is TaskCompletionSource oldTaskSource)
                 {
+                    // Job is in progress, and it is already awaited a second time,
+                    // through the TaskCompletionSource created from the last
+                    // case below.
                     return oldTaskSource.Task;
                 }
-                else
+                else // requestState is _jobRequest
                 {
-                    var promiseIdSource = new TaskCompletionSource();
-                    oldState = Interlocked.CompareExchange(ref _requestState, promiseIdSource, _jobRequest)!;
-                    if (object.ReferenceEquals(oldState, _jobRequest))
-                        return promiseIdSource.Task;
+                    // Create TaskCompletionSource to prepare to await the job
+                    // for the second time.  When the job posting completes,
+                    // the TaskCompletionSource will get completed.
+                    var newTaskSource = new TaskCompletionSource();
+                    requestState = Interlocked.CompareExchange(ref _requestState, 
+                                                               newTaskSource, 
+                                                               _jobRequest);
+
+                    if (object.ReferenceEquals(requestState, _jobRequest))
+                        return newTaskSource.Task;
+
+                    // If the current call races with another one doing the same,
+                    // drop the speculatively-created TaskCompleteSource and retry. 
                 }
             }
         }
@@ -139,9 +201,10 @@ public partial class HeartyHttpClient
             if (jobRequest is not null)
             {
                 var oldState = Interlocked.CompareExchange(ref _requestState, jobRequest, null);
+                var requestTask = GetTaskForStartedJob(oldState);
 
                 // The job is to be posted for the first time.
-                if (oldState is null)
+                if (requestTask is null)
                 {
                     try
                     {
@@ -157,7 +220,8 @@ public partial class HeartyHttpClient
                     }
                     catch (Exception e)
                     {
-                        oldState = Interlocked.Exchange(ref _requestState, Task.FromException(e));
+                        oldState = Interlocked.Exchange(ref _requestState, 
+                                                        _retryOnFailure ? null : Task.FromException(e));
                         if (oldState is TaskCompletionSource promiseIdSourceForFailure)
                             promiseIdSourceForFailure.SetException(e);
                         throw;
@@ -173,13 +237,17 @@ public partial class HeartyHttpClient
                 // completes to obtain the promise ID.
                 else
                 {
-                    // If posting the job failed, the exception will be re-thrown.
-                    await GetTaskForStartedJob(oldState).ConfigureAwait(false);
+                    // If posting the job failed, the exception will be re-thrown here.
+                    await requestTask.ConfigureAwait(false);
+
+                    // At this point, the member variable _promiseId is
+                    // guaranteed to be valid, because it is set before
+                    // the job's task gets completed, on success.
                 }
             }
 
-            // If not posting a job, and thus the promise ID is known,
-            // issue HTTP request to download the stream.
+            // If this call did not just post a job above, obtaining a successful
+            // response, then issue a HTTP request now to re-download the same data.
             if (response is null)
             {
                 promiseId = _promiseId;
