@@ -209,6 +209,12 @@ public interface IHeartyClient : IDisposable
     /// Can be triggered to cancel the operation of posting
     /// the job. Note, however, if cancellation races with
     /// successful posting of the job, the job is not cancelled.
+    /// This cancellation token may be separate from the one
+    /// passed into <see cref="IAsyncEnumerable{T}.GetAsyncEnumerator(CancellationToken)" />;
+    /// the latter cancels only the downloading of the results.
+    /// A job that is successfully cancelled will, of course, 
+    /// cause cancelled results to appear in the concurrently
+    /// downloaded result stream.
     /// </param>
     /// <returns>
     /// Asynchronous stream of items from the job, which 
@@ -218,6 +224,14 @@ public interface IHeartyClient : IDisposable
     /// Subsequent enumerations will not re-submit the job,
     /// but may entail re-downloading results from the server.
     /// </returns>
+    /// <remarks>
+    /// <para>
+    /// To start a job immediately but only download the results
+    /// later, call <see cref="PostJobAsync" /> instead, then
+    /// pass in the <see cref="PromiseId" /> returned into
+    /// <see cref="GetResultStreamAsync{T}" />.
+    /// </para>
+    /// </remarks>
     IAsyncEnumerable<KeyValuePair<int, T>> RunJobStreamAsync<T>(
         string route,
         PayloadWriter input,
