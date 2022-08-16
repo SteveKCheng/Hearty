@@ -28,7 +28,7 @@ public partial class HeartyHttpClient
         if (reader.OwnsStream)
             ThrowOnReaderOwningStream(nameof(reader));
 
-        return new ItemStream<T>(this, promiseId, reader);
+        return new ItemStream<T>(this, reader, promiseId);
     }
 
     /// <inheritdoc cref="IHeartyClient.RunJobStreamAsync" />
@@ -47,17 +47,24 @@ public partial class HeartyHttpClient
                                    wantResult: true,
                                    queue: queue);
 
-        var request = new HttpRequestMessage(HttpMethod.Post, url);
-        AddAuthorizationHeader(request);
-        request.Content = input.CreateHttpContent();
-        request.Headers.TryAddWithoutValidation(HeaderNames.Accept, MultipartParallelMediaType);
-        request.Headers.TryAddWithoutValidation(HeaderNames.Accept, ExceptionPayload.JsonMediaType);
-        request.Headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, ExceptionPayload.JsonMediaType);
-        reader.AddAcceptHeaders(request.Headers, HeartyHttpHeaders.AcceptItem);
-
-        return new ItemStream<T>(this, request, reader, 
-                                 retryOnFailure: true, 
+        return new ItemStream<T>(this,
+                                 reader,
+                                 jobUrl: url, 
+                                 jobInput: input.CreateHttpContent(),  
+                                 repostOnFailure: true, 
                                  cancellationToken);
+    }
+
+    /// <summary>
+    /// Add the HTTP headers for content negotiation 
+    /// to receive a container of items (for streaming downloads).
+    /// </summary>
+    private static void AddHeadersForItemStream(HttpRequestMessage request)
+    {
+        var headers = request.Headers;
+        headers.TryAddWithoutValidation(HeaderNames.Accept, MultipartParallelMediaType);
+        headers.TryAddWithoutValidation(HeaderNames.Accept, ExceptionPayload.JsonMediaType);
+        headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, ExceptionPayload.JsonMediaType);
     }
 
     /// <summary>
@@ -82,7 +89,7 @@ public partial class HeartyHttpClient
         /// <item><see cref="TaskCompletionSource" />, whose <see cref="TaskCompletionSource.Task" />
         /// member can be awaited for the job to be posted.
         /// </item>
-        /// <item>The same as <see cref="_jobRequest" />, meaning the job 
+        /// <item>The same as <see cref="_jobUrl" />, meaning the job 
         /// has been started, but there is only one awaiter (which can await
         /// the request directly).  This state is an optimization to not
         /// create <see cref="TaskCompletionSource" /> in the very common case
@@ -93,29 +100,55 @@ public partial class HeartyHttpClient
         /// </remarks>
         private object? _requestState;
 
+        /// <summary>
+        /// The ID of the job, which is set once the job has been
+        /// successfully posted.
+        /// </summary>
         private PromiseId _promiseId;
-        private readonly HttpRequestMessage? _jobRequest;
+
+        /// <summary>
+        /// The URL to POST the job on the job server, or null if only
+        /// an existing job should be retrieved.
+        /// </summary>
+        private readonly string? _jobUrl;
+
+        /// <summary>
+        /// The input body to POST when creating the job on the job server.
+        /// </summary>
+        private readonly HttpContent? _jobInput;
+
+        /// <summary>
+        /// The parent object that created this object.
+        /// </summary>
         private readonly HeartyHttpClient _client;
+
+        /// <summary>
+        /// Reader passed in from the user to decode the payload of each item.
+        /// </summary>
         private readonly PayloadReader<T> _reader;
+
+        /// <summary>
+        /// Cancels the POST of the job, when triggered.
+        /// </summary>
         private readonly CancellationToken _jobCancellationToken;
 
         /// <summary>
-        /// If true, do not cache failures from submitting an HTTP request
-        /// to the job server, allowing it to be re-tried.
+        /// If true, do not cache failures from posting the job
+        /// to the job server, allowing posting to be re-tried.
         /// </summary>
-        private readonly bool _retryOnFailure;
+        private readonly bool _repostOnFailure;
 
         /// <summary>
         /// Construct for reading an existing promise with known ID.
         /// </summary>
         public ItemStream(HeartyHttpClient client,
-                          PromiseId promiseId, 
-                          PayloadReader<T> reader)
+                          PayloadReader<T> reader,
+                          PromiseId promiseId)
         {
             _promiseId = promiseId;
             _reader = reader;
             _client = client;
-            _retryOnFailure = false;    // irrelevant
+            _repostOnFailure = false;    // irrelevant
         }
 
         /// <summary>
@@ -123,15 +156,17 @@ public partial class HeartyHttpClient
         /// known after the job posting is successful.
         /// </summary>
         public ItemStream(HeartyHttpClient client,
-                          HttpRequestMessage jobRequest,
                           PayloadReader<T> reader,
-                          bool retryOnFailure,
+                          string jobUrl,
+                          HttpContent jobInput,
+                          bool repostOnFailure,
                           CancellationToken jobCancellationToken)
         {
-            _jobRequest = jobRequest;
+            _jobUrl = jobUrl;
+            _jobInput = jobInput;
             _reader = reader;
             _client = client;
-            _retryOnFailure = retryOnFailure;
+            _repostOnFailure = repostOnFailure;
             _jobCancellationToken = jobCancellationToken;
         }
 
@@ -169,7 +204,7 @@ public partial class HeartyHttpClient
                     // case below.
                     return oldTaskSource.Task;
                 }
-                else // requestState is _jobRequest
+                else // requestState is _jobUrl
                 {
                     // Create TaskCompletionSource to prepare to await the job
                     // for the second time.  When the job posting completes,
@@ -177,11 +212,11 @@ public partial class HeartyHttpClient
                     var newTaskSource = new TaskCompletionSource();
                     requestState = Interlocked.CompareExchange(ref _requestState, 
                                                                newTaskSource, 
-                                                               _jobRequest);
+                                                               _jobUrl);
 
-                    if (object.ReferenceEquals(requestState, _jobRequest))
+                    if (object.ReferenceEquals(requestState, _jobUrl))
                     {
-                        requestState = _jobRequest;
+                        requestState = _jobUrl;
                         return newTaskSource.Task;
                     }
 
@@ -203,11 +238,10 @@ public partial class HeartyHttpClient
             HttpResponseMessage? response = null;
 
             var httpClient = _client._httpClient;
-            var jobRequest = _jobRequest;
 
-            if (jobRequest is not null)
+            if (_jobUrl is not null)
             {
-                oldState = Interlocked.CompareExchange(ref _requestState, jobRequest, null);
+                oldState = Interlocked.CompareExchange(ref _requestState, _jobUrl, null);
                 var requestTask = GetTaskForStartedJob(ref oldState);
 
                 // The job is to be posted for the first time.
@@ -215,7 +249,14 @@ public partial class HeartyHttpClient
                 {
                     try
                     {
-                        response = await httpClient.SendAsync(jobRequest,
+                        // Construct REST API message to post job
+                        var request = new HttpRequestMessage(HttpMethod.Post, _jobUrl);
+                        request.Content = _jobInput;
+                        _client.AddAuthorizationHeader(request);
+                        AddHeadersForItemStream(request);
+                        _reader.AddAcceptHeaders(request.Headers, HeartyHttpHeaders.AcceptItem);
+
+                        response = await httpClient.SendAsync(request,
                                                               HttpCompletionOption.ResponseHeadersRead,
                                                               _jobCancellationToken)
                                                    .ConfigureAwait(false);
@@ -229,7 +270,7 @@ public partial class HeartyHttpClient
                     {
                         // Errors do not stick when _retryOnFailure is true and
                         // the exception is not a (user-triggered) cancellation.
-                        var exceptionTask = !_retryOnFailure ||
+                        var exceptionTask = !_repostOnFailure ||
                                             (e is OperationCanceledException oce &&
                                              oce.CancellationToken == _jobCancellationToken)
                                           ? Task.FromException(e)
@@ -267,13 +308,12 @@ public partial class HeartyHttpClient
             if (response is null)
             {
                 promiseId = _promiseId;
-                var url = _client.CreateRequestUrl("promises/", promiseId);
 
+                // Construct REST API message to download item stream
+                var url = _client.CreateRequestUrl("promises/", promiseId);
                 var request = new HttpRequestMessage(HttpMethod.Get, url);
                 _client.AddAuthorizationHeader(request);
-                request.Headers.TryAddWithoutValidation(HeaderNames.Accept, MultipartParallelMediaType);
-                request.Headers.TryAddWithoutValidation(HeaderNames.Accept, ExceptionPayload.JsonMediaType);
-                request.Headers.TryAddWithoutValidation(HeartyHttpHeaders.AcceptItem, ExceptionPayload.JsonMediaType);
+                AddHeadersForItemStream(request);
                 _reader.AddAcceptHeaders(request.Headers, HeartyHttpHeaders.AcceptItem);
 
                 response = await httpClient.SendAsync(request,
@@ -282,7 +322,7 @@ public partial class HeartyHttpClient
                                            .ConfigureAwait(false);
 
                 if (response.StatusCode == HttpStatusCode.NotFound &&
-                    jobRequest is not null && _retryOnFailure)
+                    _jobUrl is not null && _repostOnFailure)
                 {
                     // Try re-submitting the job, the next time this method is called,
                     // if the server does not hold the promise, e.g. if it has
