@@ -175,33 +175,39 @@ public partial class HeartyHttpClient
         /// posted once.
         /// </summary>
         /// <param name="requestState">
-        /// The last value of <see cref="_requestState" /> that has been read.
-        /// This argument will be updated if this method needs to change that
-        /// member (by atomic compare-and-exchange).
+        /// On return, set to the last value of <see cref="_requestState" /> 
+        /// that has been read.
         /// </param>
         /// <returns>
         /// The task that completes when the job completes, or null
-        /// if no job has run yet (or it has been reset).
+        /// if there is no job that can be re-used but this method
+        /// has just marked one as started.
         /// </returns>
-        private Task? GetTaskForStartedJob(ref object? requestState)
+        private Task? GetTaskForStartedJob(out object? requestState)
         {
+            object? s = Interlocked.CompareExchange(ref _requestState, _jobUrl, null);
+
             while (true)
             {
-                if (requestState is null)
+                if (s is null)
                 {
-                    // No job has started yet, or it has just been reset.
+                    // No job has started yet, or it has just been reset,
+                    // and now it has just been marked as started.
+                    requestState = _jobUrl;
                     return null;
                 }
-                else if (requestState is Task oldTask)
+                else if (s is Task oldTask)
                 {
                     // Job has been posted as complete already.
+                    requestState = s;
                     return oldTask;
                 }
-                else if (requestState is TaskCompletionSource oldTaskSource)
+                else if (s is TaskCompletionSource oldTaskSource)
                 {
                     // Job is in progress, and it is already awaited a second time,
                     // through the TaskCompletionSource created from the last
                     // case below.
+                    requestState = s;
                     return oldTaskSource.Task;
                 }
                 else // requestState is _jobUrl
@@ -210,18 +216,20 @@ public partial class HeartyHttpClient
                     // for the second time.  When the job posting completes,
                     // the TaskCompletionSource will get completed.
                     var newTaskSource = new TaskCompletionSource();
-                    requestState = Interlocked.CompareExchange(ref _requestState, 
-                                                               newTaskSource, 
-                                                               _jobUrl);
+                    s = Interlocked.CompareExchange(ref _requestState, 
+                                                    newTaskSource, 
+                                                    _jobUrl);
 
-                    if (object.ReferenceEquals(requestState, _jobUrl))
+                    if (object.ReferenceEquals(s, _jobUrl))
                     {
-                        requestState = _jobUrl;
+                        requestState = newTaskSource;
                         return newTaskSource.Task;
                     }
 
                     // If the current call races with another one doing the same,
                     // drop the speculatively-created TaskCompleteSource and retry. 
+                    if (s is null)
+                        s = Interlocked.CompareExchange(ref _requestState, _jobUrl, null);
                 }
             }
         }
@@ -241,8 +249,7 @@ public partial class HeartyHttpClient
 
             if (_jobUrl is not null)
             {
-                oldState = Interlocked.CompareExchange(ref _requestState, _jobUrl, null);
-                var requestTask = GetTaskForStartedJob(ref oldState);
+                var requestTask = GetTaskForStartedJob(out oldState);
 
                 // The job is to be posted for the first time.
                 if (requestTask is null)
