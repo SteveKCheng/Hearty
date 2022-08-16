@@ -107,6 +107,15 @@ public partial class HeartyHttpClient
         private PromiseId _promiseId;
 
         /// <summary>
+        /// Accesses <see cref="_promiseId" /> avoiding torn reads.
+        /// </summary>
+        private PromiseId PromiseId
+        {
+            get => PromiseId.AtomicRead(ref _promiseId);
+            set => PromiseId.AtomicWrite(ref _promiseId, value);
+        }
+
+        /// <summary>
         /// The URL to POST the job on the job server, or null if only
         /// an existing job should be retrieved.
         /// </summary>
@@ -271,7 +280,7 @@ public partial class HeartyHttpClient
                         response.EnsureSuccessStatusCode();
                         promiseId = GetPromiseId(response.Headers);
 
-                        _promiseId = promiseId;
+                        PromiseId = promiseId;
                     }
                     catch (Exception e)
                     {
@@ -305,7 +314,7 @@ public partial class HeartyHttpClient
                     // If posting the job failed, the exception will be re-thrown here.
                     await requestTask.ConfigureAwait(false);
 
-                    // At this point, the member variable _promiseId is
+                    // At this point, the property PromiseId is
                     // guaranteed to be valid, because it is set before
                     // the job's task gets completed, on success.
                 }
@@ -315,7 +324,7 @@ public partial class HeartyHttpClient
             // response, then issue a HTTP request now to re-download the same data.
             if (response is null)
             {
-                promiseId = _promiseId;
+                promiseId = PromiseId;
 
                 // Construct REST API message to download item stream
                 var url = _client.CreateRequestUrl("promises/", promiseId);

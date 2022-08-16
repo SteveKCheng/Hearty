@@ -6,6 +6,8 @@ using System.Text;
 using System.Text.Json.Serialization;
 
 using Hearty.Common;
+using System.Threading;
+using System.Runtime.CompilerServices;
 
 namespace Hearty;
 
@@ -305,4 +307,40 @@ public readonly struct PromiseId : IComparable<PromiseId>
         => RawInteger;
 
     #endregion
+
+    /// <summary>
+    /// Read a value of <see cref="PromiseId" /> avoiding torn reads, for correct
+    /// operation of lock-free algorithms in 32-bit processes.
+    /// </summary>
+    /// <param name="location">
+    /// The variable to read from.
+    /// </param>
+    /// <returns>The atomically-read value from <paramref name="location" />. </returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static PromiseId AtomicRead(ref PromiseId location)
+    {
+        if (Environment.Is64BitProcess)
+            return location;
+        else
+            return new PromiseId(Interlocked.Read(ref Unsafe.As<PromiseId, ulong>(ref location)));
+    }
+
+    /// <summary>
+    /// Write a value of <see cref="PromiseId" /> atomically, for correct
+    /// operation of lock-free algorithms in 32-bit processes.
+    /// </summary>
+    /// <param name="location">
+    /// The variable to write to.
+    /// </param>
+    /// <param name="value">
+    /// The value to write into <paramref name="location" />.
+    /// </param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void AtomicWrite(ref PromiseId location, PromiseId value)
+    {
+        if (Environment.Is64BitProcess)
+            location = value;
+        else
+            Interlocked.Exchange(ref Unsafe.As<PromiseId, ulong>(ref location), value.RawInteger);
+    }
 }
