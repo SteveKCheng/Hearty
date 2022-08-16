@@ -270,13 +270,13 @@ public partial class HeartyHttpClient
                     {
                         // Errors do not stick when _retryOnFailure is true and
                         // the exception is not a (user-triggered) cancellation.
-                        var exceptionTask = !_repostOnFailure ||
+                        requestTask = !_repostOnFailure ||
                                             (e is OperationCanceledException oce &&
                                              oce.CancellationToken == _jobCancellationToken)
                                           ? Task.FromException(e)
                                           : null;
 
-                        oldState = Interlocked.Exchange(ref _requestState, exceptionTask);
+                        oldState = Interlocked.Exchange(ref _requestState, requestTask);
                         if (oldState is TaskCompletionSource promiseIdSourceForFailure)
                             promiseIdSourceForFailure.SetException(e);
 
@@ -284,10 +284,11 @@ public partial class HeartyHttpClient
                     }
 
                     // Finalize the state for a successfully posted job.
-                    oldState = Interlocked.Exchange(ref _requestState, Task.CompletedTask);
+                    requestTask = Task.CompletedTask;
+                    oldState = Interlocked.Exchange(ref _requestState, requestTask);
                     if (oldState is TaskCompletionSource promiseIdSourceForSuccess)
                         promiseIdSourceForSuccess.SetResult();
-                    oldState = Task.CompletedTask;
+                    oldState = requestTask;
                 }
 
                 // The job has already been posted once.  Wait until that
