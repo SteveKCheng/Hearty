@@ -30,6 +30,7 @@ public sealed class ResilientItemStream<T> : IAsyncEnumerable<KeyValuePair<int, 
     private readonly IAsyncEnumerable<KeyValuePair<int, T>> _source;
     private readonly IAsyncPolicy _policy;
     private readonly int _length;
+    private readonly Context _context;
 
     /// <summary>
     /// Wraps an asynchronous sequence of items so retrieval goes through the Polly
@@ -45,11 +46,18 @@ public sealed class ResilientItemStream<T> : IAsyncEnumerable<KeyValuePair<int, 
     /// <param name="length">
     /// The expected length of the sequence.
     /// </param>
-    public ResilientItemStream(IAsyncPolicy policy, IAsyncEnumerable<KeyValuePair<int, T>> source, int length)
+    /// <param name="context">
+    /// Context object to propagate to Polly.
+    /// </param>
+    public ResilientItemStream(IAsyncPolicy policy, 
+                               IAsyncEnumerable<KeyValuePair<int, T>> source, 
+                               int length,
+                               Context context)
     {
         _source = source;
         _policy = policy;
         _length = length;
+        _context = context;
     }
 
     /// <inheritdoc cref="IAsyncEnumerable{T}.GetAsyncEnumerator(CancellationToken)" />
@@ -59,7 +67,7 @@ public sealed class ResilientItemStream<T> : IAsyncEnumerable<KeyValuePair<int, 
         IAsyncEnumerator<KeyValuePair<int, T>>? s = null;
 
         // Do not re-create this delegate every time through the below loop
-        Func<Task<bool>> moveNextOrResetAsync = async delegate 
+        Func<Context, Task<bool>> moveNextOrResetAsync = async context => 
         {
             s ??= _source.GetAsyncEnumerator(cancellationToken);
 
@@ -77,7 +85,8 @@ public sealed class ResilientItemStream<T> : IAsyncEnumerable<KeyValuePair<int, 
 
         try
         {
-            while (await _policy.ExecuteAsync(moveNextOrResetAsync).ConfigureAwait(false))
+            while (await _policy.ExecuteAsync(moveNextOrResetAsync, _context)
+                                .ConfigureAwait(false))
             {
                 var item = s!.Current;
 
