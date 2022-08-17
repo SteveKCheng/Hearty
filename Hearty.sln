@@ -33,7 +33,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BTree", "BTree\BTree.csproj
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Server.FasterKV", "Server.FasterKV\Server.FasterKV.csproj", "{5368B4E2-1A92-46B3-9EFA-5EAC68DE99B4}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Work.Hosting", "Work.Hosting\Work.Hosting.csproj", "{774998D7-7AEB-4120-AFFC-BB0179043BE2}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Work.Hosting", "Work.Hosting\Work.Hosting.csproj", "{774998D7-7AEB-4120-AFFC-BB0179043BE2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PollyProxies", "PollyProxies\PollyProxies.csproj", "{EC7409B6-2DA8-405B-A007-5424AB4A0DAD}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -105,6 +107,10 @@ Global
 		{774998D7-7AEB-4120-AFFC-BB0179043BE2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{774998D7-7AEB-4120-AFFC-BB0179043BE2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{774998D7-7AEB-4120-AFFC-BB0179043BE2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EC7409B6-2DA8-405B-A007-5424AB4A0DAD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EC7409B6-2DA8-405B-A007-5424AB4A0DAD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EC7409B6-2DA8-405B-A007-5424AB4A0DAD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EC7409B6-2DA8-405B-A007-5424AB4A0DAD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

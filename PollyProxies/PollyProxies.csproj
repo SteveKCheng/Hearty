@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>Hearty.PollyProxies</RootNamespace>
+    <AssemblyName>Hearty.PollyProxies</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultContentItems>false</EnableDefaultContentItems>
+    <Description>Proxy classes to use Hearty with the Polly resilience framework</Description>
+  </PropertyGroup>
+
+  <Import Project="..\Packaging.props" />
+
+  <ItemGroup>
+    <Compile Include="PollyProxiesExtensions.cs" />
+    <Compile Include="PollyHttpMessageHandler.cs" />
+    <Compile Include="PollyHttpContent.cs" />
+    <Compile Include="PollyStream.cs" />
+    <Compile Include="ResilientItemStream.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Polly" Version="7.2.3" />
+    <PackageReference Include="GitVersion.MsBuild" Version="5.10.3" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="all" />
+  </ItemGroup>
+  
+</Project>
