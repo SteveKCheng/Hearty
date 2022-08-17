@@ -20,6 +20,7 @@ public partial class HeartyHttpClient : IHeartyClient
     private readonly HttpClient _httpClient;
     private readonly bool _leaveOpen;
     private readonly string _serverUrl;
+    private Action<HeartyHttpClient, HttpRequestMessage>? _messageTracer;
 
     /// <summary>
     /// Wrap a strongly-typed interface for Hearty over 
@@ -40,6 +41,15 @@ public partial class HeartyHttpClient : IHeartyClient
     /// If true, do not dispose <paramref name="httpClient" />
     /// on disposing this instance.
     /// </param>
+    /// <param name="messageTracer">
+    /// An optional action hooking into the creation
+    /// of HTTP messages from this object, possibly modifying it 
+    /// before it gets sent.  Such an action may be used to 
+    /// log all messages created, or attach contextual information
+    /// (via <see cref="HttpRequestMessage.Options" />) for
+    /// the implementations of <see cref="HttpMessageHandler" /> inside
+    /// <paramref name="httpClient" /> to process.
+    /// </param>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="httpClient" /> is null,
     /// or <paramref name="serverUrl" /> 
@@ -49,10 +59,12 @@ public partial class HeartyHttpClient : IHeartyClient
     /// </exception>
     public HeartyHttpClient(HttpClient httpClient,
                             string? serverUrl = null,
-                            bool leaveOpen = false)
+                            bool leaveOpen = false,
+                            Action<HeartyHttpClient, HttpRequestMessage>? messageTracer = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _leaveOpen = leaveOpen;
+        _messageTracer = messageTracer;
 
         // We assume this is an absolute URI if non-null, which
         // is ensured by the property setter of HttpClient.BaseAddress.
@@ -101,9 +113,12 @@ public partial class HeartyHttpClient : IHeartyClient
                                    route: route,
                                    queue: queue);
 
-        var response = await _httpClient.PostAsync(url,
-                                                   input.CreateHttpContent(),
-                                                   cancellationToken)
+        var request = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = input.CreateHttpContent()
+        };
+
+        var response = await SendHttpMessageAsync(request, true, cancellationToken)
                                         .ConfigureAwait(false);
         EnsureSuccessStatusCodeEx(response);
 
@@ -121,6 +136,15 @@ public partial class HeartyHttpClient : IHeartyClient
 
         public bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format, IFormatProvider? provider)
             => RestApiUtilities.TryFormatExpiry(TimeSpan, destination, out charsWritten);
+    }
+
+    private Task<HttpResponseMessage> SendHttpMessageAsync(HttpRequestMessage request, bool bufferBody, CancellationToken cancellationToken)
+    {
+        _messageTracer?.Invoke(this, request);
+        return _httpClient.SendAsync(request,
+                                     bufferBody ? HttpCompletionOption.ResponseContentRead
+                                                : HttpCompletionOption.ResponseHeadersRead,
+                                     cancellationToken);
     }
 
     private string CreateRequestUrl(string path,
@@ -215,10 +239,8 @@ public partial class HeartyHttpClient : IHeartyClient
         message.Headers.TryAddWithoutValidation(HeaderNames.Accept, ExceptionPayload.JsonMediaType);
         message.Content = input.CreateHttpContent();
 
-        var response = await _httpClient.SendAsync(message,
-                                                   HttpCompletionOption.ResponseHeadersRead,
-                                                   cancellationToken)
-                                        .ConfigureAwait(false);
+        var response = await SendHttpMessageAsync(message, false, cancellationToken)
+                                .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
         var content = response.Content;
@@ -287,10 +309,8 @@ public partial class HeartyHttpClient : IHeartyClient
         AddAuthorizationHeader(request);
         reader.AddAcceptHeaders(request.Headers);
 
-        var response = await _httpClient.SendAsync(request,
-                                                   HttpCompletionOption.ResponseHeadersRead,
-                                                   cancellationToken)
-                                        .ConfigureAwait(false);
+        var response = await SendHttpMessageAsync(request, false, cancellationToken)
+                                .ConfigureAwait(false);
 
         response.EnsureSuccessStatusCode();
 
@@ -350,8 +370,8 @@ public partial class HeartyHttpClient : IHeartyClient
         var request = new HttpRequestMessage(HttpMethod.Delete, url);
         AddAuthorizationHeader(request);
 
-        var response = await _httpClient.SendAsync(request)
-                                        .ConfigureAwait(false);
+        var response = await SendHttpMessageAsync(request, true, CancellationToken.None)
+                                .ConfigureAwait(false);
 
         response.EnsureSuccessStatusCode();
     }
@@ -364,8 +384,8 @@ public partial class HeartyHttpClient : IHeartyClient
         var request = new HttpRequestMessage(HttpMethod.Delete, url);
         AddAuthorizationHeader(request);
 
-        var response = await _httpClient.SendAsync(request)
-                                        .ConfigureAwait(false);
+        var response = await SendHttpMessageAsync(request, true, CancellationToken.None)
+                                    .ConfigureAwait(false);
 
         response.EnsureSuccessStatusCode();
     }
@@ -440,7 +460,7 @@ public partial class HeartyHttpClient : IHeartyClient
         request.Headers.Authorization = new AuthenticationHeaderValue(
                                             "Basic", EncodeBasicAuthentication(user, password));
         request.Headers.TryAddWithoutValidation(HeaderNames.Accept, "application/jwt");
-        var response = await _httpClient.SendAsync(request)
+        var response = await SendHttpMessageAsync(request, true, CancellationToken.None)
                                         .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         BearerToken = await response.Content.ReadAsStringAsync()

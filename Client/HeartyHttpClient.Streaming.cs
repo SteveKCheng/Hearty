@@ -254,8 +254,6 @@ public partial class HeartyHttpClient
 
             HttpResponseMessage? response = null;
 
-            var httpClient = _client._httpClient;
-
             if (_jobUrl is not null)
             {
                 var requestTask = GetTaskForStartedJob(out oldState);
@@ -272,10 +270,9 @@ public partial class HeartyHttpClient
                         AddHeadersForItemStream(request);
                         _reader.AddAcceptHeaders(request.Headers, HeartyHttpHeaders.AcceptItem);
 
-                        response = await httpClient.SendAsync(request,
-                                                              HttpCompletionOption.ResponseHeadersRead,
-                                                              _jobCancellationToken)
-                                                   .ConfigureAwait(false);
+                        response = await _client.SendHttpMessageAsync(request, false, 
+                                                                      _jobCancellationToken)
+                                                .ConfigureAwait(false);
 
                         response.EnsureSuccessStatusCode();
                         promiseId = GetPromiseId(response.Headers);
@@ -333,10 +330,8 @@ public partial class HeartyHttpClient
                 AddHeadersForItemStream(request);
                 _reader.AddAcceptHeaders(request.Headers, HeartyHttpHeaders.AcceptItem);
 
-                response = await httpClient.SendAsync(request,
-                                                      HttpCompletionOption.ResponseHeadersRead,
-                                                      cancellationToken)
-                                           .ConfigureAwait(false);
+                response = await _client.SendHttpMessageAsync(request, false, cancellationToken)
+                                        .ConfigureAwait(false);
 
                 if (response.StatusCode == HttpStatusCode.NotFound &&
                     _jobUrl is not null && _repostOnFailure)
