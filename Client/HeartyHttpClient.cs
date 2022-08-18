@@ -45,12 +45,12 @@ public partial class HeartyHttpClient : IHeartyClient
     /// The cancellation token passed in from the originating method call
     /// to <see cref="HeartyHttpClient" />.
     /// </param>
-    public delegate void Tracer(HeartyHttpClient self, 
-                                HttpRequestMessage message, 
-                                object? context,
-                                CancellationToken cancellationToken);
+    public delegate void TraceAction(HeartyHttpClient self, 
+                                     HttpRequestMessage message, 
+                                     object? context,
+                                     CancellationToken cancellationToken);
 
-    private readonly Tracer? _tracer;
+    private readonly TraceAction? _traceAction;
 
     /// <summary>
     /// Wrap a strongly-typed interface for Hearty over 
@@ -71,7 +71,7 @@ public partial class HeartyHttpClient : IHeartyClient
     /// If true, do not dispose <paramref name="httpClient" />
     /// on disposing this instance.
     /// </param>
-    /// <param name="tracer">
+    /// <param name="traceAction">
     /// An optional action to hook into the sending of HTTP messages
     /// from this instance. 
     /// </param>
@@ -85,11 +85,11 @@ public partial class HeartyHttpClient : IHeartyClient
     public HeartyHttpClient(HttpClient httpClient,
                             string? serverUrl = null,
                             bool leaveOpen = false,
-                            Tracer? tracer = null)
+                            TraceAction? traceAction = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _leaveOpen = leaveOpen;
-        _tracer = tracer;
+        _traceAction = traceAction;
 
         // We assume this is an absolute URI if non-null, which
         // is ensured by the property setter of HttpClient.BaseAddress.
@@ -169,7 +169,7 @@ public partial class HeartyHttpClient : IHeartyClient
                                                            CancellationToken cancellationToken,
                                                            object? context)
     {
-        _tracer?.Invoke(this, request, context, cancellationToken);
+        _traceAction?.Invoke(this, request, context, cancellationToken);
         return _httpClient.SendAsync(request,
                                      bufferBody ? HttpCompletionOption.ResponseContentRead
                                                 : HttpCompletionOption.ResponseHeadersRead,
