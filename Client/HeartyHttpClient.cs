@@ -38,12 +38,17 @@ public partial class HeartyHttpClient : IHeartyClient
     /// (inside <see cref="HttpClient" />) could interpret.
     /// </param>
     /// <param name="context">
-    /// The context object passed in from one of the method calls to
+    /// The context object passed in from the originating method call to
     /// <see cref="HeartyHttpClient" />.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The cancellation token passed in from the originating method call
+    /// to <see cref="HeartyHttpClient" />.
     /// </param>
     public delegate void Tracer(HeartyHttpClient self, 
                                 HttpRequestMessage message, 
-                                object? context);
+                                object? context,
+                                CancellationToken cancellationToken);
 
     private readonly Tracer? _tracer;
 
@@ -164,7 +169,7 @@ public partial class HeartyHttpClient : IHeartyClient
                                                            CancellationToken cancellationToken,
                                                            object? context)
     {
-        _tracer?.Invoke(this, request, context);
+        _tracer?.Invoke(this, request, context, cancellationToken);
         return _httpClient.SendAsync(request,
                                      bufferBody ? HttpCompletionOption.ResponseContentRead
                                                 : HttpCompletionOption.ResponseHeadersRead,
