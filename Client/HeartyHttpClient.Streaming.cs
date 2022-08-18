@@ -23,7 +23,8 @@ public partial class HeartyHttpClient
     public IAsyncEnumerable<KeyValuePair<int, T>>
         GetResultStreamAsync<T>(
             PromiseId promiseId,
-            PayloadReader<T> reader)
+            PayloadReader<T> reader,
+            object? context = null)
     {
         if (reader.OwnsStream)
             ThrowOnReaderOwningStream(nameof(reader));
@@ -37,7 +38,8 @@ public partial class HeartyHttpClient
                              PayloadWriter input,
                              PayloadReader<T> reader,
                              JobQueueKey queue = default,
-                             CancellationToken cancellationToken = default)
+                             CancellationToken cancellationToken = default,
+                             object? context = null)
     {
         if (reader.OwnsStream)
             ThrowOnReaderOwningStream(nameof(reader));

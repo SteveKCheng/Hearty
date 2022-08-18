@@ -107,7 +107,8 @@ public partial class HeartyHttpClient : IHeartyClient
     public async Task<PromiseId> PostJobAsync(string route,
                                               PayloadWriter input,
                                               JobQueueKey queue = default,
-                                              CancellationToken cancellationToken = default)
+                                              CancellationToken cancellationToken = default, 
+                                              object? context = null) 
     {
         var url = CreateRequestUrl("requests/",
                                    route: route,
@@ -227,7 +228,8 @@ public partial class HeartyHttpClient : IHeartyClient
                                         PayloadWriter input,
                                         PayloadReader<T> reader,
                                         JobQueueKey queue = default,
-                                        CancellationToken cancellationToken = default)
+                                        CancellationToken cancellationToken = default,
+                                        object? context = null)
     {
         var url = CreateRequestUrl("requests/",
                                    route: route,
@@ -290,7 +292,8 @@ public partial class HeartyHttpClient : IHeartyClient
                         StringValues contentTypes,
                         TimeSpan timeout,
                         bool throwOnException = true,
-                        CancellationToken cancellationToken = default)
+                        CancellationToken cancellationToken = default,
+                        object? context = null)
     {
         var reader = PromiseByteStream.GetPayloadReader(contentTypes, throwOnException);
         return GetResultAsync(promiseId, reader, timeout, cancellationToken);
@@ -300,7 +303,8 @@ public partial class HeartyHttpClient : IHeartyClient
     public async Task<T> GetResultAsync<T>(PromiseId promiseId,
                                            PayloadReader<T> reader,
                                            TimeSpan timeout,
-                                           CancellationToken cancellationToken = default)
+                                           CancellationToken cancellationToken = default,
+                                           object? context = null)
     {
         var url = CreateRequestUrl("promises/", promiseId,
                                    timeout: (timeout != TimeSpan.Zero) ? timeout : null);
@@ -361,7 +365,8 @@ public partial class HeartyHttpClient : IHeartyClient
 
     /// <inheritdoc cref="IHeartyClient.CancelJobAsync" />
     public async Task CancelJobAsync(PromiseId promiseId,
-                                     JobQueueKey queue = default)
+                                     JobQueueKey queue = default,
+                                     object? context = null)
     {
         var url = CreateRequestUrl("promises/",
                                    promiseId,
@@ -377,7 +382,8 @@ public partial class HeartyHttpClient : IHeartyClient
     }
 
     /// <inheritdoc cref="IHeartyClient.KillJobAsync" />
-    public async Task KillJobAsync(PromiseId promiseId)
+    public async Task KillJobAsync(PromiseId promiseId,
+                                   object? context = null)
     {
         var url = CreateRequestUrl("jobs/", promiseId);
 

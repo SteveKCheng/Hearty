@@ -11,6 +11,34 @@ namespace Hearty.Client;
 /// A strongly-typed interface for clients 
 /// to access remote promises under the Hearty framework.
 /// </summary>
+/// <remarks>
+/// <para>
+/// All the methods in this interface take an optional "context"
+/// argument to facilitate tracing and logging.  What this object
+/// is may be established by convention in implementations. 
+/// Alternatively, implementations may offer hooks (delegates)
+/// for clients to specify the intepretation of the context
+/// object or the action to take with it.  
+/// </para>
+/// <para>
+/// In most frameworks, the per-method state for tracing and logging
+/// is propagated non-intrusively through (hidden) async-local variables.
+/// However, async-local state is far from straightforward to work with,
+/// especially in the situation of <see cref="IAsyncEnumerable{T}" />
+/// results returned by major methods in this interface.  
+/// The items from <see cref="IAsyncEnumerable{T}" /> are usually,
+/// and quite intentionally, lazily retrieved upon 
+/// calling <see cref="IAsyncEnumerator{T}.MoveNextAsync" />
+/// on the return value of a method call from this interface. 
+/// But that means the retrieval operation would not become
+/// part of the implicit asynchronous flow of the original method.
+/// </para>
+/// <para>
+/// To avoid that difficulty, this interface specifies that per-method
+/// to state to be passed down explicitly, at the expense of making
+/// this interface less nice.
+/// </para>
+/// </remarks>
 public interface IHeartyClient : IDisposable
 {
     /// <summary>
@@ -35,6 +63,10 @@ public interface IHeartyClient : IDisposable
     /// the job. Note, however, if cancellation races with
     /// successful posting of the job, the job is not cancelled.
     /// </param>
+    /// <param name="context">
+    /// Object that represents or describes an implementation-defined
+    /// context for this operation, to faciliate tracing and logging.
+    /// </param>
     /// <returns>
     /// ID of the remote promise which is used by the server
     /// to uniquely identify the job.
@@ -43,7 +75,8 @@ public interface IHeartyClient : IDisposable
         string route,
         PayloadWriter input,
         JobQueueKey queue = default,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        object? context = null);
 
     /// <summary>
     /// Queue up a job for the Hearty server, and return results
@@ -75,6 +108,10 @@ public interface IHeartyClient : IDisposable
     /// the job. Note, however, if cancellation races with
     /// successful posting of the job, the job is not cancelled.
     /// </param>
+    /// <param name="context">
+    /// Object that represents or describes an implementation-defined
+    /// context for this operation, to faciliate tracing and logging.
+    /// </param>
     /// <returns>
     /// The de-serialized result from the job if it completes
     /// successfully.
@@ -84,7 +121,8 @@ public interface IHeartyClient : IDisposable
         PayloadWriter input,
         PayloadReader<T> reader,
         JobQueueKey queue = default,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        object? context = null);
 
     /// <summary>
     /// Wait for and obtain the output from a remote promise,
@@ -111,6 +149,10 @@ public interface IHeartyClient : IDisposable
     /// <param name="cancellationToken">
     /// Can be triggered to cancel the request.
     /// </param>
+    /// <param name="context">
+    /// Object that represents or describes an implementation-defined
+    /// context for this operation, to faciliate tracing and logging.
+    /// </param>
     /// <returns>
     /// Asynchronous task providing the output 
     /// from the remote promise.
@@ -120,7 +162,8 @@ public interface IHeartyClient : IDisposable
         StringValues contentTypes,
         TimeSpan timeout,
         bool throwOnException = true,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        object? context = null);
 
     /// <summary>
     /// Wait for and obtain the result contained by a remote promise.
@@ -143,6 +186,10 @@ public interface IHeartyClient : IDisposable
     /// <param name="cancellationToken">
     /// Can be triggered to cancel the request.
     /// </param>
+    /// <param name="context">
+    /// Object that represents or describes an implementation-defined
+    /// context for this operation, to faciliate tracing and logging.
+    /// </param>
     /// <returns>
     /// Forward-only read-only stream providing the bytes of 
     /// the desired result.
@@ -151,7 +198,8 @@ public interface IHeartyClient : IDisposable
         PromiseId promiseId,
         PayloadReader<T> reader,
         TimeSpan timeout,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        object? context = null);
 
     /// <summary>
     /// Download a stream of items from a promise/job stored
@@ -168,6 +216,10 @@ public interface IHeartyClient : IDisposable
     /// De-serializes the payload of each item into the desired
     /// object of type <typeparamref name="T" />.
     /// </param>
+    /// <param name="context">
+    /// Object that represents or describes an implementation-defined
+    /// context for this operation, to faciliate tracing and logging.
+    /// </param>
     /// <returns>
     /// Asynchronous stream of items, which are downloaded
     /// incrementally.  The server may be producing
@@ -178,7 +230,8 @@ public interface IHeartyClient : IDisposable
     /// </returns>
     IAsyncEnumerable<KeyValuePair<int, T>> GetResultStreamAsync<T>(
         PromiseId promiseId,
-        PayloadReader<T> reader);
+        PayloadReader<T> reader,
+        object? context = null);
 
     /// <summary>
     /// Queue up a job for the Hearty server, and return a
@@ -216,6 +269,10 @@ public interface IHeartyClient : IDisposable
     /// cause cancelled results to appear in the concurrently
     /// downloaded result stream.
     /// </param>
+    /// <param name="context">
+    /// Object that represents or describes an implementation-defined
+    /// context for this operation, to faciliate tracing and logging.
+    /// </param>
     /// <returns>
     /// Asynchronous stream of items from the job, which 
     /// are downloaded incrementally and may be produced
@@ -237,7 +294,8 @@ public interface IHeartyClient : IDisposable
         PayloadWriter input,
         PayloadReader<T> reader,
         JobQueueKey queue = default,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        object? context = null);
 
     /// <summary>
     /// Request a job on the Hearty server 
@@ -255,13 +313,18 @@ public interface IHeartyClient : IDisposable
     /// is used to identify a specific instance of the job
     /// if the client has pushed it onto multiple queues.
     /// </param>
+    /// <param name="context">
+    /// Object that represents or describes an implementation-defined
+    /// context for this operation, to faciliate tracing and logging.
+    /// </param>
     /// <returns>
     /// Asynchronous task that completes when the server
     /// acknowledges the request to cancel the job.
     /// </returns>
     Task CancelJobAsync(
         PromiseId promiseId,
-        JobQueueKey queue);
+        JobQueueKey queue, 
+        object? context = null);
 
     /// <summary>
     /// Stop a job on the Hearty server for all clients, 
@@ -275,9 +338,14 @@ public interface IHeartyClient : IDisposable
     /// stopped yet.
     /// </remarks>
     /// <param name="promiseId">The ID of the job to kill. </param>
+    /// <param name="context">
+    /// Object that represents or describes an implementation-defined
+    /// context for this operation, to faciliate tracing and logging.
+    /// </param>
     /// <returns>
     /// Asynchronous task that completes when the server
     /// acknowledges the request to stop the job.
     /// </returns>
-    Task KillJobAsync(PromiseId promiseId);
+    Task KillJobAsync(PromiseId promiseId,
+                      object? context = null);
 }
