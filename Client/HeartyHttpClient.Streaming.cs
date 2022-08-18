@@ -29,7 +29,7 @@ public partial class HeartyHttpClient
         if (reader.OwnsStream)
             ThrowOnReaderOwningStream(nameof(reader));
 
-        return new ItemStream<T>(this, reader, promiseId);
+        return new ItemStream<T>(this, context, reader, promiseId);
     }
 
     /// <inheritdoc cref="IHeartyClient.RunJobStreamAsync" />
@@ -50,6 +50,7 @@ public partial class HeartyHttpClient
                                    queue: queue);
 
         return new ItemStream<T>(this,
+                                 context,
                                  reader,
                                  jobUrl: url, 
                                  jobInput: input.CreateHttpContent(),  
@@ -103,6 +104,12 @@ public partial class HeartyHttpClient
         private object? _requestState;
 
         /// <summary>
+        /// Context object passed down by the original caller of 
+        /// <see cref="HeartyHttpClient" />.
+        /// </summary>
+        private object? _context;
+
+        /// <summary>
         /// The ID of the job, which is set once the job has been
         /// successfully posted.
         /// </summary>
@@ -153,12 +160,14 @@ public partial class HeartyHttpClient
         /// Construct for reading an existing promise with known ID.
         /// </summary>
         public ItemStream(HeartyHttpClient client,
+                          object? context,
                           PayloadReader<T> reader,
                           PromiseId promiseId)
         {
             _promiseId = promiseId;
             _reader = reader;
             _client = client;
+            _context = context;
             _repostOnFailure = false;    // irrelevant
         }
 
@@ -167,6 +176,7 @@ public partial class HeartyHttpClient
         /// known after the job posting is successful.
         /// </summary>
         public ItemStream(HeartyHttpClient client,
+                          object? context,
                           PayloadReader<T> reader,
                           string jobUrl,
                           HttpContent jobInput,
@@ -177,6 +187,7 @@ public partial class HeartyHttpClient
             _jobInput = jobInput;
             _reader = reader;
             _client = client;
+            _context = context;
             _repostOnFailure = repostOnFailure;
             _jobCancellationToken = jobCancellationToken;
         }
@@ -273,7 +284,8 @@ public partial class HeartyHttpClient
                         _reader.AddAcceptHeaders(request.Headers, HeartyHttpHeaders.AcceptItem);
 
                         response = await _client.SendHttpMessageAsync(request, false, 
-                                                                      _jobCancellationToken)
+                                                                      _jobCancellationToken,
+                                                                      _context)
                                                 .ConfigureAwait(false);
 
                         response.EnsureSuccessStatusCode();
@@ -332,7 +344,10 @@ public partial class HeartyHttpClient
                 AddHeadersForItemStream(request);
                 _reader.AddAcceptHeaders(request.Headers, HeartyHttpHeaders.AcceptItem);
 
-                response = await _client.SendHttpMessageAsync(request, false, cancellationToken)
+                response = await _client.SendHttpMessageAsync(request, 
+                                                              false, 
+                                                              cancellationToken,
+                                                              _context)
                                         .ConfigureAwait(false);
 
                 if (response.StatusCode == HttpStatusCode.NotFound &&
