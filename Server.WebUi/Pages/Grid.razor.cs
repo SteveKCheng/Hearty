@@ -6,6 +6,7 @@ using Microsoft.JSInterop;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Hearty.Server.WebUi.Pages;
@@ -270,9 +271,9 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
         if (source is IQueryable<TGridItem> queryableSource)
         {
             // Let the data source do the selection if possible
-            records = queryableSource.Skip(request.StartIndex)
-                                     .Take(request.Count)
-                                     .AsEnumerable();
+            records = await queryableSource.Skip(request.StartIndex)
+                                           .Take(request.Count)
+                                           .LoadAsync(request.CancellationToken);
         }
         else
         {
