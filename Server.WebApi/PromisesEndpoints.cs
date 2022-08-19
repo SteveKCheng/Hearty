@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Primitives;
 using System;
 using System.IO;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -547,6 +548,32 @@ namespace Hearty.Server.WebApi
         }
 
         /// <summary>
+        /// Write a short text message as the HTTP response body 
+        /// describing the state of the promise or the operation.
+        /// </summary>
+        private static ValueTask WriteBodyTextMessageAsync(HttpResponse httpResponse, 
+                                                           string? brief, 
+                                                           string description)
+        {
+            if (brief is not null)
+                httpResponse.Headers.Add("Reason", brief);
+
+            // Encode first to get the length of the body
+            var encoding = Encoding.UTF8;
+            int length = encoding.GetByteCount(description);
+            Span<byte> buffer = (length <= 8192) ? stackalloc byte[length] : new byte[length];
+            Encoding.UTF8.GetBytes(description, buffer);
+
+            httpResponse.ContentType = ServedMediaTypes.TextPlain.ToString();
+            httpResponse.ContentLength = length;
+
+            var writer = httpResponse.BodyWriter;
+            buffer.CopyTo(writer.GetSpan(length));
+            writer.Advance(length);
+            return writer.CompleteAsync();
+        }
+
+        /// <summary>
         /// Write the contents of a <see cref="Promise" /> as a response
         /// to an HTTP request.
         /// </summary>
@@ -595,7 +622,13 @@ namespace Hearty.Server.WebApi
 
             if (parameters.Timeout == TimeSpan.Zero && !promise.HasOutput)
             {
-                httpResponse.StatusCode = StatusCodes.Status204NoContent;
+                httpResponse.StatusCode = StatusCodes.Status202Accepted;
+
+                await WriteBodyTextMessageAsync(
+                    httpResponse,
+                    "Incomplete promise",
+                    "The requested promise exists, but its associated computation has not complete, so no results can be returned. ")
+                    .ConfigureAwait(false);
                 return;
             }
 
