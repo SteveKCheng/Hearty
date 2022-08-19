@@ -52,6 +52,13 @@ public sealed partial class Grid<TGridItem> : IGrid<TGridItem>, IAsyncDisposable
     public bool Virtualize { get; set; }
 
     /// <summary>
+    /// Placeholder content to render if <see cref="Virtualize" /> is on,
+    /// and the items are still being asynchronously retrieved.
+    /// </summary>
+    [Parameter]
+    public RenderFragment<PlaceholderContext>? VirtualizationPlaceholder { get; set; }
+
+    /// <summary>
     /// If true, allow the user to change the width of columns
     /// by dragging the mouse.
     /// </summary>

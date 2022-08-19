@@ -38,7 +38,9 @@
                                 TItem="KeyValuePair<int, TGridItem>"
                                 ItemSize="@RowHeight"
                                 ItemsProvider="@ProvideVirtualizedItems"
-                                ItemContent="@(item => builder => RenderRow(builder, item.Key, item.Value))" />
+                                ItemContent="@(item => builder => RenderRow(builder, item.Key, item.Value))"
+                                Placeholder="@VirtualizationPlaceholder"
+                                />
                 </tbody>
             }
             else
