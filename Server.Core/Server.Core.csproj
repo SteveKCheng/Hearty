@@ -27,7 +27,6 @@
     <Compile Include="ExpiryQueue.cs" />
     <Compile Include="IJobQueueSystem.cs" />
     <Compile Include="IncrementalAsyncList.cs" />
-    <Compile Include="InMemoryPathsDirectory.cs" />
     <Compile Include="IPromiseClientInfo.cs" />
     <Compile Include="IPromiseListBuilder.cs" />
     <Compile Include="IRemoteJobCancellation.cs" />
@@ -35,7 +34,6 @@
     <Compile Include="JobsManager.cs" />
     <Compile Include="LocalWorkerAdaptor.cs" />
     <Compile Include="MacroJob.cs" />
-    <Compile Include="PathsDirectory.cs" />
     <Compile Include="Payload.cs" />
     <Compile Include="PipeExtensions.cs" />
     <Compile Include="Promise.cs" />

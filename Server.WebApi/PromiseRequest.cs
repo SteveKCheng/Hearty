@@ -64,13 +64,6 @@ namespace Hearty.Server.WebApi
         public PromiseStorage Storage { get; init; }
 
         /// <summary>
-        /// The instance of <see cref="PathsDirectory" />
-        /// being exposed to the client and that is 
-        /// the target of this request.
-        /// </summary>
-        public PathsDirectory Directory { get; init; }
-
-        /// <summary>
         /// The IANA media type that the payload, as a byte stream,
         /// has been labelled with.
         /// </summary>

@@ -64,12 +64,6 @@ namespace Hearty.Server.WebApi
             public PromiseStorage PromiseStorage { get; init; }
 
             /// <summary>
-            /// Services endpoints for promises by path,
-            /// and for creating promises initially.
-            /// </summary>
-            public PathsDirectory PathsDirectory { get; init; }
-
-            /// <summary>
             /// Called to translate exceptions that come from
             /// user-defined functions involving promises.
             /// </summary>
@@ -95,7 +89,6 @@ namespace Hearty.Server.WebApi
             public Services(IServiceProvider p)
             {
                 PromiseStorage = p.GetRequiredService<PromiseStorage>();
-                PathsDirectory = p.GetRequiredService<PathsDirectory>();
                 ExceptionTranslator = p.GetRequiredService<PromiseExceptionTranslator>();
                 RemoteCancellation = p.GetService<IRemoteJobCancellation>()
                                         ?? _dummyRemoteCancellation;
@@ -252,7 +245,6 @@ namespace Hearty.Server.WebApi
                 var jobInput = new PromiseRequest
                 {
                     Storage = services.PromiseStorage,
-                    Directory = services.PathsDirectory,
                     RouteKey = routeKey,
                     JobQueueKey = queueKey,
                     OwnerPrincipal = httpContext.User,
@@ -364,29 +356,6 @@ namespace Hearty.Server.WebApi
                     httpContext => CancelJobAsync(services, httpContext, kill: true));
         }
 
-        /// <summary>
-        /// Maps the HTTP route that reads out to the client a cached promise given one
-        /// if its (named) paths.
-        /// </summary>
-        /// <param name="endpoints">Builds all the HTTP endpoints used by the application. </param>
-        /// <returns>Builder specific to the new job executor's endpoint that may be
-        /// used to customize its handling by the ASP.NET Core framework.
-        /// </returns>
-        public static IEndpointConventionBuilder
-            MapGetPromiseByPath(this IEndpointRouteBuilder endpoints)
-        {
-            var services = new Services(endpoints.ServiceProvider);
-
-            // FIXME This should be managed by a cache
-            IPromiseClientInfo clientInfo = new BasicPromiseClientInfo();
-
-            return endpoints.MapGet(
-                    pattern: "/jobs/v1/index/{**path}",
-                    requestDelegate: httpContext => GetPromiseByPathAsync(services,
-                                                                          httpContext,
-                                                                          clientInfo));
-        }
-
         private static Task GetPromiseByIdAsync(Services services, 
                                                 HttpContext httpContext,
                                                 IPromiseClientInfo client)
@@ -484,35 +453,6 @@ namespace Hearty.Server.WebApi
             /// in response.
             /// </remarks>
             public bool IsPost { get; init; }
-        }
-
-        private static Task GetPromiseByPathAsync(Services services,
-                                                  HttpContext httpContext,
-                                                  IPromiseClientInfo client)
-        {
-            var httpRequest = httpContext.Request;
-            var httpResponse = httpContext.Response;
-            var cancellationToken = httpContext.RequestAborted;
-
-            var pathString = (string)httpContext.GetRouteValue("path")!;
-            var timeout = ParseTimeout(httpRequest.Query);
-
-            var path = PromisePath.Parse(pathString);
-            if (!services.PathsDirectory.TryGetPath(path, out var promiseId))
-            {
-                httpResponse.StatusCode = StatusCodes.Status404NotFound;
-                return Task.CompletedTask;
-            }
-
-            var parameters = new QueryParameters
-            {
-                Timeout = timeout,
-                AcceptedContentTypes = httpRequest.Headers.Accept
-            };
-
-            return RespondToGetPromiseAsync(services, promiseId, httpResponse,
-                                            parameters,
-                                            client, cancellationToken);
         }
 
         private static async Task CancelJobAsync(Services services,

@@ -103,7 +103,6 @@ public class Startup
             return promiseStorage;
         });
 
-        services.AddSingleton<PathsDirectory, InMemoryPathsDirectory>();
         services.AddSingleton<JobsManager>();
         services.AddSingleton<TimeoutProvider, SimpleTimeoutProvider>();
 
@@ -309,8 +308,6 @@ public class Startup
 
             endpoints.MapKillJobById()
                      .RequireAuthorization(AuthorizationPolicies.Admin);
-
-            endpoints.MapGetPromiseByPath();
 
             endpoints.MapAuthTokenRetrieval()
                      .RequireAuthorization(AuthorizationPolicies.Basic);
