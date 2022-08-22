@@ -297,20 +297,24 @@ internal sealed class RemoteWorkerProxy : IJobWorker<PromisedWork, PromiseData>
             var cancellationSource = _heartbeatCancellation ?? new CancellationTokenSource();
             cancellationSource.CancelAfter(_heartbeatTimeout);
 
+            _logger.LogDebug("Sending heartbeat (ping) message to worker {worker}", Name);
+
             try
             {
                 await _rpc.InvokeRemotelyAsync<PingMessage, PongMessage>(
                     WorkerHost.TypeCode_Heartbeat,
                     new PingMessage(),
                     cancellationSource.Token).ConfigureAwait(false);
+
+                _logger.LogDebug("Received successful reply to heartbeat message from worker {worker}", Name);
             }
-            catch
+            catch (Exception e)
             {
                 // Ignore failure to send if the connection was already shutdown or disposed
                 if (_hasSentShutdownEvent != 0)
                     return;
 
-                _logger.LogError("Worker {worker} has become unresponsive.  Its connection will be terminated. ",
+                _logger.LogError(e, "Worker {worker} has become unresponsive.  Its connection will be terminated. ",
                                  Name);
                 SendShutdownEvent(WorkerEventKind.Unresponsive);
                 await _rpc.DisposeAsync().ConfigureAwait(false);
