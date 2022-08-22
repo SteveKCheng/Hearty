@@ -62,12 +62,13 @@ public sealed class WorkerHost : IDisposable, IAsyncDisposable
         return self._impl.RunJobAsync(request, cancellationToken);
     }
 
-    internal static ValueTask<PongMessage> ReceivePingAsync(
+    internal static ValueTask<PongMessage> CheckHealthAsync(
         PingMessage request,
         RpcConnection connection,
         CancellationToken cancellationToken)
     {
-        return ValueTask.FromResult(new PongMessage());
+        var self = (WorkerHost)connection.State!;
+        return self._impl.CheckHealthAsync(request, cancellationToken);
     }
 
     /// <summary>

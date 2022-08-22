@@ -27,7 +27,7 @@ public class JobWorkerRpcRegistry : RpcRegistry
             WorkerHost.TypeCode_RunJob, WorkerHost.RunJobImplAsync);
 
         this.Add<PingMessage, PongMessage>(
-            WorkerHost.TypeCode_Heartbeat, WorkerHost.ReceivePingAsync);
+            WorkerHost.TypeCode_Heartbeat, WorkerHost.CheckHealthAsync);
     }
 
     internal static readonly JobWorkerRpcRegistry DefaultInstance = new JobWorkerRpcRegistry();
