@@ -137,6 +137,7 @@ public class WorkerDistribution<TInput, TOutput> : IReadOnlyDictionary<string, I
         workerImpl.OnEvent += (object? sender, WorkerEventArgs e) =>
         {
             if (e.Kind == WorkerEventKind.Shutdown || 
+                e.Kind == WorkerEventKind.Disposed ||
                 e.Kind == WorkerEventKind.Unresponsive)
             {
                 RemoveWorker(name);

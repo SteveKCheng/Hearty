@@ -164,7 +164,7 @@ internal sealed class RemoteWorkerProxy : IJobWorker<PromisedWork, PromiseData>
     {
         // Send shutdown event as soon as this method is called,
         // without waiting for the RPC connection to close.
-        SendShutdownEvent(WorkerEventKind.Shutdown);
+        SendShutdownEvent(WorkerEventKind.Disposed);
 
         return _rpc.DisposeAsync();
     }
@@ -179,6 +179,20 @@ internal sealed class RemoteWorkerProxy : IJobWorker<PromisedWork, PromiseData>
     {
         if (Interlocked.Exchange(ref _hasSentShutdownEvent, 1) == 0)
         {
+            switch (eventKind)
+            {
+                case WorkerEventKind.Shutdown:
+                    _logger.LogError("The connection to worker {worker} is being shut down, possibly due to a lost network connection. ",
+                                     Name);
+                    break;
+                case WorkerEventKind.Disposed:
+                    _logger.LogError("The connection to worker {worker} is being voluntarily disposed by the job server. ",
+                                     Name);
+                    break;
+                default:
+                    break;
+            }
+
             // Clean up heartbeat timer
             var heartbeatTimer = Interlocked.Exchange(ref _heartbeatTimer, null);
             heartbeatTimer?.Dispose();
@@ -277,6 +291,9 @@ internal sealed class RemoteWorkerProxy : IJobWorker<PromisedWork, PromiseData>
 
         try
         {
+            if (_rpc.IsClosingStarted)
+                return;
+
             var cancellationSource = _heartbeatCancellation ?? new CancellationTokenSource();
             cancellationSource.CancelAfter(_heartbeatTimeout);
 
@@ -289,7 +306,8 @@ internal sealed class RemoteWorkerProxy : IJobWorker<PromisedWork, PromiseData>
             }
             catch
             {
-                if (!_rpc.IsClosingStarted)
+                // Ignore failure to send if the connection was already shutdown or disposed
+                if (_hasSentShutdownEvent != 0)
                     return;
 
                 _logger.LogError("Worker {worker} has become unresponsive.  Its connection will be terminated. ",

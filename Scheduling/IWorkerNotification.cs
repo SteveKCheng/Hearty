@@ -68,6 +68,11 @@ public enum WorkerEventKind
     Shutdown,
 
     /// <summary>
+    /// The worker has been voluntarily disposed by the job server.
+    /// </summary>
+    Disposed,
+
+    /// <summary>
     /// Heartbeat messages to the worker got no response.
     /// The worker is assumed to be unable to work, and the job
     /// server will close down its connection to it.
