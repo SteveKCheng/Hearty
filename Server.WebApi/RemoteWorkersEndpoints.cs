@@ -152,7 +152,8 @@ namespace Hearty.Server.WebApi
             using var _ = cancellationSourceUse;
 
             var (worker, closeTask) =
-                await RemoteWorkerService.AcceptHostAsync(_workerDistribution,
+                await RemoteWorkerService.AcceptHostAsync(_logger,
+                                                          _workerDistribution,
                                                           webSocket,
                                                           _rpcRegistry,
                                                           cancellationSourceUse.Token);

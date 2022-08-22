@@ -140,6 +140,7 @@ public class TestWorkersGenerator
                 var (clientWebSocket, serverWebSocket) = CreateWebSocketPair();
 
                 var serverTask = RemoteWorkerService.AcceptHostAsync(
+                    _logger,
                     _workerDistribution,
                     serverWebSocket,
                     _serverRpcRegistry,

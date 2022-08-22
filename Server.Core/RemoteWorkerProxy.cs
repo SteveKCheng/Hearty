@@ -5,6 +5,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Hearty.Utilities;
+using Microsoft.Extensions.Logging;
 
 namespace Hearty.Server;
 
@@ -182,23 +183,34 @@ internal sealed class RemoteWorkerProxy : IJobWorker<PromisedWork, PromiseData>
             var heartbeatTimer = Interlocked.Exchange(ref _heartbeatTimer, null);
             heartbeatTimer?.Dispose();
 
-            // FIXME Catch exceptions from executing event handler
-            OnEvent?.Invoke(this, new WorkerEventArgs
+            try
             {
-                Kind = eventKind
-            });
+                OnEvent?.Invoke(this, new WorkerEventArgs
+                {
+                    Kind = eventKind
+                });
+            }
+            catch (Exception e)
+            {
+                _logger.LogCritical(
+                    e, 
+                    "An exception occurred in invoking handlers for events from remote worker {worker}. ",
+                    Name);
+            }
         }
     }
 
-    public RemoteWorkerProxy(string name, RpcConnection rpc)
+    public RemoteWorkerProxy(string name, RpcConnection rpc, ILogger logger)
     {
         Name = name;
         _rpc = rpc;
+        _logger = logger;
 
         rpc.OnClose += (o, e) => SendShutdownEvent(WorkerEventKind.Shutdown);
     }
 
     private readonly RpcConnection _rpc;
+    private readonly ILogger _logger;
 
     /// <summary>
     /// Wrapper over <see cref="RemoteWorkerProxy" /> to expose,
@@ -268,10 +280,24 @@ internal sealed class RemoteWorkerProxy : IJobWorker<PromisedWork, PromiseData>
             var cancellationSource = _heartbeatCancellation ?? new CancellationTokenSource();
             cancellationSource.CancelAfter(_heartbeatTimeout);
 
-            await _rpc.InvokeRemotelyAsync<PingMessage, PongMessage>(
-                WorkerHost.TypeCode_Heartbeat,
-                new PingMessage(),
-                cancellationSource.Token).ConfigureAwait(false);
+            try
+            {
+                await _rpc.InvokeRemotelyAsync<PingMessage, PongMessage>(
+                    WorkerHost.TypeCode_Heartbeat,
+                    new PingMessage(),
+                    cancellationSource.Token).ConfigureAwait(false);
+            }
+            catch
+            {
+                if (!_rpc.IsClosingStarted)
+                    return;
+
+                _logger.LogError("Worker {worker} has become unresponsive.  Its connection will be terminated. ",
+                                 Name);
+                SendShutdownEvent(WorkerEventKind.Unresponsive);
+                await _rpc.DisposeAsync().ConfigureAwait(false);
+                return;
+            }
 
             // Try to re-use the cancellation source for the next heartbeat
             _heartbeatCancellation = cancellationSource.TryReset() ? cancellationSource 
@@ -281,8 +307,9 @@ internal sealed class RemoteWorkerProxy : IJobWorker<PromisedWork, PromiseData>
         }
         catch (Exception e)
         {
-            SendShutdownEvent(WorkerEventKind.Unresponsive);
-            await _rpc.DisposeAsync().ConfigureAwait(false);
+            _logger.LogCritical(e, 
+                "An unexpected exception while trying to send a heartbeat message to worker {worker}. ",
+                Name);
         }
     }
 

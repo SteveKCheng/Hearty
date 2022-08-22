@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Hearty.Scheduling;
 using Hearty.Carp;
 using Hearty.Work;
+using Microsoft.Extensions.Logging;
 
 namespace Hearty.Server;
 
@@ -61,7 +62,7 @@ public static class RemoteWorkerService
         try
         {
             var distribution = state.WorkerDistribution;
-            var workerImpl = new RemoteWorkerProxy(request.Name, connection);
+            var workerImpl = new RemoteWorkerProxy(request.Name, connection, state.Logger);
 
             success = distribution.TryCreateWorker(workerImpl,
                                                    request.Concurrency,
@@ -94,9 +95,16 @@ public static class RemoteWorkerService
     {
         public readonly WorkerDistribution<PromisedWork, PromiseData> WorkerDistribution;
 
-        public PreInitState(WorkerDistribution<PromisedWork, PromiseData> distribution)
-            => WorkerDistribution = distribution
-                 ?? throw new ArgumentNullException(nameof(distribution));
+        public readonly ILogger Logger;
+
+        public PreInitState(ILogger logger,
+                            WorkerDistribution<PromisedWork, PromiseData> distribution)
+        {
+            ArgumentNullException.ThrowIfNull(distribution);
+            ArgumentNullException.ThrowIfNull(logger);
+            WorkerDistribution = distribution;
+            Logger = logger;
+        }
 
         public int IsRegistered;
 
@@ -107,6 +115,10 @@ public static class RemoteWorkerService
     /// Expect a remote host to register itself as a worker
     /// to the job distribution system.
     /// </summary>
+    /// <param name="logger">
+    /// Logs events that occur in the communication between the
+    /// job distribution system and the worker.
+    /// </param>
     /// <param name="distribution">The system of (remote) workers. </param>
     /// <param name="webSocket">
     /// Newly opened WebSocket connection.
@@ -144,12 +156,13 @@ public static class RemoteWorkerService
     public static async 
         Task<(IDistributedWorker<PromisedWork> Worker, Task CloseTask)> 
         AcceptHostAsync(
+            ILogger logger,
             WorkerDistribution<PromisedWork, PromiseData> distribution,
             WebSocket webSocket,
             JobServerRpcRegistry? rpcRegistry = null,
             CancellationToken cancellationToken = default)
     {
-        var state = new PreInitState(distribution);
+        var state = new PreInitState(logger, distribution);
 
         rpcRegistry ??= JobServerRpcRegistry.DefaultInstance;
 
