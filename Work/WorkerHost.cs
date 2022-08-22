@@ -48,6 +48,11 @@ public sealed class WorkerHost : IDisposable, IAsyncDisposable
     /// </summary>
     public static readonly ushort TypeCode_RunJob = 0x2;
 
+    /// <summary>
+    /// Type code for the "Heartbeat" function in the RPC protocol.
+    /// </summary>
+    public static readonly ushort TypeCode_Heartbeat = 0x3;
+
     internal static ValueTask<JobReplyMessage> RunJobImplAsync(
         JobRequestMessage request,
         RpcConnection connection,
@@ -55,6 +60,14 @@ public sealed class WorkerHost : IDisposable, IAsyncDisposable
     {
         var self = (WorkerHost)connection.State!;
         return self._impl.RunJobAsync(request, cancellationToken);
+    }
+
+    internal static ValueTask<PongMessage> ReceivePingAsync(
+        PingMessage request,
+        RpcConnection connection,
+        CancellationToken cancellationToken)
+    {
+        return ValueTask.FromResult(new PongMessage());
     }
 
     /// <summary>
