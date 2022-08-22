@@ -68,7 +68,11 @@ public static class RemoteWorkerService
                                                    out var worker);
 
             if (success)
+            {
                 state.SetResult(worker!);
+                workerImpl.StartHeartbeats(period: TimeSpan.FromMinutes(1),
+                                           timeout: TimeSpan.FromMinutes(1));
+            }
 
             reply.Status = success ? RegisterWorkerReplyStatus.Ok
                                    : RegisterWorkerReplyStatus.NameAlreadyExists;

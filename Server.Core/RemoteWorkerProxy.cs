@@ -163,7 +163,7 @@ internal sealed class RemoteWorkerProxy : IJobWorker<PromisedWork, PromiseData>
     {
         // Send shutdown event as soon as this method is called,
         // without waiting for the RPC connection to close.
-        SendShutdownEvent();
+        SendShutdownEvent(WorkerEventKind.Shutdown);
 
         return _rpc.DisposeAsync();
     }
@@ -174,13 +174,18 @@ internal sealed class RemoteWorkerProxy : IJobWorker<PromisedWork, PromiseData>
     /// Emit the event for this worker shutting down, but
     /// only for the first time this method is called.
     /// </summary>
-    private void SendShutdownEvent()
+    private void SendShutdownEvent(WorkerEventKind eventKind)
     {
         if (Interlocked.Exchange(ref _hasSentShutdownEvent, 1) == 0)
         {
+            // Clean up heartbeat timer
+            var heartbeatTimer = Interlocked.Exchange(ref _heartbeatTimer, null);
+            heartbeatTimer?.Dispose();
+
+            // FIXME Catch exceptions from executing event handler
             OnEvent?.Invoke(this, new WorkerEventArgs
             {
-                Kind = WorkerEventKind.Shutdown
+                Kind = eventKind
             });
         }
     }
@@ -190,7 +195,7 @@ internal sealed class RemoteWorkerProxy : IJobWorker<PromisedWork, PromiseData>
         Name = name;
         _rpc = rpc;
 
-        rpc.OnClose += (o, e) => SendShutdownEvent();
+        rpc.OnClose += (o, e) => SendShutdownEvent(WorkerEventKind.Shutdown);
     }
 
     private readonly RpcConnection _rpc;
@@ -218,4 +223,100 @@ internal sealed class RemoteWorkerProxy : IJobWorker<PromisedWork, PromiseData>
 
         ValueTask IAsyncDisposable.DisposeAsync() => ValueTask.CompletedTask;
     }
+
+    #region Heartbeats
+
+    /// <summary>
+    /// Start periodically sending "ping" messages to the worker
+    /// and expect the "pong" messages back.
+    /// </summary>
+    /// <remarks>
+    /// This method may only be called once for each instance.
+    /// It should be called after the worker has registered itself.
+    /// </remarks>
+    /// <param name="period">
+    /// The period of time between sending the heartbeat ping messages.
+    /// </param>
+    /// <param name="timeout">
+    /// The period of time allowed for responses to the heartbeat ping
+    /// message.  If the response does not come back within this time
+    /// interval then the worker is considered unresponsive.
+    /// </param>
+    public void StartHeartbeats(TimeSpan period, TimeSpan timeout)
+    {
+        var heartbeatTimer = new Timer(
+            s => ((RemoteWorkerProxy)s!).SendHeartbeatMessageAsync(),
+            this, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+
+        if (Interlocked.CompareExchange(ref _heartbeatTimer, heartbeatTimer, null) != null)
+        {
+            heartbeatTimer.Dispose();
+            throw new InvalidOperationException("Heartbeat timer has already started. ");
+        }
+
+        _heartbeatTimeout = timeout;
+        heartbeatTimer.Change(period, period);
+    }
+
+    private async void SendHeartbeatMessageAsync()
+    {
+        if (Interlocked.Exchange(ref _heartbeatInProgress, 1) != 0)
+            return;
+
+        try
+        {
+            var cancellationSource = _heartbeatCancellation ?? new CancellationTokenSource();
+            cancellationSource.CancelAfter(_heartbeatTimeout);
+
+            await _rpc.InvokeRemotelyAsync<PingMessage, PongMessage>(
+                WorkerHost.TypeCode_Heartbeat,
+                new PingMessage(),
+                cancellationSource.Token).ConfigureAwait(false);
+
+            // Try to re-use the cancellation source for the next heartbeat
+            _heartbeatCancellation = cancellationSource.TryReset() ? cancellationSource 
+                                                                   : null;
+
+            Volatile.Write(ref _heartbeatInProgress, 0);
+        }
+        catch (Exception e)
+        {
+            SendShutdownEvent(WorkerEventKind.Unresponsive);
+            await _rpc.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Periodic timer which triggers sending of heartbeat ping messages.
+    /// </summary>
+    private Timer? _heartbeatTimer;
+
+    /// <summary>
+    /// The time interval allowed for the worker to reply to the ping message.
+    /// </summary>
+    private TimeSpan _heartbeatTimeout;
+
+    /// <summary>
+    /// Cached cancellation source to trigger timeouts on
+    /// the worker's response to the heartbeat ping message.
+    /// </summary>
+    private CancellationTokenSource? _heartbeatCancellation;
+
+    /// <summary>
+    /// Set to 1 when a heartbeat is being processed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This flag guards against multiple heartbeats from being sent concurrently.
+    /// Without this flag, if one heartbeat pong message is slow to come back,
+    /// the next heartbeat may still fire from the timer.
+    /// </para>
+    /// <para>
+    /// This flag is also left "stuck" at 1 if a heartbeat fails, and the
+    /// connection is about to be closed down.
+    /// </para>
+    /// </remarks>
+    private int _heartbeatInProgress;
+
+    #endregion
 }

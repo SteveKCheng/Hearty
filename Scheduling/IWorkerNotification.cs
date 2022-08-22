@@ -66,6 +66,13 @@ public enum WorkerEventKind
     /// The worker is shutting down.
     /// </summary>
     Shutdown,
+
+    /// <summary>
+    /// Heartbeat messages to the worker got no response.
+    /// The worker is assumed to be unable to work, and the job
+    /// server will close down its connection to it.
+    /// </summary>
+    Unresponsive,
 }
 
 /// <summary>
