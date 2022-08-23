@@ -90,17 +90,6 @@ public sealed class WorkerHost : IDisposable, IAsyncDisposable
         return serializeOptions;
     }
 
-    private static RpcRegistry CreateWorkerRpcRegistry()
-    {
-        var registry = new RpcRegistry(new RpcExceptionSerializer(SerializeOptions), SerializeOptions);
-        registry.Add<JobRequestMessage, JobReplyMessage>(
-            WorkerHost.TypeCode_RunJob, RunJobImplAsync);
-
-        return registry;
-    }
-
-    private static readonly RpcRegistry _rpcRegistry = CreateWorkerRpcRegistry();
-
     private readonly WebSocketRpc _rpc;
     private readonly IJobSubmission _impl;
 
