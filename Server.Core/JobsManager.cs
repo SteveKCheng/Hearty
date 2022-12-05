@@ -48,6 +48,15 @@ public class JobsManager : IRemoteJobCancellation
     public JobServerMetrics Metrics { get; }
 
     /// <summary>
+    /// Delegate that is invoked whenever a job completes, whether successful or not.
+    /// </summary>
+    /// <remarks>
+    /// This delegate is called at most once per promise, even if the same promise
+    /// is submitted multiple times for job processing.
+    /// </remarks>
+    public EventHandler<Promise>? OnJobComplete;
+
+    /// <summary>
     /// Prepare the system to schedule jobs and assign them to workers.
     /// </summary>
     /// <param name="logger">
@@ -213,6 +222,16 @@ public class JobsManager : IRemoteJobCancellation
     }
 
     /// <summary>
+    /// Action to run when an (enqueued) job completes: clears
+    /// the job's registration and invokes <see cref="OnJobComplete" />.
+    /// </summary>
+    private void InvokeOnJobComplete(Promise promise)
+    {
+        RemoveCachedFuture(promise.Id);
+        OnJobComplete?.Invoke(this, promise);
+    }
+
+    /// <summary>
     /// Throw an exception if the promise object returned from
     /// <see cref="PromiseRetriever" /> is the same as the last iteration.
     /// </summary>
@@ -354,7 +373,7 @@ public class JobsManager : IRemoteJobCancellation
             bool awaiting = promise.TryAwaitAndPostResult(
                                 new ValueTask<PromiseData>(outputTask),
                                 _exceptionTranslator,
-                                p => RemoveCachedFuture(p.Id));
+                                p => InvokeOnJobComplete(p));
 
             // awaiting == false should not happen unless some code outside
             // of this class is posting to the promise.  In that case, recover
