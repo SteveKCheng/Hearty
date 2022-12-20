@@ -202,6 +202,7 @@ public readonly struct PromisedWork
             Promise = promise,
             InitialWait = this.InitialWait,
             OutputDeserializer = this.OutputDeserializer,
+            ExceptionTranslator = this.ExceptionTranslator,
             DisplayPropertyRetrieval = this.DisplayPropertyRetrieval
         };
 
